@@ -33,8 +33,8 @@ export const environment = z.object({
   DEMO_ACCOUNTS_DOMAIN: z.string().min(1).default('demo.mit8333.example'),
   DEMO_ACCOUNTS_PASSWORD: z.string().optional(),
 
-  OBSERVE_APP_KEY: z.string().default(''),
-  OBSERVE_APP_SECRET: z.string().default(''),
+  OBSERVE_APP_KEY: z.string().trim().default(''),
+  OBSERVE_APP_SECRET: z.string().trim().default(''),
 });
 
 export type Environment = z.infer<typeof environment>;

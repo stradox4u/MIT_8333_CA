@@ -25,8 +25,10 @@ export function refuseIf<Outcome>(
     ? []
     : [refused: string]
 ): asserts outcome is Exclude<Outcome, Refusal> {
-  // Typed as `Refusal`, so a renamed refusal makes a stale case a compile error.
-  switch (outcome as unknown as Refusal) {
+  // Typed as `Refusal`, so a renamed refusal makes a stale case a compile
+  // error, and a new refusal without a case fails the `never` check below.
+  const refusal = outcome as unknown as Refusal;
+  switch (refusal) {
     case 'not_found':
       throw new NotFoundException();
     case 'user_erased':
@@ -35,5 +37,8 @@ export function refuseIf<Outcome>(
       throw new ConflictException(
         `The last active Administrator can’t be ${refused}`,
       );
+    default:
+      // Any other outcome went ahead; this only checks every refusal is handled.
+      refusal satisfies never;
   }
 }

@@ -15,6 +15,7 @@ describe('Observe', () => {
     [{ OBSERVE_APP_KEY: 'key' }],
     [{ OBSERVE_APP_SECRET: 'secret' }],
     [{ OBSERVE_APP_KEY: '', OBSERVE_APP_SECRET: '' }],
+    [{ OBSERVE_APP_KEY: '  ', OBSERVE_APP_SECRET: '  ' }],
   ])('stays off without both keys: %o', (env) => {
     expect(observeIsConfigured(env)).toBe(false);
   });

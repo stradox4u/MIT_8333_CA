@@ -12,8 +12,10 @@ export class RateLimitGuard extends ThrottlerGuard {
     context: ExecutionContext,
     detail: ThrottlerLimitDetail,
   ): Promise<void> {
-    const { res } = this.getRequestResponse(context);
-    res.header('Retry-After', String(detail.timeToBlockExpire));
+    if (this.commonOptions.setHeaders ?? true) {
+      const { res } = this.getRequestResponse(context);
+      this.setResponseHeader(res, 'Retry-After', detail.timeToBlockExpire);
+    }
     return super.throwThrottlingException(context, detail);
   }
 }

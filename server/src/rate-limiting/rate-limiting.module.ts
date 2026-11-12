@@ -11,7 +11,7 @@ import {
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 
 /**
- * The throttlers, which apply only on routes that use `ThrottlerGuard` (the
+ * The throttlers, which apply only on routes that use `RateLimitGuard` (the
  * auth routes): nothing is throttled globally (docs/auth-module.md).
  *
  * - `perIp`: 10 requests per IP per 15 minutes. Off when the client's real IP
