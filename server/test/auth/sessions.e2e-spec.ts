@@ -78,6 +78,12 @@ describe('Sessions', () => {
     await grace.get('/api/auth/me').expect(200);
   });
 
+  it('answers a malformed session id with 400', async () => {
+    const ada = await app.signInByLink('ada@example.com');
+
+    await ada.delete('/api/auth/sessions/not-a-session-id').expect(400);
+  });
+
   describe('without keep-signed-in', () => {
     it('stays signed in while used at least hourly', async () => {
       const ada = await app.signInByLink('ada@example.com');

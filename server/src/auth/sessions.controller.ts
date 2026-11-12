@@ -15,6 +15,7 @@ import {
   type SessionRecord,
 } from '@nestjs/authentication';
 import { Clock } from '../clock.js';
+import { sessionId } from './auth.schemas.js';
 import { hasGoneIdle } from './session-lifetime.js';
 import { Can } from '@nestjs/authorization';
 import type { User } from '../users/user.js';
@@ -51,7 +52,10 @@ export class SessionsController {
 
   @Delete('sessions/:id')
   @HttpCode(204)
-  async revoke(@CurrentUser() user: User, @Param('id') id: string) {
+  async revoke(
+    @CurrentUser() user: User,
+    @Param('id', { schema: sessionId }) id: string,
+  ) {
     const revoked = await this.sessions.revoke(id, { userId: user.id });
     if (!revoked) {
       throw new NotFoundException();

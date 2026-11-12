@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Mailer } from '@nestjs/mail';
-import { appUrl } from '../config.js';
+import { AppConfig } from '../config/app-config.js';
 import type { RoleId } from '../database/schema.js';
 
 const ROLE_NAMES: Record<RoleId, string> = {
@@ -17,10 +17,13 @@ const ROLE_NAMES: Record<RoleId, string> = {
  */
 @Injectable()
 export class Invitations {
-  constructor(private readonly mailer: Mailer) {}
+  constructor(
+    private readonly mailer: Mailer,
+    private readonly config: AppConfig,
+  ) {}
 
   async send(invitee: { email: string; firstName: string; roleId: RoleId }) {
-    const register = new URL('/register', appUrl());
+    const register = new URL('/register', this.config.appUrl);
     register.searchParams.set('email', invitee.email);
     await this.mailer.send({
       to: invitee.email,

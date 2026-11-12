@@ -12,28 +12,24 @@ import {
 import { CurrentUser, SessionService } from '@nestjs/authentication';
 import { Can } from '@nestjs/authorization';
 import { z } from 'zod';
-import { ROLE_IDS } from '../database/schema.js';
 import { ActivityLog } from './activity-log.js';
 import { Invitations } from './invitations.js';
 import type { User } from './user.js';
+import { emailAddress, personName, roleId, userId } from './user.schemas.js';
 import { UserErasure } from './user-erasure.js';
 import { UserManagementPolicy } from './user-management.policy.js';
 import { UsersRepository } from './users.repository.js';
 
-const personName = z.string().trim().min(1).max(100);
-
 const inviteBody = z.object({
   firstName: personName,
   lastName: personName,
-  email: z.email().max(320),
-  role: z.enum(ROLE_IDS),
+  email: emailAddress,
+  role: roleId,
 });
 
-const changeRoleBody = z.object({ role: z.enum(ROLE_IDS) });
+const changeRoleBody = z.object({ role: roleId });
 
-const userId = z.uuid();
-
-const correctEmailBody = z.object({ email: z.email().max(320) });
+const correctEmailBody = z.object({ email: emailAddress });
 
 /** Administrators managing other Users' accounts. */
 @Can(UserManagementPolicy, 'manage')
@@ -63,6 +59,9 @@ export class UsersController {
     if (outcome === 'not_found') {
       throw new NotFoundException();
     }
+    if (outcome === 'erased') {
+      throw new ConflictException('An Erased User’s Role can’t change');
+    }
     if (outcome === 'last_administrator') {
       throw new ConflictException(
         'The last active Administrator can’t be demoted',
@@ -89,17 +88,22 @@ export class UsersController {
     if (outcome === 'not_found') {
       throw new NotFoundException();
     }
+    if (outcome === 'erased') {
+      throw new ConflictException('An Erased User can’t be deactivated');
+    }
     if (outcome === 'last_administrator') {
       throw new ConflictException(
         'The last active Administrator can’t be deactivated',
       );
     }
-    await this.sessions.revokeAll(id);
-    await this.activityLog.record({
-      actorId: actor.id,
-      targetId: id,
-      action: 'deactivated',
-    });
+    if (outcome === 'deactivated') {
+      await this.sessions.revokeAll(id);
+      await this.activityLog.record({
+        actorId: actor.id,
+        targetId: id,
+        action: 'deactivated',
+      });
+    }
     return this.users.findById(id);
   }
 
@@ -109,14 +113,20 @@ export class UsersController {
     @CurrentUser() actor: User,
     @Param('id', { schema: userId }) id: string,
   ) {
-    if (!(await this.users.reactivate(id))) {
+    const outcome = await this.users.reactivate(id);
+    if (outcome === 'not_found') {
       throw new NotFoundException();
     }
-    await this.activityLog.record({
-      actorId: actor.id,
-      targetId: id,
-      action: 'reactivated',
-    });
+    if (outcome === 'erased') {
+      throw new ConflictException('An Erased User can’t be reactivated');
+    }
+    if (outcome === 'reactivated') {
+      await this.activityLog.record({
+        actorId: actor.id,
+        targetId: id,
+        action: 'reactivated',
+      });
+    }
     return this.users.findById(id);
   }
 
@@ -135,11 +145,13 @@ export class UsersController {
         'The last active Administrator can’t be erased',
       );
     }
-    await this.activityLog.record({
-      actorId: actor.id,
-      targetId: id,
-      action: 'erased',
-    });
+    if (outcome === 'erased') {
+      await this.activityLog.record({
+        actorId: actor.id,
+        targetId: id,
+        action: 'erased',
+      });
+    }
     return this.users.findById(id);
   }
 

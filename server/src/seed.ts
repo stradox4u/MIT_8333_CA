@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
+import { AppConfig } from './config/app-config.js';
 import { DemoAccounts } from './users/demo-accounts.js';
 
 /**
@@ -10,7 +11,7 @@ const app = await NestFactory.createApplicationContext(AppModule, {
   logger: ['error', 'warn'],
 });
 try {
-  await app.get(DemoAccounts).seed();
+  await app.get(DemoAccounts).seed(app.get(AppConfig).demoAccounts);
   console.log('Demo accounts are ready.');
 } finally {
   await app.close();

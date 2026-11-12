@@ -1,10 +1,11 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   AuthenticationRegistry,
   OidcAccountResolver,
   type OidcProfile,
 } from '@nestjs/authentication';
 import { UsersRepository } from '../users/users.repository.js';
+import { AccountDeactivatedException } from './account-deactivated.exception.js';
 
 /**
  * Maps a Google account to a User (ADR-0006):
@@ -59,11 +60,7 @@ export class GoogleAccounts extends OidcAccountResolver {
 
   private unlessDeactivated(account: { id: string; deactivated: boolean }) {
     if (account.deactivated) {
-      throw new ForbiddenException({
-        statusCode: 403,
-        error: 'account_deactivated',
-        message: 'This account is deactivated. Contact an administrator.',
-      });
+      throw new AccountDeactivatedException();
     }
     return { id: account.id };
   }

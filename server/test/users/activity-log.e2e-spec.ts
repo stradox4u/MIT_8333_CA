@@ -53,6 +53,27 @@ describe('The Activity Log', () => {
     expect(log.body[0].occurredAt).toBe('2026-11-12T09:00:00.000Z');
   });
 
+  it('records nothing when an action changes nothing', async () => {
+    const admin = await app.signInAsAdministrator();
+    await app.signUp('ada@example.com');
+    const listed = await admin.get('/api/users').expect(200);
+    const { id } = listed.body.find(
+      (user: { email: string }) => user.email === 'ada@example.com',
+    );
+
+    await admin.post(`/api/users/${id}/reactivate`).expect(200);
+    await admin.post(`/api/users/${id}/deactivate`).expect(200);
+    await admin.post(`/api/users/${id}/deactivate`).expect(200);
+    await admin.post(`/api/users/${id}/erase`).expect(200);
+    await admin.post(`/api/users/${id}/erase`).expect(200);
+
+    const log = await admin.get('/api/activity-log').expect(200);
+    expect(log.body.map((entry: { action: string }) => entry.action)).toEqual([
+      'erased',
+      'deactivated',
+    ]);
+  });
+
   it('records a User erasing themselves', async () => {
     const admin = await app.signInAsAdministrator();
     const ada = await app.signUp('ada@example.com');

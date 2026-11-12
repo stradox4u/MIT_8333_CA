@@ -36,9 +36,10 @@ const DEMO_USERS: {
  * to sign in with a password (ADR-0006). `npm run db:seed` runs it; running
  * it again resets the accounts to their demo state.
  *
- * - `DEMO_ACCOUNTS_PASSWORD`: shared by all four; must meet the password rules.
- * - `DEMO_ACCOUNTS_DOMAIN`: their addresses are `administrator@`, `officer@`,
- *   `student@` and `staff@` it.
+ * - `password` (`DEMO_ACCOUNTS_PASSWORD`): shared by all four; must meet the
+ *   password rules.
+ * - `domain` (`DEMO_ACCOUNTS_DOMAIN`): their addresses are `administrator@`,
+ *   `officer@`, `student@` and `staff@` it.
  */
 @Injectable()
 export class DemoAccounts {
@@ -46,9 +47,13 @@ export class DemoAccounts {
 
   constructor(private readonly users: UsersRepository) {}
 
-  async seed(env: NodeJS.ProcessEnv = process.env): Promise<void> {
-    const demoPassword = env.DEMO_ACCOUNTS_PASSWORD ?? '';
-    const domain = env.DEMO_ACCOUNTS_DOMAIN || 'demo.mit8333.example';
+  async seed({
+    domain,
+    password: demoPassword = '',
+  }: {
+    domain: string;
+    password?: string;
+  }): Promise<void> {
     const rules = password.safeParse(demoPassword);
     if (!rules.success) {
       throw new Error(

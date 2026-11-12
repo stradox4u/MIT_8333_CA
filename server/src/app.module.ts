@@ -2,40 +2,47 @@ import { Module } from '@nestjs/common';
 import { AuthorizationModule } from '@nestjs/authorization';
 import { DrizzleModule } from '@nestjs/drizzle';
 import { MailModule } from '@nestjs/mail';
-import { createObserveModule } from '@nestjs/observe';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { AuthModule } from './auth/auth.module.js';
 import { CleanupModule } from './cleanup/cleanup.module.js';
 import { ClockModule } from './clock.js';
+import { AppConfig } from './config/app-config.js';
+import { AppConfigModule } from './config/app-config.module.js';
 import * as schema from './database/schema.js';
 import { createMailTransport } from './mail/mail-transport.js';
+import { ObserveModule } from './observe.js';
 import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
-
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
   imports: [
+    AppConfigModule,
     // Distributed tracing, auto-correlated logs, request/job metrics, error
     // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRoot({
-      appKey: process.env.OBSERVE_APP_KEY ?? '',
-      appSecret: process.env.OBSERVE_APP_SECRET ?? '',
-      runtimeMetrics: !Boolean(process.versions?.['webcontainer']),
-      serviceId: 'nest-typescript-starter',
+    ObserveModule.forRootAsync({
+      inject: [AppConfig],
+      useFactory: (config: AppConfig) => ({
+        ...config.observe,
+        runtimeMetrics: !process.versions?.['webcontainer'],
+        serviceId: 'nest-typescript-starter',
+      }),
     }),
     ClockModule,
     DrizzleModule.forRootAsync({
-      useFactory: () => ({
+      inject: [AppConfig],
+      useFactory: (config: AppConfig) => ({
         drizzle,
-        connection: { connectionString: process.env.DATABASE_URL },
+        connection: { connectionString: config.databaseUrl },
         schema,
         casing: 'snake_case' as const,
       }),
     }),
-    MailModule.forRoot({
-      transport: createMailTransport(),
-      from: process.env.MAIL_FROM,
+    MailModule.forRootAsync({
       isGlobal: true,
+      inject: [AppConfig],
+      useFactory: (config: AppConfig) => ({
+        transport: createMailTransport(config.mail),
+        from: config.mail.from,
+      }),
     }),
     RateLimitingModule,
     CleanupModule,

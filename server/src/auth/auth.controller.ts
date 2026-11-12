@@ -14,23 +14,25 @@ import { Can } from '@nestjs/authorization';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { rememberKeepSignedIn } from './keep-signed-in.cookie.js';
+import { personName, selfChosenRole } from '../users/user.schemas.js';
+import { keepSignedIn, signInEmail, signInLinkToken } from './auth.schemas.js';
+import { KeepSignedInCookie } from './keep-signed-in.cookie.js';
 import type { User } from '../users/user.js';
 import { UsersRepository } from '../users/users.repository.js';
 
 const signInLinkBody = z.object({
   // Malformed addresses get the same 202 and no mail (the package checks).
-  email: z.string().max(320),
-  keepSignedIn: z.boolean().default(false),
+  email: signInEmail,
+  keepSignedIn,
 });
 
-const personName = z.string().trim().min(1).max(100);
+const consumeSignInLinkBody = z.object({ token: signInLinkToken });
 
 const completeSignUpBody = z.object({
   firstName: personName,
   lastName: personName,
   // Maintenance Officers and Administrators are invited, never self-chosen.
-  role: z.enum(['student', 'staff']),
+  role: selfChosenRole,
 });
 
 @Controller('auth')
@@ -38,6 +40,7 @@ export class AuthController {
   constructor(
     private readonly signInLinks: MagicLinkService,
     private readonly users: UsersRepository,
+    private readonly keepSignedIn: KeepSignedInCookie,
   ) {}
 
   @Public()
@@ -49,7 +52,7 @@ export class AuthController {
     @Body({ schema: signInLinkBody }) body: z.infer<typeof signInLinkBody>,
     @Res({ passthrough: true }) response: Response,
   ) {
-    rememberKeepSignedIn(response, body.keepSignedIn);
+    this.keepSignedIn.remember(response, body.keepSignedIn);
     // Answers 202 whether or not the address has an account (ADR-0006).
     await this.signInLinks.create(body.email);
   }
@@ -57,7 +60,10 @@ export class AuthController {
   @Public()
   @Post('sign-in-link/consume')
   @HttpCode(200)
-  async consumeSignInLink(@Body() body: { token: string }) {
+  async consumeSignInLink(
+    @Body({ schema: consumeSignInLinkBody })
+    body: z.infer<typeof consumeSignInLinkBody>,
+  ) {
     const signedIn = await this.signInLinks.consume(body.token);
     if (!signedIn) {
       throw new UnauthorizedException();

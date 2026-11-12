@@ -42,6 +42,12 @@ describe('Throttling', () => {
       await signIn(PASSWORD).expect(429);
     });
 
+    it('does not count successful sign-ins', async () => {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        await signIn(PASSWORD).expect(200);
+      }
+    });
+
     it('lets the account try again once 15 minutes have passed', async () => {
       for (let attempt = 0; attempt < 5; attempt++) {
         await signIn('Wrong-Password-1').expect(401);

@@ -28,4 +28,12 @@ describe('Sign-in Links', () => {
       signUpComplete: false,
     });
   });
+
+  it('answers a consume request without a token with 400, not a server error', async () => {
+    await app
+      .browser()
+      .post('/api/auth/sign-in-link/consume')
+      .send({})
+      .expect(400);
+  });
 });

@@ -1,12 +1,10 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   HttpCode,
   Post,
   Put,
   UnauthorizedException,
-  UseGuards,
 } from '@nestjs/common';
 import {
   CurrentSession,
@@ -19,26 +17,34 @@ import {
 } from '@nestjs/authentication';
 import { Mailer } from '@nestjs/mail';
 import { Can } from '@nestjs/authorization';
-import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { emailOf } from '../rate-limiting/rate-limiting.module.js';
+import { ThrottlerException } from '@nestjs/throttler';
+import { FailedAttempts } from '../rate-limiting/failed-attempts.js';
+import { normalizeEmail } from '../users/users.repository.js';
 import { z } from 'zod';
 import { AccountPolicy } from './account.policy.js';
 import { FreshAuthentication } from './fresh-authentication.js';
-import { password } from './password.js';
+import { AccountDeactivatedException } from './account-deactivated.exception.js';
+import {
+  currentPassword,
+  keepSignedIn,
+  newPassword,
+  offeredPassword,
+  signInEmail,
+} from './auth.schemas.js';
 import type { User } from '../users/user.js';
 import { UsersRepository } from '../users/users.repository.js';
 
 const signInBody = z.object({
-  email: z.string().max(320),
-  password: z.string().max(1024),
-  keepSignedIn: z.boolean().default(false),
+  email: signInEmail,
+  password: offeredPassword,
+  keepSignedIn,
 });
 
-const setPasswordBody = z.object({
-  /** Needed unless the User signed in within the last 10 minutes. */
-  currentPassword: z.string().max(1024).optional(),
-  newPassword: password,
-});
+/** 5 wrong passwords per account per 15 minutes (docs/auth-module.md). */
+const FAILED_SIGN_IN_LIMIT = 5;
+const FAILED_SIGN_IN_WINDOW_MS = 15 * 60 * 1000;
+
+const setPasswordBody = z.object({ currentPassword, newPassword });
 
 /** Optional passwords (ADR-0006): signing in with one, and setting one. */
 @Controller('auth')
@@ -50,18 +56,21 @@ export class PasswordsController {
     private readonly sessions: SessionService,
     private readonly freshAuthentication: FreshAuthentication,
     private readonly mailer: Mailer,
+    private readonly failedAttempts: FailedAttempts,
   ) {}
 
   @Public()
-  // 5 attempts per account per 15 minutes, from anywhere.
-  @UseGuards(ThrottlerGuard)
-  @SkipThrottle({ perIp: true })
-  @Throttle({ perAccount: { limit: 5, getTracker: emailOf } })
   @Post('sign-in')
   @HttpCode(200)
   async signInWithPassword(
     @Body({ schema: signInBody }) body: z.infer<typeof signInBody>,
   ) {
+    const attempts = `password-sign-in:${normalizeEmail(body.email)}`;
+    if (await this.failedAttempts.isLockedOut(attempts, FAILED_SIGN_IN_LIMIT)) {
+      throw new ThrottlerException(
+        'Too many failed sign-ins. Try again later.',
+      );
+    }
     const credentials = await this.users.findCredentials(body.email);
     // `verify()` checks a dummy hash when there is none, so an unknown address
     // takes as long as a wrong password.
@@ -70,15 +79,15 @@ export class PasswordsController {
       credentials?.passwordHash,
     );
     if (!credentials || !valid) {
+      await this.failedAttempts.recordFailure(
+        attempts,
+        FAILED_SIGN_IN_WINDOW_MS,
+      );
       throw new UnauthorizedException('Wrong email or password');
     }
     // Only after the right password: it tells strangers nothing.
     if (credentials.deactivated) {
-      throw new ForbiddenException({
-        statusCode: 403,
-        error: 'account_deactivated',
-        message: 'This account is deactivated. Contact an administrator.',
-      });
+      throw new AccountDeactivatedException();
     }
     await this.signIn.signIn(credentials.id, {
       method: 'password',

@@ -38,9 +38,14 @@ export interface ManagedUser {
   createdAt: Date;
 }
 
-/** An active Administrator: not deactivated, not erased. */
+/**
+ * An active Administrator: one who can actually sign in and manage the
+ * system. They have signed in at least once (an Invitation still pending
+ * doesn't count), and are neither deactivated nor erased.
+ */
 const activeAdministrator = and(
   eq(users.roleId, 'administrator'),
+  isNotNull(users.emailVerifiedAt),
   isNull(users.deactivatedAt),
   isNull(users.erasedAt),
 );
@@ -97,12 +102,18 @@ export class UsersRepository {
   }
 
   /**
-   * Suspends a User, unless they're the last active Administrator. Already
-   * deactivated counts as done.
+   * Deactivates a User, unless they're the last active Administrator.
+   * `already_deactivated` and `erased` change nothing.
    */
   async deactivate(
     id: string,
-  ): Promise<'deactivated' | 'not_found' | 'last_administrator'> {
+  ): Promise<
+    | 'deactivated'
+    | 'already_deactivated'
+    | 'erased'
+    | 'not_found'
+    | 'last_administrator'
+  > {
     const changed = await this.db
       .update(users)
       .set({ deactivatedAt: this.now() })
@@ -120,23 +131,31 @@ export class UsersRepository {
       return 'deactivated';
     }
     const [row] = await this.db
-      .select({ deactivatedAt: users.deactivatedAt, roleId: users.roleId })
+      .select({
+        deactivatedAt: users.deactivatedAt,
+        erasedAt: users.erasedAt,
+        roleId: users.roleId,
+      })
       .from(users)
       .where(eq(users.id, id));
     if (!row?.roleId) {
       return 'not_found';
     }
-    return row.deactivatedAt ? 'deactivated' : 'last_administrator';
+    if (row.erasedAt) {
+      return 'erased';
+    }
+    return row.deactivatedAt ? 'already_deactivated' : 'last_administrator';
   }
 
   /**
    * Erases a User (ADR-0002): clears their name, email and password, and
    * deletes Sign-in Links sent to them, keeping the row so their records stay
-   * linked. Refused for the last active Administrator.
+   * linked. Refused for the last active Administrator. `already_erased`
+   * changes nothing.
    */
   async erase(
     id: string,
-  ): Promise<'erased' | 'not_found' | 'last_administrator'> {
+  ): Promise<'erased' | 'already_erased' | 'not_found' | 'last_administrator'> {
     return this.db.transaction(async (tx) => {
       const [target] = await tx
         .select({
@@ -151,7 +170,7 @@ export class UsersRepository {
         return 'not_found';
       }
       if (target.erasedAt) {
-        return 'erased';
+        return 'already_erased';
       }
       const erased = await tx
         .update(users)
@@ -245,16 +264,33 @@ export class UsersRepository {
     return deleted.map(({ id }) => id);
   }
 
-  /** Lifts a deactivation. `false` for an unknown or erased User. */
-  async reactivate(id: string): Promise<boolean> {
+  /** Lifts a deactivation. `not_deactivated` and `erased` change nothing. */
+  async reactivate(
+    id: string,
+  ): Promise<'reactivated' | 'not_deactivated' | 'erased' | 'not_found'> {
     const changed = await this.db
       .update(users)
       .set({ deactivatedAt: null })
       .where(
-        and(eq(users.id, id), isNotNull(users.roleId), isNull(users.erasedAt)),
+        and(
+          eq(users.id, id),
+          isNotNull(users.roleId),
+          isNotNull(users.deactivatedAt),
+          isNull(users.erasedAt),
+        ),
       )
       .returning({ id: users.id });
-    return changed.length > 0;
+    if (changed.length > 0) {
+      return 'reactivated';
+    }
+    const [row] = await this.db
+      .select({ erasedAt: users.erasedAt, roleId: users.roleId })
+      .from(users)
+      .where(eq(users.id, id));
+    if (!row?.roleId) {
+      return 'not_found';
+    }
+    return row.erasedAt ? 'erased' : 'not_deactivated';
   }
 
   /** Every User, oldest first. Pending Sign-ups aren't Users yet, so they're left out. */
@@ -297,7 +333,7 @@ export class UsersRepository {
   async changeRole(
     id: string,
     roleId: RoleId,
-  ): Promise<'changed' | 'not_found' | 'last_administrator'> {
+  ): Promise<'changed' | 'erased' | 'not_found' | 'last_administrator'> {
     const changed = await this.db
       .update(users)
       .set({ roleId })
@@ -305,6 +341,7 @@ export class UsersRepository {
         and(
           eq(users.id, id),
           isNotNull(users.roleId),
+          isNull(users.erasedAt),
           roleId === 'administrator'
             ? undefined
             : this.notTheLastActiveAdministrator(id),
@@ -314,9 +351,14 @@ export class UsersRepository {
     if (changed.length > 0) {
       return 'changed';
     }
-    return (await this.findById(id))?.roleId
-      ? 'last_administrator'
-      : 'not_found';
+    const [row] = await this.db
+      .select({ erasedAt: users.erasedAt, roleId: users.roleId })
+      .from(users)
+      .where(eq(users.id, id));
+    if (!row?.roleId) {
+      return 'not_found';
+    }
+    return row.erasedAt ? 'erased' : 'last_administrator';
   }
 
   /**
@@ -519,7 +561,7 @@ export class UsersRepository {
       .select({ id: users.id })
       .from(users)
       .where(and(activeAdministrator, ne(users.id, id)));
-    return sql`(${users.roleId} <> 'administrator' or ${users.deactivatedAt} is not null or exists ${others})`;
+    return sql`(not (${activeAdministrator}) or exists ${others})`;
   }
 
   private now() {

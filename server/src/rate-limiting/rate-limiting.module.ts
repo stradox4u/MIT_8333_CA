@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { getDrizzleToken } from '@nestjs/drizzle';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { Clock } from '../clock.js';
-import { rateLimitByIp } from '../config.js';
+import { AppConfig } from '../config/app-config.js';
 import type { Database } from '../database/database.js';
 import { normalizeEmail } from '../users/users.repository.js';
 import { DrizzleThrottlerStorage } from './drizzle-throttler.storage.js';
+import { FailedAttempts } from './failed-attempts.js';
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 
@@ -22,8 +23,8 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000;
 @Module({
   imports: [
     ThrottlerModule.forRootAsync({
-      inject: [getDrizzleToken(), Clock],
-      useFactory: (db: Database, clock: Clock) => ({
+      inject: [getDrizzleToken(), Clock, AppConfig],
+      useFactory: (db: Database, clock: Clock, config: AppConfig) => ({
         storage: new DrizzleThrottlerStorage(db, clock),
         errorMessage: 'Too many attempts. Try again later.',
         throttlers: [
@@ -31,7 +32,7 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000;
             name: 'perIp',
             ttl: FIFTEEN_MINUTES,
             limit: 10,
-            skipIf: () => !rateLimitByIp(),
+            skipIf: () => !config.rateLimitByIp,
           },
           {
             name: 'perAccount',
@@ -43,6 +44,8 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000;
       }),
     }),
   ],
+  providers: [FailedAttempts],
+  exports: [FailedAttempts],
 })
 export class RateLimitingModule {}
 

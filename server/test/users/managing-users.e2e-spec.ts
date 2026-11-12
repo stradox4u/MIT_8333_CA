@@ -108,6 +108,37 @@ describe('Managing Users', () => {
         .expect(200);
     });
 
+    it('does not count an invited Administrator who has never signed in', async () => {
+      const admin = await app.signInAsAdministrator();
+      await admin
+        .post('/api/users')
+        .send({
+          firstName: 'Typo',
+          lastName: 'Admin',
+          email: 'adnim@exmaple.com',
+          role: 'administrator',
+        })
+        .expect(201);
+      const { id } = await userWithEmail(admin, 'admin@example.com');
+
+      await admin
+        .patch(`/api/users/${id}/role`)
+        .send({ role: 'staff' })
+        .expect(409);
+    });
+
+    it('cannot change an Erased User’s Role', async () => {
+      const admin = await app.signInAsAdministrator();
+      await app.signUp('ada@example.com');
+      const { id } = await userWithEmail(admin, 'ada@example.com');
+      await admin.post(`/api/users/${id}/erase`).expect(200);
+
+      await admin
+        .patch(`/api/users/${id}/role`)
+        .send({ role: 'administrator' })
+        .expect(409);
+    });
+
     it('answers 404 for an unknown User', async () => {
       const admin = await app.signInAsAdministrator();
 

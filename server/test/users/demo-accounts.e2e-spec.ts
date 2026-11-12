@@ -1,9 +1,6 @@
 import { createTestApp, type TestApp } from '../support/test-app.js';
 
-const ENV = {
-  DEMO_ACCOUNTS_PASSWORD: 'Demo-Password-2026',
-  DEMO_ACCOUNTS_DOMAIN: 'demo.test',
-};
+const DEMO = { password: 'Demo-Password-2026', domain: 'demo.test' };
 
 describe('Demo accounts', () => {
   let app: TestApp;
@@ -22,12 +19,12 @@ describe('Demo accounts', () => {
   ])(
     'lets a marker sign in as %s with the demo password',
     async (email, role) => {
-      await app.seedDemoAccounts(ENV);
+      await app.seedDemoAccounts(DEMO);
       const marker = app.browser();
 
       await marker
         .post('/api/auth/sign-in')
-        .send({ email, password: ENV.DEMO_ACCOUNTS_PASSWORD })
+        .send({ email, password: DEMO.password })
         .expect(200);
 
       const me = await marker.get('/api/auth/me').expect(200);
@@ -36,14 +33,14 @@ describe('Demo accounts', () => {
   );
 
   it('can be run again without creating duplicates', async () => {
-    await app.seedDemoAccounts(ENV);
-    await app.seedDemoAccounts(ENV);
+    await app.seedDemoAccounts(DEMO);
+    await app.seedDemoAccounts(DEMO);
     const admin = app.browser();
     await admin
       .post('/api/auth/sign-in')
       .send({
         email: 'administrator@demo.test',
-        password: ENV.DEMO_ACCOUNTS_PASSWORD,
+        password: DEMO.password,
       })
       .expect(200);
 
@@ -57,7 +54,7 @@ describe('Demo accounts', () => {
 
   it('refuses a demo password that breaks the password rules', async () => {
     await expect(
-      app.seedDemoAccounts({ ...ENV, DEMO_ACCOUNTS_PASSWORD: 'demo' }),
+      app.seedDemoAccounts({ ...DEMO, password: 'demo' }),
     ).rejects.toThrow(/DEMO_ACCOUNTS_PASSWORD/);
   });
 });

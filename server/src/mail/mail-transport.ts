@@ -1,27 +1,15 @@
 import { MailTransport, SmtpTransport } from '@nestjs/mail';
+import type { AppConfig } from '../config/app-config.js';
 
 /**
  * The one place that knows which mail provider is in use. Mailpit (dev) and
  * Brevo (production) both speak SMTP, so switching between them is only
  * `SMTP_URL`. Adding an HTTP-API provider (Resend, Postmark, SES, SendGrid)
- * means adding a case here.
+ * means adding a case here and a value to `MAIL_TRANSPORT`.
  */
-export function createMailTransport(
-  env: NodeJS.ProcessEnv = process.env,
-): MailTransport {
-  const kind = env.MAIL_TRANSPORT ?? 'smtp';
-  switch (kind) {
+export function createMailTransport(mail: AppConfig['mail']): MailTransport {
+  switch (mail.transport) {
     case 'smtp':
-      return new SmtpTransport({ url: required(env, 'SMTP_URL') });
-    default:
-      throw new Error(`Unknown MAIL_TRANSPORT "${kind}"`);
+      return new SmtpTransport({ url: mail.smtpUrl });
   }
-}
-
-function required(env: NodeJS.ProcessEnv, name: string): string {
-  const value = env[name];
-  if (!value) {
-    throw new Error(`${name} must be set`);
-  }
-  return value;
 }

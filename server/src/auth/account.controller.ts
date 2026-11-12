@@ -16,14 +16,10 @@ import { ActivityLog } from '../users/activity-log.js';
 import { UserErasure } from '../users/user-erasure.js';
 import type { User } from '../users/user.js';
 import { AccountPolicy } from './account.policy.js';
+import { currentPassword } from './auth.schemas.js';
 import { FreshAuthentication } from './fresh-authentication.js';
 
-const eraseSelfBody = z
-  .object({
-    /** Needed unless the User signed in within the last 10 minutes. */
-    currentPassword: z.string().max(1024).optional(),
-  })
-  .optional();
+const eraseSelfBody = z.object({ currentPassword }).optional();
 
 /** A User acting on their own account. */
 @Controller('me')

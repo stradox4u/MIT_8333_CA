@@ -119,6 +119,17 @@ describe('Continue with Google', () => {
     expect(callback.body).toMatchObject({ error: 'account_deactivated' });
   });
 
+  it('refuses a sign-in provider other than Google', async () => {
+    await app.browser().get('/api/auth/oidc/github/login').expect(400);
+  });
+
+  it('refuses a keep-signed-in value that is neither true nor false', async () => {
+    await app
+      .browser()
+      .get('/api/auth/oidc/google/login?keepSignedIn=maybe')
+      .expect(400);
+  });
+
   it('honours keep-signed-in', async () => {
     const ada = await signInWithGoogle(ADA, { keepSignedIn: true });
 

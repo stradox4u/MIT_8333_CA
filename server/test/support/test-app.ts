@@ -164,9 +164,9 @@ export async function createTestApp() {
     continueWithGoogle,
     /** What the scheduler runs once a day. */
     runDailyCleanup: () => app.get(DailyCleanup).run(),
-    /** What `npm run db:seed` does, with the given environment. */
-    seedDemoAccounts: (env: NodeJS.ProcessEnv) =>
-      app.get(DemoAccounts).seed(env),
+    /** What `npm run db:seed` does, with the given settings. */
+    seedDemoAccounts: (settings: { domain: string; password?: string }) =>
+      app.get(DemoAccounts).seed(settings),
     browser,
     latestMailTo,
     signInLinkTokenSentTo,
