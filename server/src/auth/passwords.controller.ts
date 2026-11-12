@@ -20,12 +20,12 @@ import { Can } from '@nestjs/authorization';
 import { z } from 'zod';
 import { AccountPolicy } from './account.policy.js';
 import { FreshAuthentication } from './fresh-authentication.js';
-import { password } from './password.js';
 import { PasswordAttempts } from './password-attempts.js';
 import { AccountDeactivatedException } from './account-deactivated.exception.js';
 import {
   currentPassword,
   keepSignedIn,
+  newPassword,
   offeredPassword,
   signInEmail,
 } from './auth.schemas.js';
@@ -39,7 +39,7 @@ const signInBody = z.object({
 });
 
 /** A new password must meet the rules (ADR-0006). */
-const setPasswordBody = z.object({ currentPassword, newPassword: password });
+const setPasswordBody = z.object({ currentPassword, newPassword });
 
 /** Optional passwords (ADR-0006): signing in with one, and setting one. */
 @Controller('auth')
@@ -60,7 +60,7 @@ export class PasswordsController {
   async signInWithPassword(
     @Body({ schema: signInBody }) body: z.infer<typeof signInBody>,
   ) {
-    await this.passwordAttempts.begin(body.email);
+    const attempt = await this.passwordAttempts.begin(body.email);
     const credentials = await this.users.findCredentials(body.email);
     // `verify()` checks a dummy hash when there is none, so an unknown address
     // takes as long as a wrong password.
@@ -71,7 +71,7 @@ export class PasswordsController {
     if (!credentials || !valid) {
       throw new UnauthorizedException('Wrong email or password');
     }
-    await this.passwordAttempts.succeeded(body.email);
+    await this.passwordAttempts.succeeded(body.email, attempt);
     // Only after the right password: it tells strangers nothing.
     if (credentials.deactivated) {
       throw new AccountDeactivatedException();

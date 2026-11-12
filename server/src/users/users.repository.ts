@@ -10,6 +10,7 @@ import {
   users,
 } from '../database/schema.js';
 import { displayName } from './display-name.js';
+import type { LastAdministrator, NotFound, UserErased } from './refusals.js';
 import type { User } from './user.js';
 
 /** The columns that make a `User`: everything but the password hash. */
@@ -128,9 +129,9 @@ export class UsersRepository {
   ): Promise<
     | 'deactivated'
     | 'already_deactivated'
-    | 'user_erased'
-    | 'not_found'
-    | 'last_administrator'
+    | UserErased
+    | NotFound
+    | LastAdministrator
   > {
     const changed = await this.db
       .update(users)
@@ -166,7 +167,7 @@ export class UsersRepository {
    */
   async erase(
     id: string,
-  ): Promise<'erased' | 'already_erased' | 'not_found' | 'last_administrator'> {
+  ): Promise<'erased' | 'already_erased' | NotFound | LastAdministrator> {
     return this.db.transaction(async (tx) => {
       const [target] = await tx
         .select({
@@ -213,7 +214,7 @@ export class UsersRepository {
     id: string,
   ): Promise<
     | { email: string; firstName: string; roleId: RoleId }
-    | 'not_found'
+    | NotFound
     | 'not_pending'
   > {
     const [row] = await this.db
@@ -242,7 +243,7 @@ export class UsersRepository {
   async correctInvitationEmail(
     id: string,
     email: string,
-  ): Promise<'corrected' | 'not_found' | 'not_pending' | 'taken'> {
+  ): Promise<'corrected' | NotFound | 'not_pending' | 'taken'> {
     const invitation = await this.findPendingInvitation(id);
     if (typeof invitation === 'string') {
       return invitation;
@@ -278,7 +279,7 @@ export class UsersRepository {
   /** Lifts a deactivation. `not_deactivated` and `user_erased` change nothing. */
   async reactivate(
     id: string,
-  ): Promise<'reactivated' | 'not_deactivated' | 'user_erased' | 'not_found'> {
+  ): Promise<'reactivated' | 'not_deactivated' | UserErased | NotFound> {
     const changed = await this.db
       .update(users)
       .set({ deactivatedAt: null })
@@ -326,7 +327,7 @@ export class UsersRepository {
   async changeRole(
     id: string,
     roleId: RoleId,
-  ): Promise<'changed' | 'user_erased' | 'not_found' | 'last_administrator'> {
+  ): Promise<'changed' | UserErased | NotFound | LastAdministrator> {
     const changed = await this.db
       .update(users)
       .set({ roleId })

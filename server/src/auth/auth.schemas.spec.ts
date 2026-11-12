@@ -1,4 +1,4 @@
-import { password } from './password.js';
+import { newPassword } from './auth.schemas.js';
 
 describe('password rules', () => {
   it.each([
@@ -7,7 +7,7 @@ describe('password rules', () => {
     ['128 characters', `Aa1!${'x'.repeat(124)}`],
     ['non-ASCII letters', 'Ünïcödé-Pass1'],
   ])('accepts %s', (_, candidate) => {
-    expect(password.safeParse(candidate).success).toBe(true);
+    expect(newPassword.safeParse(candidate).success).toBe(true);
   });
 
   it.each([
@@ -18,6 +18,6 @@ describe('password rules', () => {
     ['no digit', 'Abcdefghij!x'],
     ['no special character', 'Abcdefgh12xy'],
   ])('refuses %s', (_, candidate) => {
-    expect(password.safeParse(candidate).success).toBe(false);
+    expect(newPassword.safeParse(candidate).success).toBe(false);
   });
 });

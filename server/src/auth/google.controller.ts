@@ -30,7 +30,7 @@ export class GoogleController {
     @Query({ schema: loginQuery }) query: z.infer<typeof loginQuery>,
     @Res({ passthrough: true }) response: Response,
   ) {
-    this.keepSignedIn.remember(response, query.keepSignedIn === 'true');
+    this.keepSignedIn.remember(response, query.keepSignedIn);
     const { url } = await this.oidc.start(provider, {
       redirectTo: query.redirectTo,
     });

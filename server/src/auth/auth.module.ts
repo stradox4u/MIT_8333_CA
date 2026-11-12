@@ -26,14 +26,14 @@ import { PasswordsController } from './passwords.controller.js';
 import { SessionAuth } from './session-auth.provider.js';
 import { SessionsController } from './sessions.controller.js';
 import { SignInLinks } from './sign-in-links.handler.js';
-import { RateLimitingModule } from '../rate-limiting/rate-limiting.module.js';
+import { RateLimitCountersModule } from '../rate-limiting/rate-limit-counters.js';
 import { UsersModule } from '../users/users.module.js';
 import './authentication-types.js';
 
 @Module({
   imports: [
     UsersModule,
-    RateLimitingModule,
+    RateLimitCountersModule,
     AuthenticationModule.forRootAsync({
       imports: [GoogleFetchModule],
       inject: [Clock, GoogleFetch, AppConfig],

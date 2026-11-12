@@ -3,7 +3,6 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AppConfig } from '../config/app-config.js';
 import { normalizeEmail } from '../users/users.repository.js';
 import { DrizzleThrottlerStorage } from './drizzle-throttler.storage.js';
-import { FailedAttempts } from './failed-attempts.js';
 import {
   RateLimitCounters,
   RateLimitCountersModule,
@@ -52,8 +51,7 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000;
       }),
     }),
   ],
-  providers: [FailedAttempts],
-  exports: [RateLimitCountersModule, FailedAttempts],
+  exports: [RateLimitCountersModule],
 })
 export class RateLimitingModule {}
 

@@ -105,6 +105,20 @@ describe('Throttling', () => {
       await requestLink('ada@example.com', '203.0.113.7').expect(429);
     });
 
+    it('tells a refused client to retry in seconds, once the block ends', async () => {
+      for (let request = 0; request < 3; request++) {
+        await requestLink('ada@example.com', '203.0.113.7').expect(202);
+      }
+
+      const refused = await requestLink(
+        'ada@example.com',
+        '203.0.113.7',
+      ).expect(429);
+
+      // 15 minutes, in seconds, as HTTP's Retry-After counts.
+      expect(refused.headers['retry-after-peraccount']).toBe('900');
+    });
+
     it('still serves that address from another IP', async () => {
       for (let request = 0; request < 3; request++) {
         await requestLink('ada@example.com', '203.0.113.7').expect(202);

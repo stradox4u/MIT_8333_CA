@@ -94,11 +94,11 @@ export const googleSignIns = pgTable(
   (table) => [index().on(table.expiresAt)],
 );
 
-/** Counters for @nestjs/throttler (see DrizzleThrottlerStorage). */
+/** Fixed-window counters behind every rate limit (see RateLimitCounters). */
 export const rateLimits = pgTable(
   'rate_limits',
   {
-    /** The throttler's key: route, throttler and tracker (account or IP), hashed. */
+    /** The counter's key, hashed: a throttler's, or a password-attempt key. */
     key: text().primaryKey(),
     hits: integer().notNull(),
     windowEndsAt: instant().notNull(),

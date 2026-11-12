@@ -127,7 +127,7 @@ export class UsersController {
   @HttpCode(202)
   async resendInvitation(@Param('id', { schema: userId }) id: string) {
     const invitation = await this.users.findPendingInvitation(id);
-    refuseIf(invitation, 'sent an Invitation');
+    refuseIf(invitation);
     if (invitation === 'not_pending') {
       throw new ConflictException('This Invitation has already been accepted');
     }
@@ -141,7 +141,7 @@ export class UsersController {
     @Body({ schema: correctEmailBody }) body: z.infer<typeof correctEmailBody>,
   ) {
     const outcome = await this.users.correctInvitationEmail(id, body.email);
-    refuseIf(outcome, 'sent an Invitation');
+    refuseIf(outcome);
     if (outcome === 'not_pending') {
       throw new ConflictException(
         'Only a pending Invitation’s address can be changed',

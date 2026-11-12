@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PasswordHasher } from '@nestjs/authentication';
-import { password } from '../auth/password.js';
+import { newPassword } from '../auth/auth.schemas.js';
 import type { AppConfig } from '../config/app-config.js';
 import type { RoleId } from '../database/schema.js';
 import { UsersRepository } from './users.repository.js';
@@ -52,7 +52,7 @@ export class DemoAccounts {
     domain,
     password: demoPassword = '',
   }: AppConfig['demoAccounts']): Promise<void> {
-    const rules = password.safeParse(demoPassword);
+    const rules = newPassword.safeParse(demoPassword);
     if (!rules.success) {
       throw new Error(
         `DEMO_ACCOUNTS_PASSWORD ${rules.error.issues.map((issue) => issue.message).join(', ')}`,

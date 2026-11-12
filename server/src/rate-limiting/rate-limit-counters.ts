@@ -8,6 +8,8 @@ import { rateLimits } from '../database/schema.js';
 /** A counter as it stands after a hit. */
 export interface Counter {
   hits: number;
+  /** Which window the hit was counted in, for `takeBack()`. */
+  windowEndsAt: Date;
   msUntilWindowEnds: number;
   /** 0 when the key isn't blocked. */
   msUntilUnblocked: number;
@@ -55,26 +57,35 @@ export class RateLimitCounters {
       .returning();
     return {
       hits: row.hits,
+      windowEndsAt: row.windowEndsAt,
       msUntilWindowEnds: msUntil(row.windowEndsAt, now),
       msUntilUnblocked: row.blockedUntil ? msUntil(row.blockedUntil, now) : 0,
     };
   }
 
-  /** Blocks `key` for `durationMs`; returns the block's length. */
-  async block(key: string, durationMs: number): Promise<number> {
+  /** Blocks `key` for `durationMs`. */
+  async block(key: string, durationMs: number): Promise<void> {
     await this.db
       .update(rateLimits)
       .set({ blockedUntil: new Date(this.clock.now() + durationMs) })
       .where(eq(rateLimits.key, hashed(key)));
-    return durationMs;
   }
 
-  /** Takes one hit back, for an attempt that turned out to be fine. */
-  async takeBack(key: string): Promise<void> {
+  /**
+   * Takes back the hit `counted` returned, for an attempt that turned out
+   * fine. Only within the window it was counted in: a later window's hits
+   * are other attempts.
+   */
+  async takeBack(key: string, counted: Counter): Promise<void> {
     await this.db
       .update(rateLimits)
       .set({ hits: sql`greatest(${rateLimits.hits} - 1, 0)` })
-      .where(eq(rateLimits.key, hashed(key)));
+      .where(
+        and(
+          eq(rateLimits.key, hashed(key)),
+          eq(rateLimits.windowEndsAt, counted.windowEndsAt),
+        ),
+      );
   }
 
   /** Deletes counters whose window and block are both over. */

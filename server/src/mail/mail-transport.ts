@@ -1,9 +1,13 @@
 import { MailTransport, SmtpTransport } from '@nestjs/mail';
 
-/** What the transports are built from: `AppConfig.mail`. */
+/**
+ * Everything mail needs, defined once here; `AppConfig.mail` is declared as
+ * this type, so a new setting can't be forgotten there.
+ */
 export interface MailSettings {
   transport: MailTransportKind;
   smtpUrl: string;
+  from: string;
 }
 
 /**

@@ -46,7 +46,7 @@ export async function createTestApp({
   config = {},
 }: {
   /** Settings to override, by `AppConfig` property, for this file's app. */
-  config?: Partial<Record<keyof AppConfig, unknown>>;
+  config?: Partial<AppConfig>;
 } = {}) {
   const database = await createTestDatabase();
   const mailbox = new InMemoryMailTransport();
@@ -68,7 +68,7 @@ export async function createTestApp({
       factory: (settings: ConfigService<Environment, true>) =>
         new Proxy(new AppConfig(settings), {
           get: (real, name, receiver) =>
-            name in config
+            Object.hasOwn(config, name)
               ? config[name as keyof AppConfig]
               : Reflect.get(real, name, receiver),
         }),
