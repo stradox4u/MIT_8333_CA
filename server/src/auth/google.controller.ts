@@ -1,9 +1,19 @@
-import { Controller, Get, Param, Query, Redirect, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  Redirect,
+  Res,
+  UseFilters,
+} from '@nestjs/common';
 import { OidcService, Public } from '@nestjs/authentication';
+import { ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { keepSignedInQuery, signInProvider } from './auth.schemas.js';
 import { KeepSignedInCookie } from './keep-signed-in.cookie.js';
+import { GoogleCallbackFilter } from './google-callback.filter.js';
 
 const loginQuery = z.object({
   keepSignedIn: keepSignedInQuery,
@@ -39,6 +49,13 @@ export class GoogleController {
 
   @Get(':provider/callback')
   @Redirect()
+  @UseFilters(GoogleCallbackFilter)
+  @ApiResponse({
+    status: 302,
+    description:
+      'On success, redirectTo or /. On failure, APP_URL/sign-in?error=' +
+      'account_deactivated (a proved deactivated User), otherwise google_sign_in_failed.',
+  })
   async callback(
     @Param('provider', { schema: signInProvider }) provider: string,
     @Query({ schema: callbackQuery }) query: z.infer<typeof callbackQuery>,

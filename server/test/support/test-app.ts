@@ -158,10 +158,17 @@ export async function createTestApp({
   const continueWithGoogle = async (
     signingIn: ReturnType<typeof browser>,
     account: GoogleAccount,
-    { keepSignedIn = false }: { keepSignedIn?: boolean } = {},
+    {
+      keepSignedIn = false,
+      redirectTo,
+    }: {
+      keepSignedIn?: boolean;
+      redirectTo?: string;
+    } = {},
   ) => {
     const login = await signingIn
-      .get(`/api/auth/oidc/google/login?keepSignedIn=${keepSignedIn}`)
+      .get('/api/auth/oidc/google/login')
+      .query({ keepSignedIn, ...(redirectTo && { redirectTo }) })
       .expect(302);
     const authorization = new URL(login.headers.location);
     const code = google.approve(
@@ -180,6 +187,7 @@ export async function createTestApp({
   return {
     mailbox,
     clock,
+    googleFetch: moduleRef.get(GoogleFetch),
     continueWithGoogle,
     /** What the scheduler runs once a day. */
     runDailyCleanup: () => app.get(DailyCleanup).run(),
