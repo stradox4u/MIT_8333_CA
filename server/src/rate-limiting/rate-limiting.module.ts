@@ -22,7 +22,6 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000;
  */
 @Module({
   imports: [
-    RateLimitCountersModule,
     ThrottlerModule.forRootAsync({
       imports: [RateLimitCountersModule],
       inject: [RateLimitCounters, AppConfig],
@@ -51,7 +50,6 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000;
       }),
     }),
   ],
-  exports: [RateLimitCountersModule],
 })
 export class RateLimitingModule {}
 

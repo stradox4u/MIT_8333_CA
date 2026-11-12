@@ -8,7 +8,9 @@ import type { Environment } from './environment.js';
  * setting is read here, through `@nestjs/config`. Only two places read
  * `process.env` directly, because they run before or outside the app's
  * config: `AppConfigModule` (whether to load `.env`, before `ConfigService`
- * exists) and `drizzle.config.ts` (drizzle-kit runs outside Nest).
+ * exists) and `drizzle.config.ts` (drizzle-kit runs outside Nest). Whether
+ * Observe runs is decided from the environment `@nestjs/config` loaded, by
+ * `ConditionalModule` (see `observeIsConfigured`).
  */
 @Injectable()
 export class AppConfig {

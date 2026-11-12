@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthorizationModule } from '@nestjs/authorization';
+import { ConditionalModule } from '@nestjs/config';
 import { DrizzleModule } from '@nestjs/drizzle';
 import { MailModule } from '@nestjs/mail';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -10,7 +11,7 @@ import { AppConfig } from './config/app-config.js';
 import { AppConfigModule } from './config/app-config.module.js';
 import * as schema from './database/schema.js';
 import { createMailTransport } from './mail/mail-transport.js';
-import { ObserveModule } from './observe.js';
+import { ObserveModule, observeIsConfigured } from './observe.js';
 import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
 
 @Module({
@@ -18,14 +19,18 @@ import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
     AppConfigModule,
     // Distributed tracing, auto-correlated logs, request/job metrics, error
     // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRootAsync({
-      inject: [AppConfig],
-      useFactory: (config: AppConfig) => ({
-        ...config.observe,
-        runtimeMetrics: !process.versions?.['webcontainer'],
-        serviceId: 'nest-typescript-starter',
+    // Only when its keys are set (see observeIsConfigured).
+    ConditionalModule.registerWhen(
+      ObserveModule.forRootAsync({
+        inject: [AppConfig],
+        useFactory: (config: AppConfig) => ({
+          ...config.observe,
+          runtimeMetrics: !process.versions?.['webcontainer'],
+          serviceId: 'nest-typescript-starter',
+        }),
       }),
-    }),
+      observeIsConfigured,
+    ),
     ClockModule,
     DrizzleModule.forRootAsync({
       inject: [AppConfig],

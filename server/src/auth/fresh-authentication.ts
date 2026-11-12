@@ -29,7 +29,7 @@ export class FreshAuthentication {
   ): Promise<void> {
     if (currentPassword !== undefined) {
       // Guesses here count toward the same lockout as password sign-in.
-      const attempt = await this.passwordAttempts.begin(user.email!);
+      const hit = await this.passwordAttempts.begin(user.email!);
       const hash = await this.users.findPasswordHash(user.id);
       if (!(await this.hasher.verify(currentPassword, hash))) {
         throw new ForbiddenException({
@@ -38,7 +38,7 @@ export class FreshAuthentication {
           message: 'The current password is wrong',
         });
       }
-      await this.passwordAttempts.succeeded(user.email!, attempt);
+      await this.passwordAttempts.succeeded(hit);
       return;
     }
     if (this.clock.now() - session.createdAt.getTime() > FRESH_FOR_MS) {

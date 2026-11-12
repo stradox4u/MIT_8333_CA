@@ -11,11 +11,11 @@ import {
 } from '@nestjs/common';
 import { CurrentUser, MagicLinkService, Public } from '@nestjs/authentication';
 import { Can } from '@nestjs/authorization';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { personName, selfChosenRole } from '../users/user.schemas.js';
 import { keepSignedIn, signInEmail, signInLinkToken } from './auth.schemas.js';
+import { RateLimitGuard } from '../rate-limiting/rate-limit.guard.js';
 import { KeepSignedInCookie } from './keep-signed-in.cookie.js';
 import type { User } from '../users/user.js';
 import { UsersRepository } from '../users/users.repository.js';
@@ -45,7 +45,7 @@ export class AuthController {
 
   @Public()
   // 10 per IP, and 3 per address and IP, per 15 minutes.
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(RateLimitGuard)
   @Post('sign-in-link')
   @HttpCode(202)
   async requestSignInLink(

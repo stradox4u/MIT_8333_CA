@@ -2,7 +2,8 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 
 /**
  * The outcomes that refuse an action on a User. Repositories name them
- * through these types, so a renamed refusal can't slip past `refuseIf()`.
+ * through these types, and `refuseIf()` switches on them, so renaming one
+ * breaks the build wherever it's stale.
  */
 export type NotFound = 'not_found';
 export type UserErased = 'user_erased';
@@ -24,7 +25,8 @@ export function refuseIf<Outcome>(
     ? []
     : [refused: string]
 ): asserts outcome is Exclude<Outcome, Refusal> {
-  switch (outcome as unknown) {
+  // Typed as `Refusal`, so a renamed refusal makes a stale case a compile error.
+  switch (outcome as unknown as Refusal) {
     case 'not_found':
       throw new NotFoundException();
     case 'user_erased':

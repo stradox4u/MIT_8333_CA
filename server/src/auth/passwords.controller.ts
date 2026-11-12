@@ -60,7 +60,7 @@ export class PasswordsController {
   async signInWithPassword(
     @Body({ schema: signInBody }) body: z.infer<typeof signInBody>,
   ) {
-    const attempt = await this.passwordAttempts.begin(body.email);
+    const hit = await this.passwordAttempts.begin(body.email);
     const credentials = await this.users.findCredentials(body.email);
     // `verify()` checks a dummy hash when there is none, so an unknown address
     // takes as long as a wrong password.
@@ -71,7 +71,7 @@ export class PasswordsController {
     if (!credentials || !valid) {
       throw new UnauthorizedException('Wrong email or password');
     }
-    await this.passwordAttempts.succeeded(body.email, attempt);
+    await this.passwordAttempts.succeeded(hit);
     // Only after the right password: it tells strangers nothing.
     if (credentials.deactivated) {
       throw new AccountDeactivatedException();

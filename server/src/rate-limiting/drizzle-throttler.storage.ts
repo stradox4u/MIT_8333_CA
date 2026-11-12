@@ -16,15 +16,15 @@ export class DrizzleThrottlerStorage implements ThrottlerStorage {
     limit: number,
     blockDuration: number,
   ) {
-    const counter = await this.counters.hit(key, ttl);
-    let msUntilUnblocked = counter.msUntilUnblocked;
-    if (msUntilUnblocked === 0 && counter.hits > limit) {
+    const hit = await this.counters.hit(key, ttl);
+    let msUntilUnblocked = hit.msUntilUnblocked;
+    if (msUntilUnblocked === 0 && hit.count > limit) {
       await this.counters.block(key, blockDuration);
       msUntilUnblocked = blockDuration;
     }
     return {
-      totalHits: counter.hits,
-      timeToExpire: seconds(counter.msUntilWindowEnds),
+      totalHits: hit.count,
+      timeToExpire: seconds(hit.msUntilWindowEnds),
       isBlocked: msUntilUnblocked > 0,
       timeToBlockExpire: seconds(msUntilUnblocked),
     };

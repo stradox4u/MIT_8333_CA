@@ -5,10 +5,12 @@ import { Clock } from '../clock.js';
 import { InjectDatabase, type Database } from '../database/database.js';
 import { rateLimits } from '../database/schema.js';
 
-/** A counter as it stands after a hit. */
-export interface Counter {
-  hits: number;
-  /** Which window the hit was counted in, for `takeBack()`. */
+/** One counted hit, and its counter as it stands after it. */
+export interface Hit {
+  key: string;
+  /** Hits in the current window, this one included. */
+  count: number;
+  /** The window this hit was counted in, for `takeBack()`. */
   windowEndsAt: Date;
   msUntilWindowEnds: number;
   /** 0 when the key isn't blocked. */
@@ -33,7 +35,7 @@ export class RateLimitCounters {
    * after a window ends, opens a window of `windowMs`; while the key is
    * blocked, hits don't count.
    */
-  async hit(key: string, windowMs: number): Promise<Counter> {
+  async hit(key: string, windowMs: number): Promise<Hit> {
     const now = new Date(this.clock.now());
     const at = sql`${now.toISOString()}::timestamptz`;
     const windowEnd = new Date(now.getTime() + windowMs);
@@ -56,7 +58,8 @@ export class RateLimitCounters {
       })
       .returning();
     return {
-      hits: row.hits,
+      key,
+      count: row.hits,
       windowEndsAt: row.windowEndsAt,
       msUntilWindowEnds: msUntil(row.windowEndsAt, now),
       msUntilUnblocked: row.blockedUntil ? msUntil(row.blockedUntil, now) : 0,
@@ -72,18 +75,18 @@ export class RateLimitCounters {
   }
 
   /**
-   * Takes back the hit `counted` returned, for an attempt that turned out
-   * fine. Only within the window it was counted in: a later window's hits
-   * are other attempts.
+   * Takes a hit back, for an attempt that shouldn't count after all. Only
+   * within the window it was counted in: a later window's hits are other
+   * attempts.
    */
-  async takeBack(key: string, counted: Counter): Promise<void> {
+  async takeBack(hit: Hit): Promise<void> {
     await this.db
       .update(rateLimits)
       .set({ hits: sql`greatest(${rateLimits.hits} - 1, 0)` })
       .where(
         and(
-          eq(rateLimits.key, hashed(key)),
-          eq(rateLimits.windowEndsAt, counted.windowEndsAt),
+          eq(rateLimits.key, hashed(hit.key)),
+          eq(rateLimits.windowEndsAt, hit.windowEndsAt),
         ),
       );
   }
@@ -105,7 +108,10 @@ export class RateLimitCounters {
   }
 }
 
-/** Its own module, so the throttlers' async factory can inject it. */
+/**
+ * Its own module, so the throttlers' async factory and the modules that
+ * count attempts (auth, cleanup) can import just the counters.
+ */
 @Module({ providers: [RateLimitCounters], exports: [RateLimitCounters] })
 export class RateLimitCountersModule {}
 

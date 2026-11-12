@@ -58,6 +58,15 @@ describe('Throttling', () => {
       expect(statuses.filter((status) => status === 429)).toHaveLength(15);
     });
 
+    it('lets simultaneous correct sign-ins leave nothing counted behind', async () => {
+      await Promise.all(Array.from({ length: 8 }, () => signIn(PASSWORD)));
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await signIn('Wrong-Password-1').expect(401);
+      }
+      await signIn('Wrong-Password-1').expect(429);
+    });
+
     it('lets the account try again once 15 minutes have passed', async () => {
       for (let attempt = 0; attempt < 5; attempt++) {
         await signIn('Wrong-Password-1').expect(401);
@@ -115,8 +124,10 @@ describe('Throttling', () => {
         '203.0.113.7',
       ).expect(429);
 
-      // 15 minutes, in seconds, as HTTP's Retry-After counts.
+      // 15 minutes, in seconds, as HTTP's Retry-After counts; the standard
+      // header too, for clients and proxies that only know that one.
       expect(refused.headers['retry-after-peraccount']).toBe('900');
+      expect(refused.headers['retry-after']).toBe('900');
     });
 
     it('still serves that address from another IP', async () => {

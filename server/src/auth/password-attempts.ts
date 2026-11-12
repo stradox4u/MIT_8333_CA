@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
 import {
-  type Counter,
+  type Hit,
   RateLimitCounters,
 } from '../rate-limiting/rate-limit-counters.js';
 import { normalizeEmail } from '../users/users.repository.js';
@@ -17,9 +17,11 @@ const WINDOW_MS = 15 * 60 * 1000;
  *
  * Each attempt is counted before its password is checked, in one atomic
  * step, so a burst of simultaneous guesses can't all get in before any is
- * counted. An attempt whose password was right is handed back with
- * `succeeded()`. The price: attempts still being checked count too, so many
- * simultaneous right passwords for one account can briefly hit the limit.
+ * counted. Only wrong passwords stay counted: an attempt refused over the
+ * limit is handed back at once (no password was checked), and one whose
+ * password was right is handed back with `succeeded()`. So many
+ * simultaneous right passwords can be refused while they're in flight, but
+ * leave nothing counted behind.
  */
 @Injectable()
 export class PasswordAttempts {
@@ -27,21 +29,22 @@ export class PasswordAttempts {
 
   /**
    * Counts an attempt for `email`, before its password is checked: 429 once
-   * the limit is used up. Hand the result to `succeeded()` if it was right.
+   * the limit is used up. Hand the hit to `succeeded()` if it was right.
    */
-  async begin(email: string): Promise<Counter> {
-    const counted = await this.counters.hit(keyFor(email), WINDOW_MS);
-    if (counted.hits > WRONG_PASSWORDS_ALLOWED) {
+  async begin(email: string): Promise<Hit> {
+    const hit = await this.counters.hit(keyFor(email), WINDOW_MS);
+    if (hit.count > WRONG_PASSWORDS_ALLOWED) {
+      await this.counters.takeBack(hit);
       throw new ThrottlerException(
         'Too many wrong passwords. Try again later.',
       );
     }
-    return counted;
+    return hit;
   }
 
   /** The password was right, so this attempt doesn't count. */
-  async succeeded(email: string, counted: Counter): Promise<void> {
-    await this.counters.takeBack(keyFor(email), counted);
+  async succeeded(hit: Hit): Promise<void> {
+    await this.counters.takeBack(hit);
   }
 }
 

@@ -30,9 +30,9 @@ describe('RateLimitCounters', () => {
     await counters.hit('key', WINDOW_MS);
     const second = await counters.hit('key', WINDOW_MS);
 
-    await counters.takeBack('key', second);
+    await counters.takeBack(second);
 
-    expect((await counters.hit('key', WINDOW_MS)).hits).toBe(2);
+    expect((await counters.hit('key', WINDOW_MS)).count).toBe(2);
   });
 
   it('does not take a hit back from a later window', async () => {
@@ -42,8 +42,8 @@ describe('RateLimitCounters', () => {
       await counters.hit('key', WINDOW_MS);
     }
 
-    await counters.takeBack('key', lastOfFirstWindow);
+    await counters.takeBack(lastOfFirstWindow);
 
-    expect((await counters.hit('key', WINDOW_MS)).hits).toBe(6);
+    expect((await counters.hit('key', WINDOW_MS)).count).toBe(6);
   });
 });
