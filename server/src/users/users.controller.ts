@@ -1,0 +1,212 @@
+import {
+  Body,
+  ConflictException,
+  Controller,
+  Get,
+  HttpCode,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
+import { CurrentUser, SessionService } from '@nestjs/authentication';
+import { Can } from '@nestjs/authorization';
+import { z } from 'zod';
+import { ROLE_IDS } from '../database/schema.js';
+import { ActivityLog } from './activity-log.js';
+import { Invitations } from './invitations.js';
+import type { User } from './user.js';
+import { UserErasure } from './user-erasure.js';
+import { UserManagementPolicy } from './user-management.policy.js';
+import { UsersRepository } from './users.repository.js';
+
+const personName = z.string().trim().min(1).max(100);
+
+const inviteBody = z.object({
+  firstName: personName,
+  lastName: personName,
+  email: z.email().max(320),
+  role: z.enum(ROLE_IDS),
+});
+
+const changeRoleBody = z.object({ role: z.enum(ROLE_IDS) });
+
+const userId = z.uuid();
+
+const correctEmailBody = z.object({ email: z.email().max(320) });
+
+/** Administrators managing other Users' accounts. */
+@Can(UserManagementPolicy, 'manage')
+@Controller('users')
+export class UsersController {
+  constructor(
+    private readonly users: UsersRepository,
+    private readonly invitations: Invitations,
+    private readonly sessions: SessionService,
+    private readonly erasure: UserErasure,
+    private readonly activityLog: ActivityLog,
+  ) {}
+
+  @Get()
+  list() {
+    return this.users.list();
+  }
+
+  @Patch(':id/role')
+  async changeRole(
+    @CurrentUser() actor: User,
+    @Param('id', { schema: userId }) id: string,
+    @Body({ schema: changeRoleBody }) body: z.infer<typeof changeRoleBody>,
+  ) {
+    const before = await this.users.findById(id);
+    const outcome = await this.users.changeRole(id, body.role);
+    if (outcome === 'not_found') {
+      throw new NotFoundException();
+    }
+    if (outcome === 'last_administrator') {
+      throw new ConflictException(
+        'The last active Administrator can’t be demoted',
+      );
+    }
+    if (before?.roleId !== body.role) {
+      await this.activityLog.record({
+        actorId: actor.id,
+        targetId: id,
+        action: 'role_changed',
+        details: { from: before?.roleId, to: body.role },
+      });
+    }
+    return this.users.findById(id);
+  }
+
+  @Post(':id/deactivate')
+  @HttpCode(200)
+  async deactivate(
+    @CurrentUser() actor: User,
+    @Param('id', { schema: userId }) id: string,
+  ) {
+    const outcome = await this.users.deactivate(id);
+    if (outcome === 'not_found') {
+      throw new NotFoundException();
+    }
+    if (outcome === 'last_administrator') {
+      throw new ConflictException(
+        'The last active Administrator can’t be deactivated',
+      );
+    }
+    await this.sessions.revokeAll(id);
+    await this.activityLog.record({
+      actorId: actor.id,
+      targetId: id,
+      action: 'deactivated',
+    });
+    return this.users.findById(id);
+  }
+
+  @Post(':id/reactivate')
+  @HttpCode(200)
+  async reactivate(
+    @CurrentUser() actor: User,
+    @Param('id', { schema: userId }) id: string,
+  ) {
+    if (!(await this.users.reactivate(id))) {
+      throw new NotFoundException();
+    }
+    await this.activityLog.record({
+      actorId: actor.id,
+      targetId: id,
+      action: 'reactivated',
+    });
+    return this.users.findById(id);
+  }
+
+  @Post(':id/erase')
+  @HttpCode(200)
+  async erase(
+    @CurrentUser() actor: User,
+    @Param('id', { schema: userId }) id: string,
+  ) {
+    const outcome = await this.erasure.erase(id);
+    if (outcome === 'not_found') {
+      throw new NotFoundException();
+    }
+    if (outcome === 'last_administrator') {
+      throw new ConflictException(
+        'The last active Administrator can’t be erased',
+      );
+    }
+    await this.activityLog.record({
+      actorId: actor.id,
+      targetId: id,
+      action: 'erased',
+    });
+    return this.users.findById(id);
+  }
+
+  /** Sends a pending Invitation again. */
+  @Post(':id/invitation')
+  @HttpCode(202)
+  async resendInvitation(@Param('id', { schema: userId }) id: string) {
+    const invitation = await this.users.findPendingInvitation(id);
+    if (invitation === 'not_found') {
+      throw new NotFoundException();
+    }
+    if (invitation === 'not_pending') {
+      throw new ConflictException('This Invitation has already been accepted');
+    }
+    await this.invitations.send(invitation);
+  }
+
+  /** Corrects a pending Invitation's address, and sends it there. */
+  @Patch(':id/email')
+  async correctInvitationEmail(
+    @Param('id', { schema: userId }) id: string,
+    @Body({ schema: correctEmailBody }) body: z.infer<typeof correctEmailBody>,
+  ) {
+    const outcome = await this.users.correctInvitationEmail(id, body.email);
+    if (outcome === 'not_found') {
+      throw new NotFoundException();
+    }
+    if (outcome === 'not_pending') {
+      throw new ConflictException(
+        'Only a pending Invitation’s address can be changed',
+      );
+    }
+    if (outcome === 'taken') {
+      throw new ConflictException('This address already has an account');
+    }
+    const invitation = await this.users.findPendingInvitation(id);
+    if (typeof invitation !== 'string') {
+      await this.invitations.send(invitation);
+    }
+    return this.users.findById(id);
+  }
+
+  @Post()
+  async invite(
+    @CurrentUser() actor: User,
+    @Body({ schema: inviteBody }) body: z.infer<typeof inviteBody>,
+  ) {
+    const invited = await this.users.invite({
+      email: body.email,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      roleId: body.role,
+    });
+    if (!invited) {
+      throw new ConflictException('This address already has an account');
+    }
+    await this.invitations.send({
+      email: invited.email!,
+      firstName: body.firstName,
+      roleId: body.role,
+    });
+    await this.activityLog.record({
+      actorId: actor.id,
+      targetId: invited.id,
+      action: 'invited',
+      details: { role: body.role },
+    });
+    return invited;
+  }
+}
