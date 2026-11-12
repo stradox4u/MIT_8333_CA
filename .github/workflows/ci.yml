@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  # Every PR into main, then again once it merges: main may have moved since
+  # the PR's last run, and that merge commit is what ships.
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a PR cancels that PR's run in progress. Runs on main each get
+# their own group, so every merge is tested.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+# One job per app, run in parallel. Add a `client` job shaped like `server`,
+# and a `smoke` job with `needs: [server, client]` and
+# `if: github.event_name == 'push'`, so it runs only after a merge to main.
+jobs:
+  server:
+    name: Server tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      # Self-contained: in-process Postgres (PGlite), in-memory mail and a fake
+      # Google, with env vars set in vitest.config.e2e.ts. No services or secrets.
+      - name: End-to-end tests
+        run: npm run test:e2e
