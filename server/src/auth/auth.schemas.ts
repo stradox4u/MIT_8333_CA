@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { password } from './password.js';
 
 /** Zod pieces for signing in, shared by every route that takes them. */
 
@@ -11,14 +10,17 @@ export const signInEmail = z.string().max(320);
 
 export const keepSignedIn = z.boolean().default(false);
 
+/**
+ * The same choice as a query parameter (Google sign-in): `true`, `false`,
+ * or empty or absent for no.
+ */
+export const keepSignedInQuery = z.enum(['true', 'false', '']).optional();
+
 /** A password offered to sign in or to confirm it's you; never a new one. */
 export const offeredPassword = z.string().max(1024);
 
 /** Fresh authentication; needed unless the User signed in in the last 10 minutes. */
 export const currentPassword = offeredPassword.optional();
-
-/** A password being set: the rules (ADR-0006). */
-export const newPassword = password;
 
 export const signInLinkToken = z.string().min(1).max(512);
 

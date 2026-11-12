@@ -11,6 +11,10 @@ export default defineConfig({
     // take longer than the 10s default.
     hookTimeout: 30_000,
     env: {
+      // Set here, not left to Vitest's default: the config module skips
+      // loading .env only under NODE_ENV=test, so a developer's .env (or an
+      // exported NODE_ENV) can't leak into the run.
+      NODE_ENV: 'test',
       APP_URL: 'http://localhost:5173',
       // Tests talk plain HTTP, so cookies can't be `Secure`.
       COOKIE_SECURE: 'false',

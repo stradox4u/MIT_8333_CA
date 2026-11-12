@@ -48,6 +48,16 @@ describe('Throttling', () => {
       }
     });
 
+    it('holds the limit when wrong passwords arrive all at once', async () => {
+      const answers = await Promise.all(
+        Array.from({ length: 20 }, () => signIn('Wrong-Password-1')),
+      );
+
+      const statuses = answers.map((answer) => answer.status);
+      expect(statuses.filter((status) => status === 401)).toHaveLength(5);
+      expect(statuses.filter((status) => status === 429)).toHaveLength(15);
+    });
+
     it('lets the account try again once 15 minutes have passed', async () => {
       for (let attempt = 0; attempt < 5; attempt++) {
         await signIn('Wrong-Password-1').expect(401);
@@ -56,6 +66,33 @@ describe('Throttling', () => {
       app.clock.advance(15 * MINUTE);
 
       await signIn(PASSWORD).expect(200);
+    });
+  });
+
+  describe('confirming with the current password', () => {
+    it('counts wrong guesses toward the same lockout as sign-in', async () => {
+      const ada = await app.signUp('ada@example.com');
+      await ada
+        .put('/api/auth/password')
+        .send({ newPassword: PASSWORD })
+        .expect(204);
+      app.clock.advance(11 * MINUTE);
+
+      for (let guess = 0; guess < 5; guess++) {
+        await ada
+          .put('/api/auth/password')
+          .send({
+            currentPassword: 'Wrong-Password-1',
+            newPassword: `${PASSWORD}!`,
+          })
+          .expect(403);
+      }
+
+      await ada
+        .put('/api/auth/password')
+        .send({ currentPassword: PASSWORD, newPassword: `${PASSWORD}!` })
+        .expect(429);
+      await signIn(PASSWORD).expect(429);
     });
   });
 
@@ -84,6 +121,37 @@ describe('Throttling', () => {
       }
 
       await requestLink('someone-else@example.com', '203.0.113.7').expect(429);
+    });
+  });
+
+  describe('Sign-in Link requests when per-IP limits are off', () => {
+    let withoutIpLimits: TestApp;
+
+    beforeAll(async () => {
+      withoutIpLimits = await createTestApp({
+        config: { rateLimitByIp: false },
+      });
+    });
+    beforeEach(() => withoutIpLimits.reset());
+    afterAll(() => withoutIpLimits.close());
+
+    it('still limits one address to 3 requests, whatever IP they come from', async () => {
+      const ips = ['203.0.113.7', '198.51.100.20', '192.0.2.33'];
+      for (const ip of ips) {
+        await withoutIpLimits
+          .browser()
+          .post('/api/auth/sign-in-link')
+          .set('X-Forwarded-For', ip)
+          .send({ email: 'ada@example.com' })
+          .expect(202);
+      }
+
+      await withoutIpLimits
+        .browser()
+        .post('/api/auth/sign-in-link')
+        .set('X-Forwarded-For', '192.0.2.99')
+        .send({ email: 'ada@example.com' })
+        .expect(429);
     });
   });
 });

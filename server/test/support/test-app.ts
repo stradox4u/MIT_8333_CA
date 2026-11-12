@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { getDrizzleToken } from '@nestjs/drizzle';
+import { ConfigService } from '@nestjs/config';
 import { InMemoryMailTransport, MailTransport } from '@nestjs/mail';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
@@ -7,6 +7,9 @@ import { Clock } from '../../src/clock.js';
 import { configureApp } from '../../src/configure-app.js';
 import { GoogleFetch } from '../../src/auth/google-fetch.js';
 import { DailyCleanup } from '../../src/cleanup/daily-cleanup.js';
+import { AppConfig } from '../../src/config/app-config.js';
+import type { Environment } from '../../src/config/environment.js';
+import { DATABASE } from '../../src/database/database.js';
 import { DemoAccounts } from '../../src/users/demo-accounts.js';
 import { UsersRepository } from '../../src/users/users.repository.js';
 import { FakeGoogle, type GoogleAccount } from './fake-google.js';
@@ -39,14 +42,19 @@ export type TestApp = Awaited<ReturnType<typeof createTestApp>>;
  * replaced: an in-process database, a mailbox that keeps what is sent, and a
  * clock the test controls.
  */
-export async function createTestApp() {
+export async function createTestApp({
+  config = {},
+}: {
+  /** Settings to override, by `AppConfig` property, for this file's app. */
+  config?: Partial<Record<keyof AppConfig, unknown>>;
+} = {}) {
   const database = await createTestDatabase();
   const mailbox = new InMemoryMailTransport();
   const clock = new TestClock();
   const google = new FakeGoogle(() => clock.now());
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-    .overrideProvider(getDrizzleToken())
+    .overrideProvider(DATABASE)
     .useValue(database.db)
     .overrideProvider(MailTransport)
     .useValue(mailbox)
@@ -54,6 +62,17 @@ export async function createTestApp() {
     .useValue(clock)
     .overrideProvider(GoogleFetch)
     .useValue({ fetch: google.fetch })
+    .overrideProvider(AppConfig)
+    .useFactory({
+      inject: [ConfigService],
+      factory: (settings: ConfigService<Environment, true>) =>
+        new Proxy(new AppConfig(settings), {
+          get: (real, name, receiver) =>
+            name in config
+              ? config[name as keyof AppConfig]
+              : Reflect.get(real, name, receiver),
+        }),
+    })
     .compile();
   const app = moduleRef.createNestApplication();
   configureApp(app);
@@ -165,7 +184,7 @@ export async function createTestApp() {
     /** What the scheduler runs once a day. */
     runDailyCleanup: () => app.get(DailyCleanup).run(),
     /** What `npm run db:seed` does, with the given settings. */
-    seedDemoAccounts: (settings: { domain: string; password?: string }) =>
+    seedDemoAccounts: (settings: AppConfig['demoAccounts']) =>
       app.get(DemoAccounts).seed(settings),
     browser,
     latestMailTo,
@@ -173,6 +192,7 @@ export async function createTestApp() {
     signInByLink,
     signUp,
     signInAsAdministrator,
+    databaseMentions: (text: string) => database.mentions(text),
     async reset() {
       mailbox.clear();
       clock.reset();

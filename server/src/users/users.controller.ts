@@ -4,7 +4,6 @@ import {
   Controller,
   Get,
   HttpCode,
-  NotFoundException,
   Param,
   Patch,
   Post,
@@ -13,6 +12,7 @@ import { CurrentUser, SessionService } from '@nestjs/authentication';
 import { Can } from '@nestjs/authorization';
 import { z } from 'zod';
 import { ActivityLog } from './activity-log.js';
+import { refuseIf } from './refusals.js';
 import { Invitations } from './invitations.js';
 import type { User } from './user.js';
 import { emailAddress, personName, roleId, userId } from './user.schemas.js';
@@ -55,18 +55,7 @@ export class UsersController {
     @Body({ schema: changeRoleBody }) body: z.infer<typeof changeRoleBody>,
   ) {
     const before = await this.users.findById(id);
-    const outcome = await this.users.changeRole(id, body.role);
-    if (outcome === 'not_found') {
-      throw new NotFoundException();
-    }
-    if (outcome === 'erased') {
-      throw new ConflictException('An Erased User’s Role can’t change');
-    }
-    if (outcome === 'last_administrator') {
-      throw new ConflictException(
-        'The last active Administrator can’t be demoted',
-      );
-    }
+    refuseIf(await this.users.changeRole(id, body.role), 'given another Role');
     if (before?.roleId !== body.role) {
       await this.activityLog.record({
         actorId: actor.id,
@@ -75,7 +64,7 @@ export class UsersController {
         details: { from: before?.roleId, to: body.role },
       });
     }
-    return this.users.findById(id);
+    return this.users.findManaged(id);
   }
 
   @Post(':id/deactivate')
@@ -85,17 +74,7 @@ export class UsersController {
     @Param('id', { schema: userId }) id: string,
   ) {
     const outcome = await this.users.deactivate(id);
-    if (outcome === 'not_found') {
-      throw new NotFoundException();
-    }
-    if (outcome === 'erased') {
-      throw new ConflictException('An Erased User can’t be deactivated');
-    }
-    if (outcome === 'last_administrator') {
-      throw new ConflictException(
-        'The last active Administrator can’t be deactivated',
-      );
-    }
+    refuseIf(outcome, 'deactivated');
     if (outcome === 'deactivated') {
       await this.sessions.revokeAll(id);
       await this.activityLog.record({
@@ -104,7 +83,7 @@ export class UsersController {
         action: 'deactivated',
       });
     }
-    return this.users.findById(id);
+    return this.users.findManaged(id);
   }
 
   @Post(':id/reactivate')
@@ -114,12 +93,7 @@ export class UsersController {
     @Param('id', { schema: userId }) id: string,
   ) {
     const outcome = await this.users.reactivate(id);
-    if (outcome === 'not_found') {
-      throw new NotFoundException();
-    }
-    if (outcome === 'erased') {
-      throw new ConflictException('An Erased User can’t be reactivated');
-    }
+    refuseIf(outcome, 'reactivated');
     if (outcome === 'reactivated') {
       await this.activityLog.record({
         actorId: actor.id,
@@ -127,7 +101,7 @@ export class UsersController {
         action: 'reactivated',
       });
     }
-    return this.users.findById(id);
+    return this.users.findManaged(id);
   }
 
   @Post(':id/erase')
@@ -137,14 +111,7 @@ export class UsersController {
     @Param('id', { schema: userId }) id: string,
   ) {
     const outcome = await this.erasure.erase(id);
-    if (outcome === 'not_found') {
-      throw new NotFoundException();
-    }
-    if (outcome === 'last_administrator') {
-      throw new ConflictException(
-        'The last active Administrator can’t be erased',
-      );
-    }
+    refuseIf(outcome, 'erased');
     if (outcome === 'erased') {
       await this.activityLog.record({
         actorId: actor.id,
@@ -152,7 +119,7 @@ export class UsersController {
         action: 'erased',
       });
     }
-    return this.users.findById(id);
+    return this.users.findManaged(id);
   }
 
   /** Sends a pending Invitation again. */
@@ -160,9 +127,7 @@ export class UsersController {
   @HttpCode(202)
   async resendInvitation(@Param('id', { schema: userId }) id: string) {
     const invitation = await this.users.findPendingInvitation(id);
-    if (invitation === 'not_found') {
-      throw new NotFoundException();
-    }
+    refuseIf(invitation, 'sent an Invitation');
     if (invitation === 'not_pending') {
       throw new ConflictException('This Invitation has already been accepted');
     }
@@ -176,9 +141,7 @@ export class UsersController {
     @Body({ schema: correctEmailBody }) body: z.infer<typeof correctEmailBody>,
   ) {
     const outcome = await this.users.correctInvitationEmail(id, body.email);
-    if (outcome === 'not_found') {
-      throw new NotFoundException();
-    }
+    refuseIf(outcome, 'sent an Invitation');
     if (outcome === 'not_pending') {
       throw new ConflictException(
         'Only a pending Invitation’s address can be changed',
@@ -191,7 +154,7 @@ export class UsersController {
     if (typeof invitation !== 'string') {
       await this.invitations.send(invitation);
     }
-    return this.users.findById(id);
+    return this.users.findManaged(id);
   }
 
   @Post()
@@ -219,6 +182,6 @@ export class UsersController {
       action: 'invited',
       details: { role: body.role },
     });
-    return invited;
+    return this.users.findManaged(invited.id);
   }
 }

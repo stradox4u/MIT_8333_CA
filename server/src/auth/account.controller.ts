@@ -50,10 +50,12 @@ export class AccountController {
         'You’re the last active Administrator: make someone else one first',
       );
     }
-    await this.activityLog.record({
-      actorId: user.id,
-      targetId: user.id,
-      action: 'erased',
-    });
+    if (outcome === 'erased') {
+      await this.activityLog.record({
+        actorId: user.id,
+        targetId: user.id,
+        action: 'erased',
+      });
+    }
   }
 }

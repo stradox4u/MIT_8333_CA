@@ -3,6 +3,7 @@ import { PasswordHasher, type SessionRecord } from '@nestjs/authentication';
 import { Clock } from '../clock.js';
 import type { User } from '../users/user.js';
 import { UsersRepository } from '../users/users.repository.js';
+import { PasswordAttempts } from './password-attempts.js';
 
 const FRESH_FOR_MS = 10 * 60 * 1000;
 
@@ -18,6 +19,7 @@ export class FreshAuthentication {
     private readonly clock: Clock,
     private readonly users: UsersRepository,
     private readonly hasher: PasswordHasher,
+    private readonly passwordAttempts: PasswordAttempts,
   ) {}
 
   async require(
@@ -26,6 +28,8 @@ export class FreshAuthentication {
     currentPassword: string | undefined,
   ): Promise<void> {
     if (currentPassword !== undefined) {
+      // Guesses here count toward the same lockout as password sign-in.
+      await this.passwordAttempts.begin(user.email!);
       const hash = await this.users.findPasswordHash(user.id);
       if (!(await this.hasher.verify(currentPassword, hash))) {
         throw new ForbiddenException({
@@ -34,6 +38,7 @@ export class FreshAuthentication {
           message: 'The current password is wrong',
         });
       }
+      await this.passwordAttempts.succeeded(user.email!);
       return;
     }
     if (this.clock.now() - session.createdAt.getTime() > FRESH_FOR_MS) {

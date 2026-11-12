@@ -4,10 +4,9 @@ import {
   AuthenticationStorage,
   google,
 } from '@nestjs/authentication';
-import { getDrizzleToken } from '@nestjs/drizzle';
 import { Clock } from '../clock.js';
 import { AppConfig } from '../config/app-config.js';
-import type { Database } from '../database/database.js';
+import { DATABASE, type Database } from '../database/database.js';
 import { AccountController } from './account.controller.js';
 import { AccountPolicy } from './account.policy.js';
 import { AuthController } from './auth.controller.js';
@@ -17,6 +16,7 @@ import { GoogleAccounts } from './google-accounts.resolver.js';
 import { GoogleController } from './google.controller.js';
 import { GoogleFetch, GoogleFetchModule } from './google-fetch.js';
 import { KeepSignedInCookie } from './keep-signed-in.cookie.js';
+import { PasswordAttempts } from './password-attempts.js';
 import {
   asksToKeepSignedIn,
   KEPT_SESSION_IDLE_LIMIT,
@@ -87,12 +87,13 @@ import './authentication-types.js';
     AccountPolicy,
     FreshAuthentication,
     KeepSignedInCookie,
+    PasswordAttempts,
     SessionAuth,
     SignInLinks,
     GoogleAccounts,
     {
       provide: DrizzleAuthStore,
-      inject: [getDrizzleToken(), AuthenticationStorage],
+      inject: [DATABASE, AuthenticationStorage],
       useFactory: (db: Database, storage: AuthenticationStorage) => {
         const store = new DrizzleAuthStore(db);
         storage.registerSource({

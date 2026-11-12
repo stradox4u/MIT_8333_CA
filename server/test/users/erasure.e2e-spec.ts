@@ -39,6 +39,45 @@ describe('Erasing a User', () => {
       });
     });
 
+    it('answers with the User shown as an Erased user', async () => {
+      const admin = await app.signInAsAdministrator();
+      await app.signUp('ada@example.com');
+      const ada = await findListed(admin, (u) => u.email === 'ada@example.com');
+
+      const erased = await admin.post(`/api/users/${ada.id}/erase`).expect(200);
+
+      expect(erased.body).toMatchObject({
+        id: ada.id,
+        name: 'Erased user',
+        email: null,
+        status: 'erased',
+      });
+    });
+
+    it('leaves their address nowhere in the database', async () => {
+      const admin = await app.signInAsAdministrator();
+      const adaBrowser = await app.signUp('ada@example.com');
+      await adaBrowser
+        .put('/api/auth/password')
+        .send({ newPassword: PASSWORD })
+        .expect(204);
+      await app
+        .browser()
+        .post('/api/auth/sign-in')
+        .send({ email: 'ada@example.com', password: 'Wrong-Password-1' })
+        .expect(401);
+      await app
+        .browser()
+        .post('/api/auth/sign-in-link')
+        .send({ email: 'ada@example.com' })
+        .expect(202);
+      const ada = await findListed(admin, (u) => u.email === 'ada@example.com');
+
+      await admin.post(`/api/users/${ada.id}/erase`).expect(200);
+
+      expect(await app.databaseMentions('ada@example.com')).toBe(false);
+    });
+
     it('signs them out everywhere', async () => {
       const admin = await app.signInAsAdministrator();
       const adaBrowser = await app.signUp('ada@example.com');

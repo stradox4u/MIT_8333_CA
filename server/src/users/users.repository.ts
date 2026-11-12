@@ -5,9 +5,11 @@ import { InjectDatabase, type Database } from '../database/database.js';
 import {
   googleIdentities,
   type RoleId,
+  roles,
   signInLinks,
   users,
 } from '../database/schema.js';
+import { displayName } from './display-name.js';
 import type { User } from './user.js';
 
 /** The columns that make a `User`: everything but the password hash. */
@@ -37,6 +39,22 @@ export interface ManagedUser {
   status: 'invited' | 'active' | 'deactivated' | 'erased';
   createdAt: Date;
 }
+
+/** The columns of a `ManagedUser`: what Administrators see of a User. */
+const managedUserColumns = {
+  id: users.id,
+  name: displayName(users),
+  email: users.email,
+  firstName: users.firstName,
+  lastName: users.lastName,
+  role: sql<RoleId>`${users.roleId}`,
+  status: sql<ManagedUser['status']>`case
+    when ${users.erasedAt} is not null then 'erased'
+    when ${users.deactivatedAt} is not null then 'deactivated'
+    when ${users.emailVerifiedAt} is not null then 'active'
+    else 'invited' end`,
+  createdAt: users.createdAt,
+};
 
 /**
  * An active Administrator: one who can actually sign in and manage the
@@ -103,14 +121,14 @@ export class UsersRepository {
 
   /**
    * Deactivates a User, unless they're the last active Administrator.
-   * `already_deactivated` and `erased` change nothing.
+   * `already_deactivated` and `user_erased` change nothing.
    */
   async deactivate(
     id: string,
   ): Promise<
     | 'deactivated'
     | 'already_deactivated'
-    | 'erased'
+    | 'user_erased'
     | 'not_found'
     | 'last_administrator'
   > {
@@ -130,21 +148,14 @@ export class UsersRepository {
     if (changed.length > 0) {
       return 'deactivated';
     }
-    const [row] = await this.db
-      .select({
-        deactivatedAt: users.deactivatedAt,
-        erasedAt: users.erasedAt,
-        roleId: users.roleId,
-      })
-      .from(users)
-      .where(eq(users.id, id));
-    if (!row?.roleId) {
+    const state = await this.stateOf(id);
+    if (!state) {
       return 'not_found';
     }
-    if (row.erasedAt) {
-      return 'erased';
+    if (state.erased) {
+      return 'user_erased';
     }
-    return row.deactivatedAt ? 'already_deactivated' : 'last_administrator';
+    return state.deactivated ? 'already_deactivated' : 'last_administrator';
   }
 
   /**
@@ -264,10 +275,10 @@ export class UsersRepository {
     return deleted.map(({ id }) => id);
   }
 
-  /** Lifts a deactivation. `not_deactivated` and `erased` change nothing. */
+  /** Lifts a deactivation. `not_deactivated` and `user_erased` change nothing. */
   async reactivate(
     id: string,
-  ): Promise<'reactivated' | 'not_deactivated' | 'erased' | 'not_found'> {
+  ): Promise<'reactivated' | 'not_deactivated' | 'user_erased' | 'not_found'> {
     const changed = await this.db
       .update(users)
       .set({ deactivatedAt: null })
@@ -283,47 +294,29 @@ export class UsersRepository {
     if (changed.length > 0) {
       return 'reactivated';
     }
-    const [row] = await this.db
-      .select({ erasedAt: users.erasedAt, roleId: users.roleId })
-      .from(users)
-      .where(eq(users.id, id));
-    if (!row?.roleId) {
+    const state = await this.stateOf(id);
+    if (!state) {
       return 'not_found';
     }
-    return row.erasedAt ? 'erased' : 'not_deactivated';
+    return state.erased ? 'user_erased' : 'not_deactivated';
   }
 
   /** Every User, oldest first. Pending Sign-ups aren't Users yet, so they're left out. */
   async list(): Promise<ManagedUser[]> {
-    const rows = await this.db
-      .select({
-        id: users.id,
-        email: users.email,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        role: users.roleId,
-        createdAt: users.createdAt,
-        emailVerifiedAt: users.emailVerifiedAt,
-        deactivatedAt: users.deactivatedAt,
-        erasedAt: users.erasedAt,
-      })
+    return this.db
+      .select(managedUserColumns)
       .from(users)
       .where(isNotNull(users.roleId))
       .orderBy(asc(users.createdAt), asc(users.email));
-    return rows.map(
-      ({ emailVerifiedAt, deactivatedAt, erasedAt, role, ...user }) => ({
-        ...user,
-        name: erasedAt ? 'Erased user' : `${user.firstName} ${user.lastName}`,
-        role: role!,
-        status: erasedAt
-          ? 'erased'
-          : deactivatedAt
-            ? 'deactivated'
-            : emailVerifiedAt
-              ? 'active'
-              : 'invited',
-      }),
-    );
+  }
+
+  /** One User as the Users list shows them; `null` for a Pending Sign-up. */
+  async findManaged(id: string): Promise<ManagedUser | null> {
+    const [user] = await this.db
+      .select(managedUserColumns)
+      .from(users)
+      .where(and(eq(users.id, id), isNotNull(users.roleId)));
+    return user ?? null;
   }
 
   /**
@@ -333,7 +326,7 @@ export class UsersRepository {
   async changeRole(
     id: string,
     roleId: RoleId,
-  ): Promise<'changed' | 'erased' | 'not_found' | 'last_administrator'> {
+  ): Promise<'changed' | 'user_erased' | 'not_found' | 'last_administrator'> {
     const changed = await this.db
       .update(users)
       .set({ roleId })
@@ -351,14 +344,11 @@ export class UsersRepository {
     if (changed.length > 0) {
       return 'changed';
     }
-    const [row] = await this.db
-      .select({ erasedAt: users.erasedAt, roleId: users.roleId })
-      .from(users)
-      .where(eq(users.id, id));
-    if (!row?.roleId) {
+    const state = await this.stateOf(id);
+    if (!state) {
       return 'not_found';
     }
-    return row.erasedAt ? 'erased' : 'last_administrator';
+    return state.erased ? 'user_erased' : 'last_administrator';
   }
 
   /**
@@ -562,6 +552,31 @@ export class UsersRepository {
       .from(users)
       .where(and(activeAdministrator, ne(users.id, id)));
     return sql`(not (${activeAdministrator}) or exists ${others})`;
+  }
+
+  /**
+   * Where a User stands, to say why a guarded update changed nothing.
+   * `null` for an unknown id or a Pending Sign-up (not a User).
+   */
+  private async stateOf(id: string) {
+    const [row] = await this.db
+      .select({
+        roleId: users.roleId,
+        erased: sql<boolean>`${users.erasedAt} is not null`,
+        deactivated: sql<boolean>`${users.deactivatedAt} is not null`,
+      })
+      .from(users)
+      .where(eq(users.id, id));
+    return row?.roleId ? row : null;
+  }
+
+  /** A Role's display name, as the `roles` table holds it. */
+  async roleName(roleId: RoleId): Promise<string> {
+    const [role] = await this.db
+      .select({ name: roles.name })
+      .from(roles)
+      .where(eq(roles.id, roleId));
+    return role.name;
   }
 
   private now() {

@@ -1,10 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SessionService } from '@nestjs/authentication';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { and, isNull, lte, or } from 'drizzle-orm';
 import { Clock } from '../clock.js';
-import { InjectDatabase, type Database } from '../database/database.js';
-import { rateLimits } from '../database/schema.js';
+import { RateLimitCounters } from '../rate-limiting/rate-limit-counters.js';
 import { UsersRepository } from '../users/users.repository.js';
 
 const PENDING_SIGN_UP_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
@@ -24,8 +22,8 @@ export class DailyCleanup {
   private readonly logger = new Logger(DailyCleanup.name);
 
   constructor(
-    @InjectDatabase() private readonly db: Database,
     private readonly users: UsersRepository,
+    private readonly counters: RateLimitCounters,
     private readonly sessions: SessionService,
     private readonly clock: Clock,
   ) {}
@@ -41,17 +39,7 @@ export class DailyCleanup {
       await this.sessions.revokeAll(id);
     }
 
-    await this.db
-      .delete(rateLimits)
-      .where(
-        and(
-          lte(rateLimits.windowEndsAt, now),
-          or(
-            isNull(rateLimits.blockedUntil),
-            lte(rateLimits.blockedUntil, now),
-          ),
-        ),
-      );
+    await this.counters.deleteExpired();
 
     this.logger.log(`Deleted ${abandoned.length} abandoned Pending Sign-ups`);
   }

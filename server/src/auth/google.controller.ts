@@ -2,11 +2,11 @@ import { Controller, Get, Param, Query, Redirect, Res } from '@nestjs/common';
 import { OidcService, Public } from '@nestjs/authentication';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { signInProvider } from './auth.schemas.js';
+import { keepSignedInQuery, signInProvider } from './auth.schemas.js';
 import { KeepSignedInCookie } from './keep-signed-in.cookie.js';
 
 const loginQuery = z.object({
-  keepSignedIn: z.stringbool().default(false),
+  keepSignedIn: keepSignedInQuery,
   /** A relative path to land on afterwards; the package ignores anything else. */
   redirectTo: z.string().max(2048).optional(),
 });
@@ -30,7 +30,7 @@ export class GoogleController {
     @Query({ schema: loginQuery }) query: z.infer<typeof loginQuery>,
     @Res({ passthrough: true }) response: Response,
   ) {
-    this.keepSignedIn.remember(response, query.keepSignedIn);
+    this.keepSignedIn.remember(response, query.keepSignedIn === 'true');
     const { url } = await this.oidc.start(provider, {
       redirectTo: query.redirectTo,
     });

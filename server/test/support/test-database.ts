@@ -34,6 +34,19 @@ export async function createTestDatabase() {
         await client.exec(`truncate ${tables.join(', ')} cascade`);
       }
     },
+    /** Whether any row of any table contains `text`: for data-protection checks. */
+    async mentions(text: string) {
+      for (const table of tables) {
+        const { rows } = await client.query(
+          `select 1 from ${table} t where t::text ilike $1 limit 1`,
+          [`%${text}%`],
+        );
+        if (rows.length > 0) {
+          return true;
+        }
+      }
+      return false;
+    },
     close: () => client.close(),
   };
 }

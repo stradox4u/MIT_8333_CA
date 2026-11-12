@@ -1,17 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { desc, eq, sql } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { Clock } from '../clock.js';
 import { InjectDatabase, type Database } from '../database/database.js';
 import { type ActivityAction, activityLog, users } from '../database/schema.js';
+import { displayName } from './display-name.js';
 
 const actors = alias(users, 'actor');
 const targets = alias(users, 'target');
-
-/** "First Last", or "Erased user" once erased: names are read at display time. */
-const nameOf = (person: typeof actors | typeof targets) =>
-  sql<string>`case when ${person.erasedAt} is not null then 'Erased user'
-                   else ${person.firstName} || ' ' || ${person.lastName} end`;
 
 /**
  * The Activity Log (GLOSSARY.md): who did what to which User, and when.
@@ -45,8 +41,8 @@ export class ActivityLog {
         occurredAt: activityLog.occurredAt,
         action: activityLog.action,
         details: activityLog.details,
-        actor: { id: actors.id, name: nameOf(actors) },
-        target: { id: targets.id, name: nameOf(targets) },
+        actor: { id: actors.id, name: displayName(actors) },
+        target: { id: targets.id, name: displayName(targets) },
       })
       .from(activityLog)
       .innerJoin(actors, eq(actors.id, activityLog.actorId))

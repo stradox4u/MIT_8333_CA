@@ -130,6 +130,13 @@ describe('Continue with Google', () => {
       .expect(400);
   });
 
+  it('treats an empty keep-signed-in as no', async () => {
+    await app
+      .browser()
+      .get('/api/auth/oidc/google/login?keepSignedIn=')
+      .expect(302);
+  });
+
   it('honours keep-signed-in', async () => {
     const ada = await signInWithGoogle(ADA, { keepSignedIn: true });
 

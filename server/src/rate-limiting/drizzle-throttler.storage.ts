@@ -1,20 +1,12 @@
 import type { ThrottlerStorage } from '@nestjs/throttler';
-import { eq, sql } from 'drizzle-orm';
-import type { Clock } from '../clock.js';
-import type { Database } from '../database/database.js';
-import { rateLimits } from '../database/schema.js';
+import type { RateLimitCounters } from './rate-limit-counters.js';
 
 /**
- * Throttler counters in Postgres, so limits survive redeploys and the API
- * holds no per-client state in memory. A fixed window per key: the first hit
- * opens a window of `ttl`; past `limit` hits the key is blocked for
- * `blockDuration`. Times come from the app's `Clock`.
+ * The throttlers' storage, on the shared Postgres counters: past `limit`
+ * hits in a window, a key is blocked for `blockDuration`.
  */
 export class DrizzleThrottlerStorage implements ThrottlerStorage {
-  constructor(
-    private readonly db: Database,
-    private readonly clock: Clock,
-  ) {}
+  constructor(private readonly counters: RateLimitCounters) {}
 
   async increment(
     key: string,
@@ -22,46 +14,16 @@ export class DrizzleThrottlerStorage implements ThrottlerStorage {
     limit: number,
     blockDuration: number,
   ) {
-    const now = new Date(this.clock.now());
-    const windowEnd = new Date(now.getTime() + ttl);
-    const windowOver = sql`${rateLimits.windowEndsAt} <= ${now.toISOString()}::timestamptz`;
-    const blocked = sql`${rateLimits.blockedUntil} > ${now.toISOString()}::timestamptz`;
-
-    // One atomic upsert: a new window when the old one is over, no counting
-    // while blocked, otherwise one more hit.
-    const [row] = await this.db
-      .insert(rateLimits)
-      .values({ key, hits: 1, windowEndsAt: windowEnd })
-      .onConflictDoUpdate({
-        target: rateLimits.key,
-        set: {
-          hits: sql`case when ${windowOver} and not coalesce(${blocked}, false) then 1
-                         when coalesce(${blocked}, false) then ${rateLimits.hits}
-                         else ${rateLimits.hits} + 1 end`,
-          windowEndsAt: sql`case when ${windowOver} and not coalesce(${blocked}, false)
-                                 then ${windowEnd.toISOString()}::timestamptz
-                                 else ${rateLimits.windowEndsAt} end`,
-          blockedUntil: sql`case when coalesce(${blocked}, false) then ${rateLimits.blockedUntil} else null end`,
-        },
-      })
-      .returning();
-
-    let blockedUntil = row.blockedUntil;
-    if (!blockedUntil && row.hits > limit) {
-      blockedUntil = new Date(now.getTime() + blockDuration);
-      await this.db
-        .update(rateLimits)
-        .set({ blockedUntil })
-        .where(eq(rateLimits.key, key));
+    const counter = await this.counters.hit(key, ttl);
+    let msUntilUnblocked = counter.msUntilUnblocked;
+    if (msUntilUnblocked === 0 && counter.hits > limit) {
+      msUntilUnblocked = await this.counters.block(key, blockDuration);
     }
-
     return {
-      totalHits: row.hits,
-      timeToExpire: Math.max(0, row.windowEndsAt.getTime() - now.getTime()),
-      isBlocked: blockedUntil !== null,
-      timeToBlockExpire: blockedUntil
-        ? Math.max(0, blockedUntil.getTime() - now.getTime())
-        : 0,
+      totalHits: counter.hits,
+      timeToExpire: counter.msUntilWindowEnds,
+      isBlocked: msUntilUnblocked > 0,
+      timeToBlockExpire: msUntilUnblocked,
     };
   }
 }

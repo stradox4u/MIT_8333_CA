@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAIL_TRANSPORT_KINDS } from '../mail/mail-transport.js';
 
 /**
  * Every environment variable the API reads, checked once at startup by
@@ -15,7 +16,7 @@ export const environment = z.object({
   APP_URL: z.url(),
   DATABASE_URL: z.string().min(1),
 
-  MAIL_TRANSPORT: z.enum(['smtp']).default('smtp'),
+  MAIL_TRANSPORT: z.enum(MAIL_TRANSPORT_KINDS).default('smtp'),
   SMTP_URL: z.string().min(1),
   MAIL_FROM: z.string().min(1),
 
