@@ -1,22 +1,59 @@
 import { Module } from '@nestjs/common';
-import { createObserveModule } from '@nestjs/observe';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
-
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
+import { AuthorizationModule } from '@nestjs/authorization';
+import { ConditionalModule } from '@nestjs/config';
+import { DrizzleModule } from '@nestjs/drizzle';
+import { MailModule } from '@nestjs/mail';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { AuthModule } from './auth/auth.module.js';
+import { CleanupModule } from './cleanup/cleanup.module.js';
+import { ClockModule } from './clock.js';
+import { AppConfig } from './config/app-config.js';
+import { AppConfigModule } from './config/app-config.module.js';
+import * as schema from './database/schema.js';
+import { createMailTransport } from './mail/mail-transport.js';
+import { ObserveModule, observeIsConfigured } from './observe.js';
+import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
 
 @Module({
   imports: [
+    AppConfigModule,
     // Distributed tracing, auto-correlated logs, request/job metrics, error
     // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRoot({
-      appKey: process.env.OBSERVE_APP_KEY ?? '',
-      appSecret: process.env.OBSERVE_APP_SECRET ?? '',
-      runtimeMetrics: !Boolean(process.versions?.['webcontainer']),
-      serviceId: 'nest-typescript-starter',
+    // Only when its keys are set (see observeIsConfigured).
+    ConditionalModule.registerWhen(
+      ObserveModule.forRootAsync({
+        inject: [AppConfig],
+        useFactory: (config: AppConfig) => ({
+          ...config.observe,
+          runtimeMetrics: !process.versions?.['webcontainer'],
+          serviceId: 'nest-typescript-starter',
+        }),
+      }),
+      observeIsConfigured,
+    ),
+    ClockModule,
+    DrizzleModule.forRootAsync({
+      inject: [AppConfig],
+      useFactory: (config: AppConfig) => ({
+        drizzle,
+        connection: { connectionString: config.databaseUrl },
+        schema,
+        casing: 'snake_case' as const,
+      }),
     }),
+    MailModule.forRootAsync({
+      isGlobal: true,
+      inject: [AppConfig],
+      useFactory: (config: AppConfig) => ({
+        transport: createMailTransport(config.mail),
+        from: config.mail.from,
+      }),
+    }),
+    RateLimitingModule,
+    CleanupModule,
+    AuthModule,
+    // After authentication, so `request.user` is set. Deny by default (ADR-0003).
+    AuthorizationModule.forRoot(),
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}
