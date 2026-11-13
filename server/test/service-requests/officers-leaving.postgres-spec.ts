@@ -29,6 +29,27 @@ describe('An officer leaving during reassignment (Postgres)', () => {
   beforeEach(() => app.reset());
   afterAll(() => app?.close());
 
+  it('drops its temporary database when application compilation fails', async () => {
+    const failed = await createPostgresTestDatabase();
+    const result = await failed.pool.query<{ name: string }>(
+      'select current_database() as name',
+    );
+    const name = result.rows[0].name;
+    const remaining = () =>
+      database.pool.query(
+        'select datname from pg_database where datname = $1',
+        [name],
+      );
+    try {
+      await expect(
+        createTestApp({ database: failed, config: { appUrl: 'invalid' } }),
+      ).rejects.toThrow(/Invalid URL/);
+      expect((await remaining()).rows).toEqual([]);
+    } finally {
+      if ((await remaining()).rows.length) await failed.close();
+    }
+  });
+
   it.each(['assigned', 'in_progress'] as const)(
     'keeps a reassigned %s request with its new officer when its previous officer leaves',
     async (status) => {

@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ConfigService } from '@nestjs/config';
 import { InMemoryMailTransport, MailTransport } from '@nestjs/mail';
@@ -63,35 +64,39 @@ export async function createTestApp({
   const clock = new TestClock();
   const google = new FakeGoogle(() => clock.now());
 
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-    .overrideProvider(DATABASE)
-    .useValue(database.db)
-    .overrideProvider(MailTransport)
-    .useValue(mailbox)
-    .overrideProvider(Clock)
-    .useValue(clock)
-    .overrideProvider(GoogleFetch)
-    .useValue({ fetch: google.fetch })
-    .overrideProvider(AppConfig)
-    .useFactory({
-      inject: [ConfigService],
-      factory: (settings: ConfigService<Environment, true>) =>
-        new Proxy(new AppConfig(settings), {
-          get: (real, name, receiver) =>
-            Object.hasOwn(config, name)
-              ? config[name as keyof AppConfig]
-              : Reflect.get(real, name, receiver),
-        }),
-    })
-    .compile();
-  const app = moduleRef.createNestApplication();
+  let app: INestApplication | undefined;
   try {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(DATABASE)
+      .useValue(database.db)
+      .overrideProvider(MailTransport)
+      .useValue(mailbox)
+      .overrideProvider(Clock)
+      .useValue(clock)
+      .overrideProvider(GoogleFetch)
+      .useValue({ fetch: google.fetch })
+      .overrideProvider(AppConfig)
+      .useFactory({
+        inject: [ConfigService],
+        factory: (settings: ConfigService<Environment, true>) =>
+          new Proxy(new AppConfig(settings), {
+            get: (real, name, receiver) =>
+              Object.hasOwn(config, name)
+                ? config[name as keyof AppConfig]
+                : Reflect.get(real, name, receiver),
+          }),
+      })
+      .compile();
+    app = moduleRef.createNestApplication();
     configureApp(app);
     // Listen once: otherwise supertest opens a new port for every request.
     await app.listen(port, '127.0.0.1');
   } catch (error) {
-    await app.close();
-    await database.close();
+    try {
+      await app?.close();
+    } finally {
+      await database.close();
+    }
     throw error;
   }
 
@@ -234,7 +239,7 @@ export async function createTestApp({
   return {
     mailbox,
     clock,
-    googleFetch: moduleRef.get(GoogleFetch),
+    googleFetch: app.get(GoogleFetch),
     googleCallbackFor,
     url: await app.getUrl(),
     continueWithGoogle,
