@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  ForbiddenException,
   HttpCode,
   Param,
   Patch,
@@ -25,6 +26,7 @@ import type { User } from '../users/user.js';
 import { refuseIf, refuseUnlessVisible } from './refusals.js';
 import { ServiceRequestLifecycle } from './service-request-lifecycle.js';
 import {
+  serviceRequestCountsResponse,
   serviceRequestDetailsResponse,
   serviceRequestPageResponse,
   submittedResponse,
@@ -40,6 +42,7 @@ import {
   referenceParam,
   reasonBody,
   submitBody,
+  summaryQuery,
 } from './service-request.schemas.js';
 import {
   type ServiceRequestAccess,
@@ -98,11 +101,28 @@ export class ServiceRequestsController {
    */
   @Get()
   @ApiOkResponse({ standardSchema: serviceRequestPageResponse })
+  @ApiBadRequestResponse({
+    description:
+      'Invalid query, unsupported scope filters, or reversed submitted days',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'The User may not use this scope or another officer’s current Assignments',
+  })
   async list(
     @CurrentUser() user: User,
     @Query({ schema: listQuery }) query: z.infer<typeof listQuery>,
   ) {
     const { scope, ...filters } = query;
+    if (
+      scope === 'assigned' &&
+      filters.officerId &&
+      filters.officerId !== user.id
+    ) {
+      throw new ForbiddenException(
+        'Only your current Assignments may be selected',
+      );
+    }
     const listed = await this.serviceRequests.list(
       await this.scopeFor(user, scope),
       filters,
@@ -118,6 +138,23 @@ export class ServiceRequestsController {
       ),
     );
     return { ...listed, items };
+  }
+
+  /** Dashboard counts for the same authorized scopes as lists. */
+  @Get('summary')
+  @ApiOkResponse({ standardSchema: serviceRequestCountsResponse })
+  @ApiBadRequestResponse({
+    description: 'A scope is required; list filters are not accepted',
+  })
+  @ApiForbiddenResponse({ description: 'The User may not use this scope' })
+  async summary(
+    @CurrentUser() user: User,
+    @Query({ schema: summaryQuery }) query: z.infer<typeof summaryQuery>,
+  ) {
+    return this.serviceRequests.summary(
+      await this.scopeFor(user, query.scope),
+      await this.authorization.can(ServiceRequestPolicy, 'manage', user),
+    );
   }
 
   /** The tracking page: the details, and the timeline oldest first. */

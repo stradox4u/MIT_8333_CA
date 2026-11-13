@@ -30,6 +30,7 @@ describe('API documentation', () => {
         '/api/activity-log',
         '/api/request-categories',
         '/api/service-requests',
+        '/api/service-requests/summary',
         '/api/service-requests/{reference}',
         '/api/service-requests/{reference}/assignment',
         '/api/service-requests/{reference}/start',
@@ -177,10 +178,47 @@ describe('API documentation', () => {
       expect.arrayContaining([
         expect.objectContaining({ name: 'scope', in: 'query', required: true }),
         expect.objectContaining({ name: 'status', in: 'query' }),
+        ...[
+          'search',
+          'category',
+          'priority',
+          'officerId',
+          'submittedFrom',
+          'submittedTo',
+          'sort',
+        ].map((name) => expect.objectContaining({ name, in: 'query' })),
         expect.objectContaining({ name: 'page', in: 'query' }),
         expect.objectContaining({ name: 'pageSize', in: 'query' }),
       ]),
     );
+  });
+
+  it('documents summary counts, zero categories and query permissions', () => {
+    const operation = document.paths['/api/service-requests/summary'].get;
+    const schema =
+      operation.responses['200'].content['application/json'].schema;
+    expect(schema.properties.byStatus.properties).toHaveProperty('submitted');
+    expect(schema.properties.byStatus.required).toEqual([
+      'submitted',
+      'assigned',
+      'in_progress',
+      'completed',
+      'verified',
+      'cancelled',
+    ]);
+    expect(schema.properties.openByCategory.items.properties).toHaveProperty(
+      'count',
+    );
+    expect(schema.required).not.toContain('openByCategory');
+    expect(operation.parameters).toEqual([
+      expect.objectContaining({ name: 'scope', required: true }),
+    ]);
+    for (const status of ['200', '400', '403'])
+      expect(operation.responses).toHaveProperty(status);
+    const sort = document.paths['/api/service-requests'].get.parameters.find(
+      (parameter: { name: string }) => parameter.name === 'sort',
+    );
+    expect(sort.description).toContain('oldest');
   });
 
   it('documents what the Service Request routes answer', () => {
