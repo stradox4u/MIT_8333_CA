@@ -61,6 +61,27 @@ describe('Demo Service Requests', () => {
     ).toEqual(expect.arrayContaining(['completed', 'verified', 'cancelled']));
   });
 
+  it('includes realistic Progress Notes in every seeded request timeline', async () => {
+    await app.seedDemoAccounts(DEMO);
+    const admin = await signIn('administrator');
+    const listed = await admin
+      .get('/api/service-requests?scope=all')
+      .expect(200);
+    for (const { reference } of listed.body.items) {
+      const shown = await admin
+        .get(`/api/service-requests/${reference}`)
+        .expect(200);
+      expect(shown.body.timeline).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'progress_note',
+            text: 'The leak is beside the ground-floor sink.',
+          }),
+        ]),
+      );
+    }
+  });
+
   it('can be rerun without duplicating or replacing requests and their history', async () => {
     await app.seedDemoAccounts(DEMO);
     const admin = await signIn('administrator');

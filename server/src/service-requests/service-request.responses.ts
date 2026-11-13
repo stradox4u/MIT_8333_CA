@@ -96,9 +96,17 @@ const assignmentEntry = z.object({
     .meta({ description: 'The Status Update the same action made, if any' }),
 });
 
+const progressNoteEntry = z.object({
+  type: z.literal('progress_note'),
+  occurredAt: instant,
+  actor: person,
+  text: z.string(),
+});
+
 const timelineEntry = z.discriminatedUnion('type', [
   statusUpdateEntry,
   assignmentEntry,
+  progressNoteEntry,
 ]);
 
 /** A Service Request's page as the server holds it. */

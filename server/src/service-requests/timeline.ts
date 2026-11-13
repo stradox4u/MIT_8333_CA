@@ -29,6 +29,14 @@ export interface AssignmentRow {
   endReason: AssignmentEndReason | null;
 }
 
+/** A Progress Note as stored, with its safe author representation. */
+export interface ProgressNoteRow {
+  id: number;
+  createdAt: Date;
+  actor: Person;
+  text: string;
+}
+
 interface Placed {
   occurredAt: Date;
   sequence: number;
@@ -36,13 +44,14 @@ interface Placed {
 }
 
 /**
- * Combines Status Updates and Assignments into one entry per action,
+ * Combines Status Updates, Assignments and Progress Notes into one entry per action,
  * including both officers on reassignment. Entries sort oldest first, with
  * shared sequence numbers preserving their order when timestamps tie.
  */
 export function buildTimeline(
   statusUpdates: StatusUpdateRow[],
   assignments: AssignmentRow[],
+  progressNotes: ProgressNoteRow[] = [],
 ): TimelineEntry[] {
   const placed: Placed[] = [];
 
@@ -116,6 +125,19 @@ export function buildTimeline(
       });
     }
   });
+
+  for (const note of progressNotes) {
+    placed.push({
+      occurredAt: note.createdAt,
+      sequence: note.id,
+      entry: {
+        type: 'progress_note',
+        occurredAt: note.createdAt,
+        actor: note.actor,
+        text: note.text,
+      },
+    });
+  }
 
   return placed
     .sort(

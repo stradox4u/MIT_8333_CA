@@ -73,6 +73,15 @@ export class DemoServiceRequests {
             .update(serviceRequests)
             .set({ demoKey })
             .where(eq(serviceRequests.reference, reference));
+          at += 30_000;
+          expectOutcome(
+            await lifecycle.addProgressNote(
+              reference,
+              requesterId,
+              'The leak is beside the ground-floor sink.',
+            ),
+            'added',
+          );
           if (status === 'submitted') return;
           at += 60_000;
           expectOutcome(

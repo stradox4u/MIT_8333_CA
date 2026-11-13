@@ -59,6 +59,15 @@ export class ServiceRequestPolicy {
     return isOfficer(user) && request.currentOfficerId === user.id;
   }
 
+  /** Progress Notes: the Requester, current officer and Administrators. */
+  addProgressNote(user: User, request: ServiceRequestAccess) {
+    return (
+      request.requesterId === user.id ||
+      isAdministrator(user) ||
+      this.work(user, request)
+    );
+  }
+
   /** The Requester or an Administrator confirms Completed work is fixed. */
   verify(user: User, request: Pick<ServiceRequestAccess, 'requesterId'>) {
     return request.requesterId === user.id || isAdministrator(user);
