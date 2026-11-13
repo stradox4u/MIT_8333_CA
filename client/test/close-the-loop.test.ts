@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { screen, waitFor, within } from "@testing-library/vue";
+import { fireEvent, screen, waitFor, within } from "@testing-library/vue";
 import { http, HttpResponse } from "msw";
 import { server } from "./setup";
 import {
@@ -124,6 +124,39 @@ test("Not fixed validates on blur, maps server field errors and retains the reas
     { reason: "It still leaks." },
     { reason: "It still leaks." },
   ]);
+  runtime.queryClient.clear();
+});
+
+test("an open Not fixed form cannot submit while Fixed is pending", async () => {
+  signedIn();
+  const data = tracked(detail());
+  let finish!: () => void;
+  let answers = 0;
+  server.use(
+    http.post(`${api}/service-requests/SR-PLUMB-1/verify`, async () => {
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      data.status = "verified";
+      return HttpResponse.json(data);
+    }),
+    http.post(`${api}/service-requests/SR-PLUMB-1/not-fixed`, () => {
+      answers++;
+      return HttpResponse.json(data);
+    }),
+  );
+  const { user, runtime } = open("/requests/SR-PLUMB-1");
+  await user.click(await screen.findByRole("button", { name: "Not fixed" }));
+  const reason = screen.getByLabelText("Reason");
+  await user.type(reason, "Still leaking.");
+  await user.click(screen.getByRole("button", { name: /^Fixed$/ }));
+  const send = screen.getByRole("button", { name: "Send Not fixed" });
+  expect(send.hasAttribute("disabled")).toBe(true);
+  await user.click(send);
+  await fireEvent.submit(send.closest("form")!);
+  expect(answers).toBe(0);
+  finish();
+  await screen.findByText("SR-PLUMB-1 is Verified.");
   runtime.queryClient.clear();
 });
 

@@ -55,7 +55,7 @@ async function toggle() {
   else wrapper.value?.querySelector("button")?.focus();
 }
 async function submit() {
-  if (send.isPending.value) return;
+  if (props.disabled || send.isPending.value) return;
   if (!form.validate()) {
     await nextTick();
     formElement.value?.querySelector("textarea")?.focus();
@@ -122,6 +122,7 @@ async function submit() {
           compact
           :variant="action === 'cancel' ? 'danger' : 'primary'"
           :pending="send.isPending.value"
+          :disabled="disabled"
           >{{
             action === "cancel" ? "Cancel Service Request" : "Send Not fixed"
           }}</SubmitButton

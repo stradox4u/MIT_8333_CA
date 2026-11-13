@@ -34,20 +34,18 @@ const requester = computed(
 const officer = computed(
   () => props.request.assignment?.officer.name ?? "The officer",
 );
-const completedOn = computed(() => {
-  const entry = [...props.request.timeline]
+const completion = computed(() =>
+  [...props.request.timeline]
     .reverse()
     .find(
       (each) => each.type === "status_update" && each.toStatus === "completed",
-    );
-  return entry ? formatDate(entry.occurredAt) : "";
-});
+    ),
+);
+const completedOn = computed(() =>
+  completion.value ? formatDate(completion.value.occurredAt) : "",
+);
 const answerBy = computed(() => {
-  const entry = [...props.request.timeline]
-    .reverse()
-    .find(
-      (each) => each.type === "status_update" && each.toStatus === "completed",
-    );
+  const entry = completion.value;
   return entry
     ? formatDate(
         new Date(
