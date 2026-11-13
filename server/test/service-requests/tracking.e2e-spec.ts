@@ -52,7 +52,6 @@ describe('Tracking a Service Request', () => {
       location: 'Block C, ground floor toilets',
       description: 'The cold tap drips constantly.',
       status: 'submitted',
-      priority: 'normal',
       requester: { id: adaId, name: 'Ada Lovelace' },
       submittedAt: '2026-11-12T09:00:00.000Z',
       timeline: [
@@ -90,7 +89,21 @@ describe('Tracking a Service Request', () => {
     });
   });
 
-  it('shows it to an Administrator', async () => {
+  it.each(['student', 'staff'])(
+    'leaves the Priority out for its Requester (%s)',
+    async (role) => {
+      const requester = await app.signUp('requester@example.com', { role });
+      const reference = await submit(requester);
+
+      const shown = await requester
+        .get(`/api/service-requests/${reference}`)
+        .expect(200);
+
+      expect(shown.body).not.toHaveProperty('priority');
+    },
+  );
+
+  it('shows it to an Administrator, with its Priority', async () => {
     const ada = await app.signUp('ada@example.com');
     const reference = await submit(ada);
     const admin = await app.signInAsAdministrator();
@@ -99,7 +112,11 @@ describe('Tracking a Service Request', () => {
       .get(`/api/service-requests/${reference}`)
       .expect(200);
 
-    expect(shown.body).toMatchObject({ reference, status: 'submitted' });
+    expect(shown.body).toMatchObject({
+      reference,
+      status: 'submitted',
+      priority: 'normal',
+    });
   });
 
   it.each(['student', 'staff'])(

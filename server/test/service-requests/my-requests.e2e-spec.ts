@@ -61,7 +61,6 @@ describe('Listing the Service Requests a User raised', () => {
           },
           location: 'Lecture theatre 2',
           status: 'submitted',
-          priority: 'normal',
           requester: { id: me.body.id, name: 'Ada Lovelace' },
           submittedAt: '2026-11-12T09:02:00.000Z',
         },
@@ -74,6 +73,28 @@ describe('Listing the Service Requests a User raised', () => {
       pageSize: 20,
       total: 2,
     });
+  });
+
+  it.each(['student', 'staff'])(
+    'leaves the Priority out for a Requester (%s)',
+    async (role) => {
+      const requester = await app.signUp('requester@example.com', { role });
+      await submit(requester);
+
+      const listed = await list(requester).expect(200);
+
+      expect(listed.body.items).toHaveLength(1);
+      expect(listed.body.items[0]).not.toHaveProperty('priority');
+    },
+  );
+
+  it('shows an Administrator the Priority of the requests they raised', async () => {
+    const admin = await app.signInAsAdministrator();
+    await submit(admin);
+
+    const listed = await list(admin).expect(200);
+
+    expect(listed.body.items).toMatchObject([{ priority: 'normal' }]);
   });
 
   it('pages them, 20 to a page unless asked otherwise', async () => {

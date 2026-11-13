@@ -23,4 +23,12 @@ export class ServiceRequestPolicy {
   view(user: User, request: { requester: { id: string } }) {
     return request.requester.id === user.id || user.roleId === 'administrator';
   }
+
+  /**
+   * Seeing a Service Request's Priority: Administrators, and (from slice 2)
+   * its assigned officer. Requesters don't see it, even their own.
+   */
+  seePriority(user: User) {
+    return user.roleId === 'administrator';
+  }
 }

@@ -90,6 +90,19 @@ describe('API documentation', () => {
     );
   });
 
+  it('documents the Priority as present only for some Users', () => {
+    const schemaOf = (path: string) =>
+      document.paths[path].get.responses['200'].content['application/json']
+        .schema;
+    const listItem = schemaOf('/api/service-requests').properties.items.items;
+    const details = schemaOf('/api/service-requests/{reference}');
+
+    for (const schema of [listItem, details]) {
+      expect(schema.properties.priority).toBeDefined();
+      expect(schema.required).not.toContain('priority');
+    }
+  });
+
   it('documents request bodies from the validation schemas', () => {
     const body =
       document.paths['/api/auth/sign-up/complete'].post.requestBody.content[

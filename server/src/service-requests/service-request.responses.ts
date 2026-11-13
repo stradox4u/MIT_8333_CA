@@ -31,7 +31,10 @@ const summary = z.object({
   category: requestCategoryResponse,
   location: z.string(),
   status,
-  priority: z.enum(PRIORITIES),
+  priority: z.enum(PRIORITIES).optional().meta({
+    description:
+      'Only for Administrators and the assigned officer; absent for anyone else',
+  }),
   requester: person,
   submittedAt: instant,
 });

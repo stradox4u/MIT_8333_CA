@@ -8,6 +8,7 @@ import {
   ApiOkResponse,
 } from '@nestjs/swagger';
 import type { z } from 'zod';
+import type { Priority } from '../database/schema.js';
 import type { User } from '../users/user.js';
 import { refuseIf } from './refusals.js';
 import {
@@ -52,12 +53,17 @@ export class ServiceRequestsController {
   /** A page of Service Requests: so far, those the User raised (`requested`). */
   @Get()
   @ApiOkResponse({ standardSchema: serviceRequestPageResponse })
-  list(
+  async list(
     @CurrentUser() user: User,
     @Query({ schema: listQuery }) query: z.infer<typeof listQuery>,
   ) {
     // The schema admits only `requested` so far: the User's own.
-    return this.serviceRequests.listRequestedBy(user.id, query);
+    const listed = await this.serviceRequests.listRequestedBy(user.id, query);
+    const priorityShown = await this.seesPriority(user);
+    return {
+      ...listed,
+      items: listed.items.map((item) => withPriorityIf(priorityShown, item)),
+    };
   }
 
   /** The tracking page: the details, and the timeline oldest first. */
@@ -82,6 +88,25 @@ export class ServiceRequestsController {
     );
     // Hidden from this User: the same answer as for a Reference nobody has.
     refuseIf(visible || 'not_found');
+    return withPriorityIf(await this.seesPriority(user), request);
+  }
+
+  private seesPriority(user: User) {
+    return this.authorization.can(ServiceRequestPolicy, 'seePriority', user);
+  }
+}
+
+/**
+ * The request as shown: without its `priority` key at all, not `null`, for
+ * Users the policy doesn't show the Priority to.
+ */
+function withPriorityIf<Shown extends { priority: Priority }>(
+  shown: boolean,
+  request: Shown,
+): Shown | Omit<Shown, 'priority'> {
+  if (shown) {
     return request;
   }
+  const { priority: _hidden, ...withoutPriority } = request;
+  return withoutPriority;
 }
