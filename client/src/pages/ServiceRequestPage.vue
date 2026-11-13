@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useQuery } from "@tanstack/vue-query";
 import ArrowLeft from "~icons/lucide/arrow-left";
@@ -40,16 +40,20 @@ const request = useQuery(
 );
 useExpiredSession(request.error);
 
-const justSubmitted = computed(
-  () => ui.submittedReference === reference.value,
+/** The submitted notice shows once, on the page for the Reference just submitted. */
+const justSubmitted = ref(false);
+watch(
+  reference,
+  (current) => {
+    justSubmitted.value = ui.submittedReference === current;
+    if (justSubmitted.value) ui.submittedReference = "";
+  },
+  { immediate: true },
 );
 const notice = ref<HTMLElement | null>(null);
 watch(notice, async (element) => {
   await nextTick();
   element?.focus();
-});
-onBeforeUnmount(() => {
-  if (justSubmitted.value) ui.submittedReference = "";
 });
 
 /** Unknown, hidden from this User, or not a Reference at all: the same page. */

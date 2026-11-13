@@ -66,6 +66,31 @@ test("the workspace links to My requests and offers Report a fault as its primar
   runtime.queryClient.clear();
 });
 
+test("the Menu button opens the navigation for small screens, and Escape or a link closes it", async () => {
+  signedIn();
+  withRequests([]);
+  const { runtime, user } = open("/dashboard");
+  const menu = await screen.findByRole("button", { name: "Menu" });
+  expect(menu.getAttribute("aria-expanded")).toBe("false");
+  expect(screen.getAllByRole("navigation", { name: "Main" })).toHaveLength(1);
+  await user.click(menu);
+  expect(menu.getAttribute("aria-expanded")).toBe("true");
+  const panel = document.getElementById(menu.getAttribute("aria-controls")!)!;
+  expect(panel.hidden).toBe(false);
+  expect(document.activeElement).toBe(
+    within(panel).getByRole("link", { name: "Dashboard" }),
+  );
+  await user.keyboard("{Escape}");
+  expect(panel.hidden).toBe(true);
+  expect(document.activeElement).toBe(menu);
+  await user.click(menu);
+  await user.click(within(panel).getByRole("link", { name: "My requests" }));
+  await screen.findByRole("heading", { name: "My requests" });
+  const again = document.getElementById("mobile-menu")!;
+  expect(again.hidden).toBe(true);
+  runtime.queryClient.clear();
+});
+
 const categories = [
   { id: "electrical", name: "Electrical", code: "ELEC" },
   { id: "plumbing", name: "Plumbing", code: "PLUMB" },
@@ -234,6 +259,23 @@ test("submitting sends the trimmed report once, then shows the new request with 
   expect(notice?.textContent?.trim()).toBe(
     "Service Request SR-PLUMB-1 submitted.",
   );
+  expect(document.activeElement).toBe(notice);
+
+  // The notice shows once: not after leaving and coming back.
+  withRequests([summary("SR-PLUMB-1", "Leaking pipe under the sink")]);
+  await user.click(
+    within(screen.getByRole("navigation", { name: "Main" })).getByRole(
+      "link",
+      { name: "My requests" },
+    ),
+  );
+  await user.click(
+    await screen.findByText("Leaking pipe under the sink", {
+      selector: "table a",
+    }),
+  );
+  await screen.findByRole("heading", { name: "Leaking pipe under the sink" });
+  expect(screen.queryByText(/submitted\./)).toBeNull();
   runtime.queryClient.clear();
 });
 

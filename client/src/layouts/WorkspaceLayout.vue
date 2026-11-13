@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useRoute } from "vue-router";
 import { useIsMutating, useMutation } from "@tanstack/vue-query";
 import Plus from "~icons/lucide/plus";
@@ -60,6 +67,13 @@ watch(
     menuOpen.value = false;
   },
 );
+const menuPanel = ref<HTMLElement | null>(null);
+async function toggleMenu() {
+  menuOpen.value = !menuOpen.value;
+  if (!menuOpen.value) return;
+  await nextTick();
+  menuPanel.value?.querySelector("a")?.focus();
+}
 function closeOnEscape(event: KeyboardEvent) {
   if (event.key !== "Escape" || !menuOpen.value) return;
   menuOpen.value = false;
@@ -111,7 +125,7 @@ onBeforeUnmount(() =>
           class="button button-outline compact-button menu-button"
           :aria-expanded="menuOpen"
           aria-controls="mobile-menu"
-          @click="menuOpen = !menuOpen"
+          @click="toggleMenu"
         >
           <Close v-if="menuOpen" class="icon" aria-hidden="true" /><Menu
             v-else
@@ -121,7 +135,12 @@ onBeforeUnmount(() =>
         </button>
       </div>
     </header>
-    <div id="mobile-menu" class="mobile-menu" :hidden="!menuOpen">
+    <div
+      id="mobile-menu"
+      ref="menuPanel"
+      class="mobile-menu"
+      :hidden="!menuOpen"
+    >
       <nav aria-label="Main">
         <ul>
           <li v-for="link in links" :key="link.to">
