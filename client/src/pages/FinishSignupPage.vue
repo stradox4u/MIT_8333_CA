@@ -51,9 +51,13 @@ function submit() {
 </script>
 <template>
   <AuthLayout>
-    <p class="verified"><CircleCheck aria-hidden="true" /> Email confirmed</p>
+    <p class="flex items-center gap-1.75 mt-0 mx-0 mb-4.5 text-[11px]">
+      <CircleCheck class="w-4 h-4" aria-hidden="true" /> Email confirmed
+    </p>
     <h1>Finish sign-up.</h1>
-    <p class="intro">
+    <p
+      class="intro mt-0 mx-0 mb-6.5 text-[13px] leading-[1.7] text-campus-muted wrap-anywhere"
+    >
       Tell us a little about yourself to start using the Service Request portal.
     </p>
     <form novalidate class="space-y-5" @submit.prevent="submit">
@@ -76,13 +80,15 @@ function submit() {
         @update:model-value="form.changed('lastName')"
       />
       <fieldset
-        class="role-field"
+        class="mt-0 mx-0 mb-5 p-0 border-0 min-w-0"
         :aria-describedby="form.errors.role ? roleErrorId : undefined"
       >
-        <legend>I am a…</legend>
+        <legend class="mb-2 text-[12px] font-[550]">I am a…</legend>
         <div class="grid grid-cols-2 gap-3">
-          <label class="role-choice"
+          <label
+            class="flex items-start gap-2 py-3.25 px-2.5 border border-campus-control rounded-[7px] [&:has(input:checked)]:bg-campus-green [&:has(input:checked)]:border-campus-navy"
             ><input
+              class="mt-1 accent-campus-navy"
               v-model="form.values.role"
               type="radio"
               value="student"
@@ -90,11 +96,16 @@ function submit() {
               @blur="form.blur('role')"
               @change="form.changed('role')"
             /><span
-              ><strong>Student</strong><small>I study here.</small></span
+              ><strong class="block text-[12px] font-semibold">Student</strong
+              ><small class="block mt-0.5 text-campus-muted text-[11px]"
+                >I study here.</small
+              ></span
             ></label
           >
-          <label class="role-choice"
+          <label
+            class="flex items-start gap-2 py-3.25 px-2.5 border border-campus-control rounded-[7px] [&:has(input:checked)]:bg-campus-green [&:has(input:checked)]:border-campus-navy"
             ><input
+              class="mt-1 accent-campus-navy"
               v-model="form.values.role"
               type="radio"
               value="staff"
@@ -102,14 +113,17 @@ function submit() {
               @blur="form.blur('role')"
               @change="form.changed('role')"
             /><span
-              ><strong>Staff</strong><small>I work here.</small></span
+              ><strong class="block text-[12px] font-semibold">Staff</strong
+              ><small class="block mt-0.5 text-campus-muted text-[11px]"
+                >I work here.</small
+              ></span
             ></label
           >
         </div>
         <p
           v-if="form.errors.role"
           :id="roleErrorId"
-          class="field-error"
+          class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
           aria-live="polite"
         >
           {{ form.errors.role }}
@@ -118,11 +132,17 @@ function submit() {
       <SubmitButton :pending="finish.isPending.value" arrow
         >Finish sign-up</SubmitButton
       >
-      <p v-if="form.formError.value" class="field-error" role="alert">
+      <p
+        v-if="form.formError.value"
+        class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
+        role="alert"
+      >
         {{ form.formError.value }}
       </p>
     </form>
-    <p class="signed-as">
+    <p
+      class="mt-5.5 mx-0 mb-0 text-center text-[11px] text-campus-muted wrap-anywhere"
+    >
       Signed in as <strong>{{ user.data.value?.email }}</strong>
     </p>
   </AuthLayout>

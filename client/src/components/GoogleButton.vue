@@ -31,11 +31,12 @@ async function start(keepSignedIn: boolean) {
 <template>
   <SubmitButton
     type="button"
-    variant="outline"
-    class="button-google"
+    variant="google"
+    class=""
     :pending="pending"
     :disabled="disabled"
     @click="start(keepSignedIn)"
-    ><GoogleIcon aria-hidden="true" />Continue with Google</SubmitButton
+    ><GoogleIcon class="w-4.75 h-4.75 flex-none" aria-hidden="true" />Continue
+    with Google</SubmitButton
   >
 </template>

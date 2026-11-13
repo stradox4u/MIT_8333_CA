@@ -282,22 +282,37 @@ watch(
 </script>
 <template>
   <WorkspaceLayout>
-    <div class="settings-heading">
+    <div
+      class="flex items-start justify-between gap-4.5 mb-6.25 phone:flex-col"
+    >
       <div>
-        <p class="eyebrow">YOUR PROFILE &amp; SECURITY</p>
+        <p
+          class="mt-0 mx-0 mb-4.25 text-[10px] font-semibold tracking-[0.16em] uppercase"
+        >
+          YOUR PROFILE &amp; SECURITY
+        </p>
         <h1>Account settings</h1>
-        <p class="intro mb-0">
+        <p
+          class="intro mt-0 mx-0 text-[13px] leading-[1.7] text-campus-muted wrap-anywhere mb-6.5"
+        >
           {{ me.data.value?.firstName }} {{ me.data.value?.lastName }} ·
           {{ me.data.value?.email }}
         </p>
       </div>
     </div>
-    <section id="password" class="settings-section" aria-label="Password">
-      <div class="section-heading">
-        <span class="section-icon"><KeyRound aria-hidden="true" /></span>
-        <div>
-          <h2>Password</h2>
-          <p>
+    <section
+      id="password"
+      class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 phone:px-3.75"
+      aria-label="Password"
+    >
+      <div class="flex items-center gap-3 mb-5 [&.tight]:mb-3">
+        <span
+          class="grid place-items-center flex-none w-9 h-9 rounded-[10px] bg-campus-green [&.quiet]:bg-campus-panel [&_.icon]:w-4.5 [&_.icon]:h-4.5"
+          ><KeyRound class="w-4.5 h-4.5" aria-hidden="true"
+        /></span>
+        <div class="flex-1 min-w-0">
+          <h2 class="mt-0 mx-0 mb-0.75 text-[16px] font-semibold">Password</h2>
+          <p class="m-0 text-campus-muted text-[12px] leading-[1.65]">
             {{
               me.data.value?.hasPassword
                 ? "Change your password. You can still use a Sign-in Link or Google."
@@ -325,7 +340,7 @@ watch(
           @blur="passwordForm.blur('confirmPassword')"
           @update:model-value="passwordForm.changed('confirmPassword')"
         />
-        <p class="field-hint">
+        <p class="m-0 text-campus-muted text-[11px] leading-[1.65]">
           12–128 characters, including uppercase, lowercase, a number and a
           symbol.
         </p>
@@ -348,50 +363,69 @@ watch(
         />
         <div class="flex flex-wrap items-center gap-3">
           <SubmitButton
+            compact
             class="compact-button"
             :pending="password.isPending.value"
             :disabled="busy"
             >{{
               me.data.value?.hasPassword ? "Change password" : "Set password"
             }}</SubmitButton
-          ><span class="field-hint">Your other sessions will end.</span>
+          ><span class="m-0 text-campus-muted text-[11px] leading-[1.65]"
+            >Your other sessions will end.</span
+          >
         </div>
-        <p v-if="passwordForm.formError.value" class="field-error" role="alert">
+        <p
+          v-if="passwordForm.formError.value"
+          class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
+          role="alert"
+        >
           {{ passwordForm.formError.value }}
         </p>
       </form>
     </section>
     <section
       id="sessions"
-      class="settings-section"
+      class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 phone:px-3.75"
       aria-label="Active sessions"
     >
-      <div class="section-heading">
-        <span class="section-icon"
-          ><MonitorSmartphone aria-hidden="true"
+      <div class="flex items-center gap-3 mb-5 [&.tight]:mb-3">
+        <span
+          class="grid place-items-center flex-none w-9 h-9 rounded-[10px] bg-campus-green [&.quiet]:bg-campus-panel [&_.icon]:w-4.5 [&_.icon]:h-4.5"
+          ><MonitorSmartphone class="w-4.5 h-4.5" aria-hidden="true"
         /></span>
-        <div>
-          <h2>Active sessions</h2>
-          <p>Review where you’re signed in and end any session.</p>
+        <div class="flex-1 min-w-0">
+          <h2 class="mt-0 mx-0 mb-0.75 text-[16px] font-semibold">
+            Active sessions
+          </h2>
+          <p class="m-0 text-campus-muted text-[12px] leading-[1.65]">
+            Review where you’re signed in and end any session.
+          </p>
         </div>
       </div>
-      <p v-if="sessions.isPending.value" role="status" class="field-hint">
+      <p
+        v-if="sessions.isPending.value"
+        role="status"
+        class="m-0 text-campus-muted text-[11px] leading-[1.65]"
+      >
         Loading your sessions…
       </p>
       <div
         v-for="session in sessions.data.value"
         :key="session.id"
-        class="session-row"
+        class="flex flex-wrap items-center gap-3 py-4 px-0 border-b border-b-campus-gray [&_.button]:w-auto [&_.button]:text-[11px] phone:[&_.button]:ml-8.5"
       >
-        <Laptop aria-hidden="true" />
-        <div class="session-info">
+        <Laptop class="w-5.5 h-5.5 flex-none" aria-hidden="true" />
+        <div class="flex-1 min-w-35">
           <strong
+            class="flex items-center flex-wrap gap-2 text-[12px] font-[550]"
             >{{ deviceName(session.userAgent) }}
-            <span v-if="session.current" class="current-badge"
+            <span
+              v-if="session.current"
+              class="py-0.5 px-1.75 rounded-sm bg-campus-green text-[9px] font-medium"
               >This session</span
             ></strong
           >
-          <p>
+          <p class="mt-1 mx-0 mb-0 text-[11px] text-campus-muted">
             Signed in {{ displayDate(session.signedInAt) }} · Last active
             {{ displayDate(session.lastActiveAt) }}
           </p>
@@ -417,10 +451,15 @@ watch(
           >End session</SubmitButton
         >
       </div>
-      <p v-if="sessions.error.value" class="field-error" role="alert">
+      <p
+        v-if="sessions.error.value"
+        class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
+        role="alert"
+      >
         {{ errorMessage(sessions.error.value) }}
       </p>
       <SubmitButton
+        compact
         v-if="sessions.error.value"
         class="compact-button mt-3"
         type="button"
@@ -430,6 +469,7 @@ watch(
         >Try again</SubmitButton
       >
       <SubmitButton
+        compact
         type="button"
         class="compact-button mt-5"
         variant="outline"
@@ -439,14 +479,17 @@ watch(
       >
       <div
         v-if="confirmEverywhere"
-        class="confirm-panel"
+        class="mt-3.75 p-4.5 border border-campus-navy rounded-[9px] bg-campus-panel [&_h3]:mt-0 [&_h3]:mx-0 [&_h3]:mb-1.5 [&_h3]:text-[14px] [&_h3]:font-semibold"
         role="group"
         aria-label="Confirm sign out everywhere"
       >
         <h3>Sign out on every device?</h3>
-        <p>This ends every session, including the one you’re using now.</p>
+        <p class="mt-0 mx-0 mb-3.75 text-[12px] leading-[1.65]">
+          This ends every session, including the one you’re using now.
+        </p>
         <div class="flex flex-wrap items-center gap-3">
           <SubmitButton
+            compact
             type="button"
             variant="outline"
             class="compact-button"
@@ -456,7 +499,7 @@ watch(
             >Sign out everywhere</SubmitButton
           ><button
             type="button"
-            class="row-action"
+            class="inline-block border-0 py-2 px-0.5 text-campus-navy bg-transparent text-[12px] underline underline-offset-4 phone:min-h-11"
             :disabled="busy"
             @click="confirmEverywhere = false"
           >
@@ -464,25 +507,39 @@ watch(
           </button>
         </div>
       </div>
-      <p v-if="sessionError" class="field-error" role="alert">
+      <p
+        v-if="sessionError"
+        class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
+        role="alert"
+      >
         {{ sessionError }}
       </p>
     </section>
-    <section id="erase" class="settings-section" aria-label="Erase my account">
-      <div class="section-heading">
-        <span class="section-icon bg-campus-panel"
-          ><Trash aria-hidden="true"
+    <section
+      id="erase"
+      class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 phone:px-3.75"
+      aria-label="Erase my account"
+    >
+      <div class="flex items-center gap-3 mb-5 [&.tight]:mb-3">
+        <span
+          class="grid place-items-center flex-none w-9 h-9 rounded-[10px] [&.quiet]:bg-campus-panel [&_.icon]:w-4.5 [&_.icon]:h-4.5 bg-campus-green"
+          ><Trash class="w-4.5 h-4.5" aria-hidden="true"
         /></span>
-        <div>
-          <h2>Erase my account</h2>
-          <p>Permanently remove your personal information.</p>
+        <div class="flex-1 min-w-0">
+          <h2 class="mt-0 mx-0 mb-0.75 text-[16px] font-semibold">
+            Erase my account
+          </h2>
+          <p class="m-0 text-campus-muted text-[12px] leading-[1.65]">
+            Permanently remove your personal information.
+          </p>
         </div>
       </div>
-      <p class="settings-copy">
+      <p class="m-0 text-campus-muted text-[12px] leading-[1.65] mb-4.25">
         Your name, email and sign-in details will be removed. Your Service
         Requests and their text will remain.
       </p>
       <SubmitButton
+        compact
         type="button"
         class="compact-button"
         variant="outline"
@@ -493,13 +550,13 @@ watch(
       <form
         v-if="confirmErasure"
         novalidate
-        class="confirm-panel space-y-5"
+        class="mt-3.75 p-4.5 border border-campus-navy rounded-[9px] bg-campus-panel [&_h3]:mt-0 [&_h3]:mx-0 [&_h3]:mb-1.5 [&_h3]:text-[14px] [&_h3]:font-semibold space-y-5"
         aria-label="Confirm account erasure"
         @submit.prevent="submitErasure"
       >
         <div>
           <h3>Erase your account permanently?</h3>
-          <p class="settings-copy">
+          <p class="m-0 text-campus-muted text-[12px] leading-[1.65] mb-4.25">
             This cannot be undone. You will lose access to this portal.
           </p>
         </div>
@@ -521,8 +578,10 @@ watch(
           @google="prepareReauthentication('erase')"
         />
         <div>
-          <label class="check impact-check"
+          <label
+            class="flex gap-2.25 text-campus-muted text-[12px] leading-[1.6] phone:min-h-9.5 items-start w-full"
             ><input
+              class="w-4 h-4 flex-none m-0 accent-campus-navy mt-0.75"
               v-model="acknowledged"
               type="checkbox"
               :aria-invalid="acknowledgementError ? true : undefined"
@@ -542,7 +601,7 @@ watch(
           <p
             v-if="acknowledgementError"
             id="erasure-ack-error"
-            class="field-error"
+            class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
             aria-live="polite"
           >
             {{ acknowledgementError }}
@@ -550,6 +609,7 @@ watch(
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <SubmitButton
+            compact
             class="compact-button"
             variant="danger"
             :pending="erase.isPending.value"
@@ -557,18 +617,28 @@ watch(
             >Erase my account permanently</SubmitButton
           ><button
             type="button"
-            class="row-action"
+            class="inline-block border-0 py-2 px-0.5 text-campus-navy bg-transparent text-[12px] underline underline-offset-4 phone:min-h-11"
             :disabled="busy"
             @click="cancelErasure"
           >
             Cancel
           </button>
         </div>
-        <p v-if="eraseForm.formError.value" class="field-error" role="alert">
+        <p
+          v-if="eraseForm.formError.value"
+          class="field-error text-error mt-0 mx-0 mb-3.75 text-[12px] leading-[1.65]"
+          role="alert"
+        >
           {{ eraseForm.formError.value }}
         </p>
       </form>
     </section>
-    <p v-if="feedback" class="feedback" role="status">{{ feedback }}</p>
+    <p
+      v-if="feedback"
+      class="mt-4.5 mx-0 mb-0 py-2.25 px-3 border-0 rounded-[7px] shadow-none bg-campus-panel text-[12px] leading-[1.65] [&.page-feedback]:flex [&.page-feedback]:items-start [&.page-feedback]:gap-2.25 [&.page-feedback]:mt-0 [&.page-feedback]:mx-0 [&.page-feedback]:mb-4.5 [&.page-feedback]:py-2.5 [&.page-feedback]:px-3.25 [&.page-feedback]:border [&.page-feedback]:border-campus-gray [&.page-feedback]:bg-campus-surface [&.success]:border-campus-navy [&_.icon]:mt-px"
+      role="status"
+    >
+      {{ feedback }}
+    </p>
   </WorkspaceLayout>
 </template>

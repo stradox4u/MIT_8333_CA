@@ -11,10 +11,7 @@ import StatusChip from "../components/StatusChip.vue";
 import { ApiError } from "../lib/api";
 import { lengthRule, useFields } from "../lib/fields";
 import { useAuthNavigation } from "../auth/navigation";
-import {
-  isExpiredSession,
-  useExpiredSession,
-} from "../lib/expired-session";
+import { isExpiredSession, useExpiredSession } from "../lib/expired-session";
 import RefreshCw from "~icons/lucide/refresh-cw";
 import { useScreenMutation } from "../lib/screen-mutation";
 import { useUiStore } from "../stores/ui";
@@ -103,33 +100,53 @@ function submit() {
 </script>
 <template>
   <WorkspaceLayout width="narrow">
-    <RouterLink to="/requests" class="back-link"
-      ><ArrowLeft class="icon" aria-hidden="true" />My requests</RouterLink
+    <RouterLink
+      to="/requests"
+      class="inline-flex items-center gap-1.5 min-h-9 mb-2.5 text-campus-navy text-[12px] underline-offset-4"
+      ><ArrowLeft
+        class="icon inline-block w-4 h-4 flex-none align-[-3px]"
+        aria-hidden="true"
+      />My requests</RouterLink
     >
-    <div class="page-heading">
-      <div>
-        <p class="eyebrow">New Service Request</p>
-        <h1 id="form-title">Report a fault</h1>
-        <p class="intro">
+    <div class="flex flex-wrap items-end justify-between gap-4.5 mb-5.5">
+      <div class="min-w-0">
+        <p
+          class="mt-0 mx-0 text-[10px] font-semibold tracking-[0.16em] uppercase mb-3"
+        >
+          New Service Request
+        </p>
+        <h1 class="mb-2.5" id="form-title">Report a fault</h1>
+        <p
+          class="intro text-[13px] leading-[1.7] text-campus-muted wrap-anywhere m-0"
+        >
           Tell us what’s wrong and where it is. An Administrator will assign a
           Maintenance Officer to fix it.
         </p>
       </div>
     </div>
-    <div class="form-layout">
+    <div
+      class="grid grid-cols-[minmax(0,1fr)_270px] items-start gap-5 tablet:grid-cols-[minmax(0,1fr)]"
+    >
       <form
         ref="formElement"
-        class="settings-section sr-form"
+        class="mb-4.5 border border-campus-gray rounded-[13px] bg-campus-surface shadow-none grid gap-5.5 p-6.5 phone:py-4.75 phone:px-3.75 phone:gap-5"
         novalidate
         aria-labelledby="form-title"
         @submit.prevent="submit"
       >
-        <div id="privacy-hint" class="privacy-hint">
-          <ShieldAlert class="icon" aria-hidden="true" />
+        <div
+          id="privacy-hint"
+          class="flex items-start gap-2.75 py-3 px-3.5 rounded-[9px] bg-campus-panel text-[12px] leading-[1.6]"
+        >
+          <ShieldAlert
+            class="icon inline-block flex-none align-[-3px] w-4.5 h-4.5 mt-px"
+            aria-hidden="true"
+          />
           <div>
-            <strong>Don’t include personal details</strong>Leave out names,
-            phone numbers and matriculation numbers. Your request stays on
-            record.
+            <strong class="block text-[13px]"
+              >Don’t include personal details</strong
+            >Leave out names, phone numbers and matriculation numbers. Your
+            request stays on record.
           </div>
         </div>
         <TextField
@@ -143,48 +160,61 @@ function submit() {
           @update:model-value="form.changed('title')"
         />
         <fieldset
-          class="category-field"
+          class="grid gap-2 min-w-0 m-0 p-0 border-0 [&[aria-invalid='true']_.category-choice]:border-error"
           :aria-invalid="form.errors.categoryId ? true : undefined"
           @focusout="leaveCategories"
         >
-          <legend>Request Category</legend>
+          <legend class="mb-2 p-0 text-[12px] font-semibold">
+            Request Category
+          </legend>
           <p
             v-if="categories.isPending.value"
-            class="field-hint"
+            class="m-0 text-campus-muted text-[11px] leading-[1.65]"
             role="status"
           >
             Loading the Request Categories…
           </p>
-          <div v-else-if="categoriesFailed" class="category-failure">
-            <p class="field-error" role="alert">
-              We couldn’t load the Request Categories. Check your connection
-              and try again.
+          <div
+            v-else-if="categoriesFailed"
+            class="grid justify-items-start gap-2.5"
+          >
+            <p
+              class="field-error text-error text-[11px] leading-[1.65] m-0"
+              role="alert"
+            >
+              We couldn’t load the Request Categories. Check your connection and
+              try again.
             </p>
             <SubmitButton
+              compact
               type="button"
               variant="outline"
               class="compact-button has-request"
               :pending="categories.isFetching.value"
               @click="categories.refetch()"
-              ><RefreshCw class="icon" aria-hidden="true" />Try
-              again</SubmitButton
+              ><RefreshCw
+                class="icon inline-block w-4 h-4 flex-none align-[-3px]"
+                aria-hidden="true"
+              />Try again</SubmitButton
             >
           </div>
-          <div v-else class="category-grid">
+          <div v-else class="grid grid-cols-3 gap-2.5 phone:grid-cols-2">
             <label
               v-for="category in categories.data.value"
               :key="category.id"
-              class="category-choice"
+              class="category-choice flex items-center gap-2.25 min-h-13 py-2.5 px-2.75 border border-campus-control rounded-lg bg-campus-surface text-[12px] font-[550] [&:has(input:checked)]:border-campus-navy [&:has(input:checked)]:bg-campus-green [&:has(input:checked)]:shadow-[0_0_0_1px_var(--color-campus-navy)_inset] [&:has(input:focus-visible)]:outline-[3px] [&:has(input:focus-visible)]:outline-solid [&:has(input:focus-visible)]:outline-campus-navy [&:has(input:focus-visible)]:outline-offset-[3px] [&_input:focus-visible]:outline-none"
               ><input
+                class="w-4 h-4 flex-none m-0 accent-campus-navy"
                 v-model="form.values.categoryId"
                 type="radio"
                 name="categoryId"
                 :value="category.id"
                 :aria-invalid="form.errors.categoryId ? true : undefined"
                 :aria-describedby="categoryDescribedBy()"
-                @change="form.blur('categoryId')" /><component
+                @change="form.blur('categoryId')"
+              /><component
                 :is="categoryIcon(category.id)"
-                class="icon"
+                class="icon inline-block flex-none align-[-3px] w-4.25 h-4.25"
                 aria-hidden="true"
               /><span>{{ category.name }}</span></label
             >
@@ -192,12 +222,15 @@ function submit() {
           <p
             v-if="form.errors.categoryId"
             id="category-error"
-            class="field-error"
+            class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
             aria-live="polite"
           >
             {{ form.errors.categoryId }}
           </p>
-          <p id="category-hint" class="field-hint">
+          <p
+            id="category-hint"
+            class="m-0 text-campus-muted text-[11px] leading-[1.65]"
+          >
             The type of fault. Where it is goes in Location.
           </p>
         </fieldset>
@@ -225,8 +258,11 @@ function submit() {
           @update:model-value="form.changed('description')"
         />
         <div>
-          <div class="form-actions">
+          <div
+            class="flex flex-wrap items-center gap-y-2.5 gap-x-4 phone:[&_.button]:w-full"
+          >
             <SubmitButton
+              compact
               class="compact-button has-request"
               :pending="send.isPending.value"
               >Submit Service Request</SubmitButton
@@ -234,7 +270,7 @@ function submit() {
           </div>
           <p
             v-if="form.formError.value"
-            class="field-error form-error"
+            class="field-error text-error text-[11px] leading-[1.65] mt-2.5 mx-0 mb-0"
             role="alert"
           >
             {{ form.formError.value }}
@@ -242,30 +278,32 @@ function submit() {
         </div>
       </form>
       <aside
-        class="settings-section form-aside"
+        class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 phone:px-3.75 sticky top-7 [&_h2]:mb-3.5 tablet:static"
         aria-labelledby="next-title"
       >
         <h2 id="next-title">What happens next</h2>
-        <ol class="next-steps">
+        <ol
+          class="grid gap-3.5 m-0 p-0 list-none [&_li]:grid [&_li]:grid-cols-[auto_1fr] [&_li]:items-start [&_li]:gap-y-1 [&_li]:gap-x-2.5 [&_li]:text-campus-muted [&_li]:text-[12px] [&_li]:leading-[1.55]"
+        >
           <li>
             <StatusChip status="submitted" />
-            <p>
+            <p class="col-span-full m-0">
               An Administrator gives it an Assignment to a Maintenance Officer.
             </p>
           </li>
           <li>
             <StatusChip status="in_progress" />
-            <p>The officer works on it.</p>
+            <p class="col-span-full m-0">The officer works on it.</p>
           </li>
           <li>
             <StatusChip status="completed" />
-            <p>
+            <p class="col-span-full m-0">
               You tell us whether it’s fixed. If you don’t answer within 7 days,
               it becomes Verified.
             </p>
           </li>
         </ol>
-        <p class="field-hint aside-note">
+        <p class="m-0 text-campus-muted text-[11px] leading-[1.65] mt-4">
           Quote your Reference, such as SR-PLUMB-42, if you contact the
           maintenance team.
         </p>
