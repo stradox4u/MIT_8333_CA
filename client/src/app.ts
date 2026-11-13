@@ -20,6 +20,7 @@ import { api, ApiError } from "./lib/api";
 import PasswordPage from "./pages/PasswordPage.vue";
 import SettingsPage from "./pages/SettingsPage.vue";
 import DashboardPage from "./pages/DashboardPage.vue";
+import MyRequestsPage from "./pages/MyRequestsPage.vue";
 import ReportFaultPage from "./pages/ReportFaultPage.vue";
 import ServiceRequestPage from "./pages/ServiceRequestPage.vue";
 import { meKey } from "./auth/identity";
@@ -89,6 +90,12 @@ export function createClientRuntime(
         name: "dashboard",
         meta: { requiresUser: true },
         component: DashboardPage,
+      },
+      {
+        path: "/requests",
+        name: "my-requests",
+        meta: { requiresUser: true },
+        component: MyRequestsPage,
       },
       {
         path: "/requests/new",

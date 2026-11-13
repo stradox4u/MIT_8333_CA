@@ -444,6 +444,290 @@ test("the tracking page offers another try when it couldn't load", async () => {
   runtime.queryClient.clear();
 });
 
+function summary(reference: string, title: string, status = "submitted") {
+  return {
+    reference,
+    title,
+    category: { id: "plumbing", name: "Plumbing", code: "PLUMB" },
+    location: "Hostel B, room 214",
+    status,
+    requester: { id: "ada", name: "Ada Okafor" },
+    submittedAt: "2026-11-12T09:00:00.000Z",
+  };
+}
+/** Answers the list from `items`, a page at a time, recording each query. */
+function withRequests(
+  items: (ReturnType<typeof summary> & { priority?: string })[],
+  queries: URLSearchParams[] = [],
+) {
+  server.use(
+    http.get(`${api}/service-requests`, ({ request }) => {
+      const query = new URL(request.url).searchParams;
+      queries.push(query);
+      const page = Number(query.get("page") ?? 1);
+      const pageSize = Number(query.get("pageSize") ?? 20);
+      const status = query.get("status");
+      const matching = items.filter((item) =>
+        status === "open"
+          ? ["submitted", "assigned", "in_progress"].includes(item.status)
+          : !status || item.status === status,
+      );
+      return HttpResponse.json({
+        items: matching.slice((page - 1) * pageSize, page * pageSize),
+        page,
+        pageSize,
+        total: matching.length,
+      });
+    }),
+  );
+  return queries;
+}
+
+test("My requests lists the requests the User raised, without Priority, even for an Administrator", async () => {
+  signedIn("administrator");
+  const year = new Date().getFullYear();
+  const queries = withRequests([
+    {
+      ...summary("SR-PLUMB-2", "Blocked shower drain"),
+      priority: "urgent",
+      submittedAt: new Date(year, 10, 12, 9).toISOString(),
+    },
+    {
+      ...summary("SR-ELEC-1", "Sockets not working", "completed"),
+      category: { id: "electrical", name: "Electrical", code: "ELEC" },
+      priority: "low",
+      submittedAt: new Date(year - 1, 2, 4, 9).toISOString(),
+    },
+  ]);
+  const { runtime, user } = open("/requests");
+  await screen.findByRole("heading", { name: "My requests" });
+  const table = await screen.findByRole("table", { name: /My requests/ });
+  expect(
+    within(table)
+      .getAllByRole("columnheader")
+      .map((cell) => cell.textContent?.trim()),
+  ).toEqual([
+    "Reference",
+    "Service Request",
+    "Request Category",
+    "Status",
+    "Submitted",
+  ]);
+  const rows = within(table).getAllByRole("row").slice(1);
+  expect(
+    rows.map((row) =>
+      within(row)
+        .getAllByRole("cell")
+        .map((cell) => cell.textContent?.replace(/\s+/g, " ").trim()),
+    ),
+  ).toEqual([
+    [
+      "SR-PLUMB-2",
+      "Blocked shower drain Hostel B, room 214",
+      "Plumbing",
+      "Submitted",
+      "12 Nov",
+    ],
+    [
+      "SR-ELEC-1",
+      "Sockets not working Hostel B, room 214",
+      "Electrical",
+      "Completed",
+      `4 Mar ${year - 1}`,
+    ],
+  ]);
+  expect(screen.queryByText(/Urgent|Low/)).toBeNull();
+  expect(screen.getByText(/Showing/).textContent?.trim()).toBe(
+    "Showing 1–2 of 2 Service Requests",
+  );
+  expect(queries[0].toString()).toBe("scope=requested&page=1&pageSize=20");
+  await user.click(
+    within(table).getByRole("link", { name: "Blocked shower drain" }),
+  );
+  expect(runtime.router.currentRoute.value.path).toBe("/requests/SR-PLUMB-2");
+  runtime.queryClient.clear();
+});
+
+test("the Status filter, Open included, lives in the URL and starts again at page 1", async () => {
+  signedIn();
+  const queries = withRequests([
+    summary("SR-PLUMB-3", "Dripping tap", "in_progress"),
+    summary("SR-PLUMB-2", "Blocked shower drain", "completed"),
+    summary("SR-PLUMB-1", "Leaking pipe", "submitted"),
+  ]);
+  const { runtime, user } = open("/requests?page=1");
+  const filter = await screen.findByRole("combobox", { name: "Status" });
+  expect(
+    within(filter)
+      .getAllByRole("option")
+      .map((option) => option.textContent?.trim()),
+  ).toEqual([
+    "Any Status",
+    "Open (Submitted, Assigned, In Progress)",
+    "Submitted",
+    "Assigned",
+    "In Progress",
+    "Completed",
+    "Verified",
+    "Cancelled",
+  ]);
+  await screen.findByText("Dripping tap", { selector: "table a" });
+  await user.selectOptions(filter, "open");
+  await waitFor(() =>
+    expect(runtime.router.currentRoute.value.fullPath).toBe(
+      "/requests?status=open",
+    ),
+  );
+  await waitFor(() =>
+    expect(screen.queryByText("Blocked shower drain")).toBeNull(),
+  );
+  expect(queries.at(-1)?.toString()).toBe(
+    "scope=requested&status=open&page=1&pageSize=20",
+  );
+  runtime.router.back();
+  await screen.findByText("Blocked shower drain", { selector: "table a" });
+  expect(
+    (screen.getByRole("combobox", { name: "Status" }) as HTMLSelectElement)
+      .value,
+  ).toBe("");
+  await runtime.router.push("/requests?status=completed");
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("combobox", { name: "Status" }) as HTMLSelectElement)
+        .value,
+    ).toBe("completed"),
+  );
+  await waitFor(() => expect(screen.queryByText("Dripping tap")).toBeNull());
+  runtime.queryClient.clear();
+});
+
+test("My requests pages through the server's total, keeping the filter, and recovers from a page past the end", async () => {
+  signedIn();
+  const queries = withRequests(
+    Array.from({ length: 45 }, (_, index) =>
+      summary(`SR-PLUMB-${45 - index}`, `Fault ${45 - index}`),
+    ),
+  );
+  const { runtime, user } = open("/requests?status=submitted");
+  await screen.findByText("Fault 45", { selector: "table a" });
+  expect(screen.getByText(/Showing/).textContent?.trim()).toBe(
+    "Showing 1–20 of 45 Service Requests",
+  );
+  const pagination = screen.getByRole("navigation", { name: "Pagination" });
+  expect(within(pagination).getByText("Page 1 of 3")).toBeTruthy();
+  expect(within(pagination).queryByRole("link", { name: /Previous/ })).toBeNull();
+  expect(
+    within(pagination)
+      .getByRole("link", { name: "Page 1" })
+      .getAttribute("aria-current"),
+  ).toBe("page");
+  expect(
+    within(pagination)
+      .getByRole("link", { name: "Page 2" })
+      .getAttribute("aria-current"),
+  ).toBeNull();
+  await user.click(within(pagination).getByRole("link", { name: /Next/ }));
+  await screen.findByText("Fault 25", { selector: "table a" });
+  expect(runtime.router.currentRoute.value.fullPath).toBe(
+    "/requests?status=submitted&page=2",
+  );
+  expect(queries.at(-1)?.toString()).toBe(
+    "scope=requested&status=submitted&page=2&pageSize=20",
+  );
+  expect(screen.getByText(/Showing/).textContent?.trim()).toBe(
+    "Showing 21–40 of 45 Service Requests",
+  );
+  await waitFor(() =>
+    expect(document.activeElement?.id).toBe("results-summary"),
+  );
+  await user.click(
+    within(screen.getByRole("navigation", { name: "Pagination" })).getByRole(
+      "link",
+      { name: "Page 3" },
+    ),
+  );
+  await screen.findByText("Fault 5", { selector: "table a" });
+  expect(
+    within(screen.getByRole("navigation", { name: "Pagination" })).queryByRole(
+      "link",
+      { name: /Next/ },
+    ),
+  ).toBeNull();
+
+  await runtime.router.push("/requests?status=submitted&page=9");
+  await screen.findByRole("heading", { name: "There’s no page 9" });
+  await user.click(screen.getByRole("link", { name: "Go to page 3" }));
+  await screen.findByText("Fault 5", { selector: "table a" });
+  expect(runtime.router.currentRoute.value.fullPath).toBe(
+    "/requests?status=submitted&page=3",
+  );
+  runtime.queryClient.clear();
+});
+
+test("My requests explains an empty list, and an empty filter can be cleared", async () => {
+  signedIn();
+  const items: ReturnType<typeof summary>[] = [];
+  withRequests(items);
+  const { runtime, user } = open("/requests");
+  await screen.findByRole("heading", {
+    name: "You haven’t reported any faults yet",
+  });
+  expect(screen.queryByRole("table")).toBeNull();
+  const reports = screen.getAllByRole("link", { name: "Report a fault" });
+  expect(reports).toHaveLength(2);
+  items.push(summary("SR-PLUMB-1", "Leaking pipe", "submitted"));
+  await runtime.router.push("/requests?status=verified");
+  await screen.findByRole("heading", { name: "No Service Requests match" });
+  await user.click(screen.getByRole("button", { name: "Clear the filter" }));
+  await screen.findByText("Leaking pipe", { selector: "table a" });
+  expect(runtime.router.currentRoute.value.fullPath).toBe("/requests");
+  runtime.queryClient.clear();
+});
+
+test("My requests offers another try when the list couldn't load, and a 401 goes to Sign in", async () => {
+  let failure: "connection" | "session" | null = "connection";
+  server.use(
+    http.get(`${api}/auth/me`, () =>
+      failure === "session"
+        ? new HttpResponse(null, { status: 401 })
+        : HttpResponse.json({
+            id: "ada",
+            email: "ada@example.test",
+            firstName: "Ada",
+            lastName: "Okafor",
+            role: "student",
+            signUpComplete: true,
+            hasPassword: false,
+          }),
+    ),
+    http.get(`${api}/service-requests`, () =>
+      failure === "connection"
+        ? HttpResponse.error()
+        : failure === "session"
+          ? new HttpResponse(null, { status: 401 })
+          : HttpResponse.json({ items: [], page: 1, pageSize: 20, total: 0 }),
+    ),
+  );
+  const { runtime, user } = open("/requests?status=open");
+  await screen.findByRole("heading", {
+    name: "We couldn’t load your Service Requests",
+  });
+  failure = null;
+  await user.click(screen.getByRole("button", { name: "Try again" }));
+  await screen.findByRole("heading", { name: "No Service Requests match" });
+  failure = "session";
+  await runtime.router.push("/requests?status=completed");
+  await screen.findByRole("heading", { name: "Welcome back." });
+  expect(runtime.router.currentRoute.value.path).toBe("/sign-in");
+  expect(
+    screen.getByText("Your session has ended. Please sign in again."),
+  ).toBeTruthy();
+  expect(localStorage.getItem("mit8333.auth-navigation.v1")).toContain(
+    "/requests?status=completed",
+  );
+  runtime.queryClient.clear();
+});
+
 test("the server's 400 issues show under the matching fields, and an unknown Request Category asks for another", async () => {
   signedIn();
   withCategories();
@@ -538,8 +822,11 @@ test("a session that ends while reporting goes to Sign in and comes back to the 
   await user.click(
     screen.getByRole("button", { name: "Submit Service Request" }),
   );
-  await screen.findByText("Your session has ended. Please sign in again.");
+  await screen.findByRole("heading", { name: "Welcome back." });
   expect(runtime.router.currentRoute.value.path).toBe("/sign-in");
+  expect(
+    screen.getByText("Your session has ended. Please sign in again."),
+  ).toBeTruthy();
   // Signing in again clears the cached identity, as completeAuthentication does.
   signedOut = false;
   runtime.queryClient.clear();
