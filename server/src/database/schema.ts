@@ -1,7 +1,10 @@
+import { sql } from 'drizzle-orm';
 import {
+  check,
   index,
   integer,
   jsonb,
+  pgSequence,
   pgTable,
   text,
   timestamp,
@@ -109,31 +112,48 @@ export const rateLimits = pgTable(
 );
 
 export const ACTIVITY_ACTIONS = [
+  // On Users:
   'invited',
   'role_changed',
   'deactivated',
   'reactivated',
   'erased',
+  // On Service Requests:
+  'status_changed',
+  'assigned',
+  'reassigned',
+  'unassigned',
+  'officer_left',
 ] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 
-/** The Activity Log: significant actions taken on Users (GLOSSARY.md). */
+/**
+ * The Activity Log: significant actions taken on Users and Service Requests
+ * (GLOSSARY.md). Each entry names exactly one of them.
+ */
 export const activityLog = pgTable(
   'activity_log',
   {
     /** Also the order entries happened in, when times tie. */
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     occurredAt: instant().notNull(),
-    actorId: uuid()
-      .notNull()
-      .references(() => users.id),
-    targetId: uuid()
-      .notNull()
-      .references(() => users.id),
+    /** Empty when nobody acted: an automatic change. */
+    actorId: uuid().references(() => users.id),
+    /** The User acted on, for an action on a User. */
+    targetId: uuid().references(() => users.id),
+    /** The Service Request acted on, for an action on one. */
+    serviceRequestId: uuid().references(() => serviceRequests.id),
     action: text().$type<ActivityAction>().notNull(),
     details: jsonb().$type<Record<string, unknown>>(),
   },
-  (table) => [index().on(table.occurredAt)],
+  (table) => [
+    index().on(table.occurredAt),
+    index().on(table.serviceRequestId),
+    check(
+      'activity_log_one_subject',
+      sql`num_nonnulls(${table.targetId}, ${table.serviceRequestId}) = 1`,
+    ),
+  ],
 );
 
 /**
@@ -218,12 +238,63 @@ export const serviceRequests = pgTable(
   ],
 );
 
+/**
+ * One counter for the rows a Service Request's timeline is built from
+ * (Assignments and Status Updates), so entries at the same instant keep the
+ * order they happened in.
+ */
+export const timelineSequence = pgSequence('timeline_sequence');
+
+const timelineId = () =>
+  integer()
+    .primaryKey()
+    .default(sql`nextval('timeline_sequence')`);
+
+export const ASSIGNMENT_END_REASONS = [
+  'reassigned',
+  'unassigned',
+  /** The officer was demoted, deactivated or erased. */
+  'officer_left',
+] as const;
+export type AssignmentEndReason = (typeof ASSIGNMENT_END_REASONS)[number];
+
+/**
+ * Assignments: an Administrator giving a Service Request to a Maintenance
+ * Officer (GLOSSARY.md). A request has at most one current Assignment, the
+ * one not yet ended; earlier ones stay on record.
+ */
+export const assignments = pgTable(
+  'assignments',
+  {
+    id: timelineId(),
+    serviceRequestId: uuid()
+      .notNull()
+      .references(() => serviceRequests.id),
+    officerId: uuid()
+      .notNull()
+      .references(() => users.id),
+    assignedById: uuid()
+      .notNull()
+      .references(() => users.id),
+    assignedAt: instant().notNull(),
+    /** Empty while it's the request's current Assignment. */
+    endedAt: instant(),
+    endedById: uuid().references(() => users.id),
+    endReason: text().$type<AssignmentEndReason>(),
+  },
+  (table) => [
+    uniqueIndex('assignments_one_current_index')
+      .on(table.serviceRequestId)
+      .where(sql`${table.endedAt} is null`),
+    index().on(table.officerId),
+  ],
+);
+
 /** Status Updates: every change to a Service Request's Status (GLOSSARY.md). */
 export const statusUpdates = pgTable(
   'status_updates',
   {
-    /** Also the order they happened in, when times tie. */
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    id: timelineId(),
     serviceRequestId: uuid()
       .notNull()
       .references(() => serviceRequests.id),
@@ -232,7 +303,15 @@ export const statusUpdates = pgTable(
     /** Empty for the move to Submitted when the request is first submitted. */
     fromStatus: text().$type<ServiceRequestStatus>(),
     toStatus: text().$type<ServiceRequestStatus>().notNull(),
+    /** Why, when the action takes one: cancelling, or Not fixed. */
     reason: text(),
+    /** The officer's optional note when they complete the work. */
+    note: text(),
+    /**
+     * The Assignment change that came with it: the Assignment it started
+     * (to Assigned), or the one it ended (back to Submitted).
+     */
+    assignmentId: integer().references(() => assignments.id),
     occurredAt: instant().notNull(),
   },
   (table) => [index().on(table.serviceRequestId)],

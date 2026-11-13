@@ -35,25 +35,25 @@ export const submittedResponse = z.object({
   reference: z.string().meta({ example: 'SR-PLUMB-42' }),
 });
 
+/** The request's current Assignment. */
+const currentAssignment = z.object({
+  officer: person,
+  assignedAt: instant,
+});
+
+/** A Service Request as the server holds it for a list, Priority and all. */
 const summary = z.object({
   reference: z.string().meta({ example: 'SR-PLUMB-42' }),
   title: z.string(),
   category: requestCategoryResponse,
   location: z.string(),
   status,
-  priority: z.enum(PRIORITIES).optional().meta({
-    description:
-      'Only for Administrators and the assigned officer; absent for anyone else',
-  }),
+  priority: z.enum(PRIORITIES),
   requester: person,
   submittedAt: instant,
-});
-
-export const serviceRequestPageResponse = z.object({
-  items: z.array(summary),
-  page: z.int().min(1),
-  pageSize: z.int().min(1).max(100),
-  total: z.int().min(0).meta({ description: 'Items in the whole list' }),
+  assignment: currentAssignment
+    .nullable()
+    .meta({ description: 'The current Assignment; empty when it has none' }),
 });
 
 const statusUpdateEntry = z.object({
@@ -67,22 +67,87 @@ const statusUpdateEntry = z.object({
     .meta({ description: 'Empty when the request was first submitted' }),
   toStatus: status,
   reason: z.string().nullable(),
+  note: z
+    .string()
+    .nullable()
+    .meta({ description: 'The officer’s note, when they completed it' }),
 });
 
-export const serviceRequestDetailsResponse = summary.extend({
+const assignmentEntry = z.object({
+  type: z.literal('assignment'),
+  occurredAt: instant,
+  actor: person.nullable(),
+  change: z
+    .enum(['assigned', 'reassigned', 'unassigned', 'officer_left'])
+    .meta({
+      description:
+        '`officer_left`: the officer was demoted, deactivated or erased',
+    }),
+  officer: person.meta({
+    description:
+      'Who was given it, or (unassigned, officer_left) whose Assignment ended',
+  }),
+  previousOfficer: person
+    .nullable()
+    .meta({ description: 'Whom it was taken from, when reassigned' }),
+  statusChange: z
+    .object({ fromStatus: status, toStatus: status })
+    .nullable()
+    .meta({ description: 'The Status change the same action made, if any' }),
+});
+
+const timelineEntry = z.discriminatedUnion('type', [
+  statusUpdateEntry,
+  assignmentEntry,
+]);
+
+/** A Service Request's page as the server holds it. */
+const details = summary.extend({
   description: z.string(),
-  timeline: z.array(statusUpdateEntry).meta({ description: 'Oldest first' }),
+  timeline: z.array(timelineEntry).meta({ description: 'Oldest first' }),
+});
+
+const pageOf = <Item extends z.ZodType>(item: Item) =>
+  z.object({
+    items: z.array(item),
+    page: z.int().min(1),
+    pageSize: z.int().min(1).max(100),
+    total: z.int().min(0).meta({ description: 'Items in the whole list' }),
+  });
+
+/** Priority as answered: only to some Users, and left out for the rest. */
+const shownPriority = z.enum(PRIORITIES).optional().meta({
+  description:
+    'Only for Administrators and the request’s current officer; absent for anyone else',
+});
+
+export const serviceRequestPageResponse = pageOf(
+  summary.extend({ priority: shownPriority }),
+);
+
+export const serviceRequestDetailsResponse = details.extend({
+  priority: shownPriority,
+});
+
+export const maintenanceOfficerResponse = person.extend({
+  openAssignments: z.int().min(0).meta({
+    description: 'Requests they hold that are Assigned or In Progress',
+  }),
 });
 
 /** A Request Category as the API shows it. */
 export type RequestCategory = z.input<typeof requestCategoryResponse>;
-/** A Status Update, as the timeline shows it. */
-export type StatusUpdateEntry = z.input<typeof statusUpdateEntry>;
-/** A Service Request as lists show it. */
+/** A User as Service Requests show them: "First Last", or "Erased user". */
+export type Person = z.input<typeof person>;
+/** One entry of a Service Request's timeline. */
+export type TimelineEntry = z.input<typeof timelineEntry>;
+/** A Service Request as lists show it, before Priority is hidden from some. */
 export type ServiceRequestSummary = z.input<typeof summary>;
 /** One page of a Service Request list, and how many the whole list holds. */
-export type ServiceRequestPage = z.input<typeof serviceRequestPageResponse>;
-/** A Service Request's page: its details, and its timeline oldest first. */
-export type ServiceRequestDetails = z.input<
-  typeof serviceRequestDetailsResponse
+export type ServiceRequestPage = z.input<
+  ReturnType<typeof pageOf<typeof summary>>
 >;
+/** A Service Request's page, before Priority is hidden from some. */
+export type ServiceRequestDetails = z.input<typeof details>;
+/** An active Maintenance Officer, with their count of Open Assignments. */
+export type MaintenanceOfficer = z.input<typeof maintenanceOfficerResponse>;
