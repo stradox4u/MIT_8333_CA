@@ -5,7 +5,7 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 import * as schema from '../../src/database/schema.js';
 
 /** Tables holding reference data that the migrations insert, kept across resets. */
-const REFERENCE_TABLES = ['roles'];
+const REFERENCE_TABLES = ['roles', 'request_categories'];
 
 /**
  * An in-process Postgres (PGlite) with the real migrations applied. `reset()`
@@ -33,6 +33,8 @@ export async function createTestDatabase() {
       if (tables.length > 0) {
         await client.exec(`truncate ${tables.join(', ')} cascade`);
       }
+      // Each test's References start again from 1.
+      await client.exec('update request_categories set last_number = 0');
     },
     /** Whether any row of any table contains `text`: for data-protection checks. */
     async mentions(text: string) {

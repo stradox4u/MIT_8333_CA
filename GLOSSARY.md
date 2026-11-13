@@ -12,6 +12,53 @@ _Avoid_: Complaint, ticket, issue
 The User who submitted a particular Service Request. A User of any Role can be a Requester.
 _Avoid_: Reporter, complainant, customer
 
+**Reference**:
+The identifier people quote for a Service Request, such as SR-PLUMB-42: the code of its Request Category when it was submitted, then that category's next number. It never changes.
+_Avoid_: Ticket number, request ID
+
+**Status**:
+Where a Service Request is in its life: Submitted, Assigned, In Progress, Completed, Verified or Cancelled.
+
+**Open**:
+A Service Request that is Submitted, Assigned or In Progress, so the work on it hasn't finished.
+_Avoid_: Active, pending
+
+**Submitted**:
+The Status of a Service Request waiting for an Administrator to give it an Assignment, whether it's new or has been handed back.
+_Avoid_: Unassigned queue, new
+
+**Completed**:
+The Status of a Service Request whose Maintenance Officer says the work is done, until its Requester confirms the fault is fixed.
+_Avoid_: Resolved, done, closed
+
+**Verified**:
+The final Status of a Completed Service Request whose Requester confirmed the fault is fixed, or didn't answer within 7 days.
+_Avoid_: Closed, confirmed
+
+**Cancelled**:
+The final Status of a Service Request withdrawn before its work finished, by its Requester or an Administrator.
+_Avoid_: Deleted, rejected
+
+**Request Category**:
+The type of fault a Service Request reports: Electrical, Plumbing, Furniture, Internet and network, Classroom equipment, or Other. Where the fault is belongs in the Service Request's location, not its Request Category.
+_Avoid_: Fault type, request type
+
+**Priority**:
+How urgent an Administrator judges a Service Request to be: Low, Normal, High or Urgent. Every Service Request starts at Normal.
+_Avoid_: Urgency, severity
+
+**Assignment**:
+An Administrator giving one Service Request to one Maintenance Officer to work on. A Service Request has at most one current Assignment; earlier ones stay on record.
+_Avoid_: Job, task, work order
+
+**Status Update**:
+A change to a Service Request's status, recording who made it and when.
+_Avoid_: Status change
+
+**Progress Note**:
+A note added to a Service Request that leaves its status unchanged, such as "Waiting for a replacement part".
+_Avoid_: Comment, update
+
 ## People and access
 
 **User**:
@@ -56,5 +103,5 @@ A User whose personal information has been permanently removed to meet data prot
 _Avoid_: Deleted user
 
 **Activity Log**:
-The permanent record of significant actions taken on Users, such as invitations, Role changes, deactivations and erasures. Each entry records who acted, on whom, and when.
+The permanent record of significant actions taken on Users and Service Requests, such as invitations, Role changes, deactivations, erasures, Assignments, Priority changes and Status Updates. Each entry records who acted, on which User or Service Request, and when.
 _Avoid_: Audit trail, audit log

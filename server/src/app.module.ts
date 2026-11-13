@@ -13,6 +13,7 @@ import * as schema from './database/schema.js';
 import { createMailTransport } from './mail/mail-transport.js';
 import { ObserveModule, observeIsConfigured } from './observe.js';
 import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
+import { ServiceRequestsModule } from './service-requests/service-requests.module.js';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
     RateLimitingModule,
     CleanupModule,
     AuthModule,
+    ServiceRequestsModule,
     // After authentication, so `request.user` is set. Deny by default (ADR-0003).
     AuthorizationModule.forRoot(),
   ],

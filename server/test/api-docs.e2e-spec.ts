@@ -28,8 +28,83 @@ describe('API documentation', () => {
         '/api/auth/me',
         '/api/users',
         '/api/activity-log',
+        '/api/request-categories',
+        '/api/service-requests',
+        '/api/service-requests/{reference}',
       ]),
     );
+  });
+
+  it('documents the Service Request form from its validation schema', () => {
+    const body =
+      document.paths['/api/service-requests'].post.requestBody.content[
+        'application/json'
+      ].schema;
+
+    expect(body).toMatchObject({
+      properties: {
+        title: { minLength: 3, maxLength: 120 },
+        categoryId: expect.anything(),
+        location: { minLength: 2, maxLength: 200 },
+        description: { minLength: 10, maxLength: 5000 },
+      },
+      required: ['title', 'categoryId', 'location', 'description'],
+    });
+  });
+
+  it('documents the Service Request list’s query parameters', () => {
+    const parameters = document.paths['/api/service-requests'].get.parameters;
+
+    expect(parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'scope', in: 'query', required: true }),
+        expect.objectContaining({ name: 'status', in: 'query' }),
+        expect.objectContaining({ name: 'page', in: 'query' }),
+        expect.objectContaining({ name: 'pageSize', in: 'query' }),
+      ]),
+    );
+  });
+
+  it('documents what the Service Request routes answer', () => {
+    const service = document.paths['/api/service-requests'];
+    const tracking = document.paths['/api/service-requests/{reference}'];
+    const schemaOf = (operation: any, status: string) =>
+      operation.responses[status].content['application/json'].schema;
+
+    expect(schemaOf(service.post, '201')).toMatchObject({
+      properties: { reference: expect.anything() },
+    });
+    expect(schemaOf(service.get, '200')).toMatchObject({
+      properties: {
+        items: expect.anything(),
+        page: expect.anything(),
+        pageSize: expect.anything(),
+        total: expect.anything(),
+      },
+    });
+    expect(schemaOf(tracking.get, '200')).toMatchObject({
+      properties: {
+        reference: expect.anything(),
+        submittedAt: { type: 'string', format: 'date-time' },
+        timeline: expect.anything(),
+      },
+    });
+    expect(tracking.get.responses['404'].description).toMatch(
+      /Service Request/,
+    );
+  });
+
+  it('documents the Priority as present only for some Users', () => {
+    const schemaOf = (path: string) =>
+      document.paths[path].get.responses['200'].content['application/json']
+        .schema;
+    const listItem = schemaOf('/api/service-requests').properties.items.items;
+    const details = schemaOf('/api/service-requests/{reference}');
+
+    for (const schema of [listItem, details]) {
+      expect(schema.properties.priority).toBeDefined();
+      expect(schema.required).not.toContain('priority');
+    }
   });
 
   it('documents request bodies from the validation schemas', () => {

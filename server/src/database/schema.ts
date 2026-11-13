@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -149,4 +150,90 @@ export const googleIdentities = pgTable(
     linkedAt: instant().notNull(),
   },
   (table) => [index().on(table.userId)],
+);
+
+/**
+ * Reference data: the six Request Categories, inserted by a migration. Each
+ * numbers its own References: `last_number` is the latest one it issued.
+ */
+export const requestCategories = pgTable('request_categories', {
+  /** Such as `plumbing`. */
+  id: text().primaryKey(),
+  name: text().notNull(),
+  /** The middle of its References, such as `PLUMB` in SR-PLUMB-42. */
+  code: text().notNull().unique(),
+  lastNumber: integer().notNull().default(0),
+  sortOrder: integer().notNull(),
+});
+
+export const SERVICE_REQUEST_STATUSES = [
+  'submitted',
+  'assigned',
+  'in_progress',
+  'completed',
+  'verified',
+  'cancelled',
+] as const;
+export type ServiceRequestStatus = (typeof SERVICE_REQUEST_STATUSES)[number];
+
+/** Open: the work on it hasn't finished (GLOSSARY.md). */
+export const OPEN_STATUSES: ServiceRequestStatus[] = [
+  'submitted',
+  'assigned',
+  'in_progress',
+];
+
+export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+export type Priority = (typeof PRIORITIES)[number];
+
+/** Service Requests: faults on campus, reported by their Requesters (GLOSSARY.md). */
+export const serviceRequests = pgTable(
+  'service_requests',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    /** Such as SR-PLUMB-42. It never changes, even if the Request Category does. */
+    reference: text().notNull(),
+    categoryId: text()
+      .notNull()
+      .references(() => requestCategories.id),
+    requesterId: uuid()
+      .notNull()
+      .references(() => users.id),
+    title: text().notNull(),
+    location: text().notNull(),
+    description: text().notNull(),
+    status: text().$type<ServiceRequestStatus>().notNull(),
+    priority: text().$type<Priority>().notNull().default('normal'),
+    submittedAt: instant().notNull(),
+    completedAt: instant(),
+    verifiedAt: instant(),
+    cancelledAt: instant(),
+  },
+  (table) => [
+    uniqueIndex().on(table.reference),
+    index().on(table.requesterId),
+    index().on(table.status),
+    index().on(table.categoryId),
+    index().on(table.submittedAt),
+  ],
+);
+
+/** Status Updates: every change to a Service Request's Status (GLOSSARY.md). */
+export const statusUpdates = pgTable(
+  'status_updates',
+  {
+    /** Also the order they happened in, when times tie. */
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    serviceRequestId: uuid()
+      .notNull()
+      .references(() => serviceRequests.id),
+    /** Empty when nobody acted: the automatic verification after 7 days. */
+    actorId: uuid().references(() => users.id),
+    /** Empty for the move to Submitted when the request is first submitted. */
+    fromStatus: text().$type<ServiceRequestStatus>(),
+    toStatus: text().$type<ServiceRequestStatus>().notNull(),
+    reason: text(),
+    occurredAt: instant().notNull(),
+  },
+  (table) => [index().on(table.serviceRequestId)],
 );

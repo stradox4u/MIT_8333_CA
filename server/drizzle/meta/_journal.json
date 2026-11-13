@@ -50,6 +50,34 @@
       "when": 1794495541407,
       "tag": "0006_google_identities",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794556163438,
+      "tag": "0007_request_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794556168646,
+      "tag": "0008_seed_request_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794556277296,
+      "tag": "0009_service_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794556489381,
+      "tag": "0010_status_updates",
+      "breakpoints": true
     }
   ]
 }
