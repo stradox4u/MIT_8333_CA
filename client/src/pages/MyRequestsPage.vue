@@ -3,18 +3,15 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useQuery } from "@tanstack/vue-query";
 import MapPin from "~icons/lucide/map-pin";
-import CircleAlert from "~icons/lucide/circle-alert";
-import RefreshCw from "~icons/lucide/refresh-cw";
 import Search from "~icons/lucide/search";
 import Inbox from "~icons/lucide/inbox";
 import Plus from "~icons/lucide/plus";
-import SubmitButton from "../components/SubmitButton.vue";
-import { ApiError } from "../lib/api";
+import LoadFailure from "../components/LoadFailure.vue";
 import WorkspaceLayout from "../layouts/WorkspaceLayout.vue";
 import StatusChip from "../components/StatusChip.vue";
 import CategoryTag from "../components/CategoryTag.vue";
 import ListPagination from "../components/ListPagination.vue";
-import { useExpiredSession } from "../lib/expired-session";
+import { isLoadFailure, useExpiredSession } from "../lib/expired-session";
 import {
   PAGE_SIZE,
   STATUSES,
@@ -33,13 +30,18 @@ const isStatusFilter = (value: unknown): value is StatusFilter =>
 
 /** The filters and page live in the URL, so Back and shared links keep them. */
 const filters = computed<ListFilters>(() => {
-  const page = Number(route.query.page);
   const status = route.query.status;
   return {
     ...(isStatusFilter(status) ? { status } : {}),
-    page: Number.isInteger(page) && page >= 1 ? page : 1,
+    page: pageFrom(route.query.page),
   };
 });
+/** Only a plain whole number names a page; anything else, such as 1e21, is page 1. */
+function pageFrom(value: unknown) {
+  if (typeof value !== "string" || !/^[1-9][0-9]*$/.test(value)) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) ? page : 1;
+}
 /** A new filter starts again at page 1. */
 function filterByStatus(event: Event) {
   const status = (event.target as HTMLSelectElement).value;
@@ -64,11 +66,14 @@ const range = computed(() => {
 });
 const plural = (count: number) =>
   count === 1 ? "Service Request" : "Service Requests";
-/** A failure other than an ended session, which goes to Sign in instead. */
-const loadFailed = computed(
+/**
+ * Nothing to show yet. While a new filter loads, the previous answer's rows
+ * stay on screen, but its emptiness doesn't pick an empty state.
+ */
+const loading = computed(
   () =>
-    !!list.error.value &&
-    !(list.error.value instanceof ApiError && list.error.value.status === 401),
+    list.isPending.value ||
+    (list.isPlaceholderData.value && !list.data.value?.items.length),
 );
 /** A page asked for in the URL that the list doesn't reach. */
 const pastTheEnd = computed(
@@ -115,22 +120,14 @@ watch(
         </select>
       </div>
     </form>
-    <div v-if="loadFailed" class="empty-state" role="alert">
-      <span class="state-icon quiet"
-        ><CircleAlert class="icon" aria-hidden="true"
-      /></span>
-      <h2>We couldn’t load your Service Requests</h2>
-      <p>Check your connection and try again.</p>
-      <SubmitButton
-        type="button"
-        variant="outline"
-        class="compact-button has-request"
-        :pending="list.isFetching.value"
-        @click="list.refetch()"
-        ><RefreshCw class="icon" aria-hidden="true" />Try again</SubmitButton
-      >
-    </div>
-    <div v-else-if="list.isPending.value" class="table-wrap" aria-busy="true">
+    <LoadFailure
+      v-if="isLoadFailure(list.error.value)"
+      class="empty-state"
+      title="We couldn’t load your Service Requests"
+      :pending="list.isFetching.value"
+      @retry="list.refetch()"
+    />
+    <div v-else-if="loading" class="table-wrap" aria-busy="true">
       <p class="visually-hidden" role="status">Loading Service Requests…</p>
       <div v-for="row in 5" :key="row" class="skeleton-row">
         <span class="skeleton"></span><span class="skeleton"></span

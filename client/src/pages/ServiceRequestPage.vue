@@ -15,12 +15,10 @@ import CategoryTag from "../components/CategoryTag.vue";
 import StatusTimeline from "../components/StatusTimeline.vue";
 import { useUiStore } from "../stores/ui";
 import { meOptions } from "../auth/identity";
-import { useExpiredSession } from "../lib/expired-session";
+import { isLoadFailure, useExpiredSession } from "../lib/expired-session";
 import { ApiError } from "../lib/api";
-import SubmitButton from "../components/SubmitButton.vue";
+import LoadFailure from "../components/LoadFailure.vue";
 import CircleHelp from "~icons/lucide/circle-help";
-import CircleAlert from "~icons/lucide/circle-alert";
-import RefreshCw from "~icons/lucide/refresh-cw";
 import {
   serviceRequestOptions,
   type Status,
@@ -63,13 +61,6 @@ const notFound = computed(() => {
     error instanceof ApiError && (error.status === 404 || error.status === 400)
   );
 });
-const loadFailed = computed(
-  () =>
-    !!request.error.value &&
-    !notFound.value &&
-    !(request.error.value instanceof ApiError &&
-      request.error.value.status === 401),
-);
 
 const requesterName = computed(() => {
   const requester = request.data.value?.requester;
@@ -128,25 +119,14 @@ const cancellation = computed(() => {
         >My requests</RouterLink
       >
     </section>
-    <section
-      v-else-if="loadFailed"
+    <LoadFailure
+      v-else-if="isLoadFailure(request.error.value)"
       class="settings-section state-panel"
-      role="alert"
-    >
-      <span class="state-icon quiet"
-        ><CircleAlert class="icon" aria-hidden="true"
-      /></span>
-      <h1>We couldn’t load {{ reference }}</h1>
-      <p class="intro">Check your connection and try again.</p>
-      <SubmitButton
-        type="button"
-        variant="outline"
-        class="compact-button has-request"
-        :pending="request.isFetching.value"
-        @click="request.refetch()"
-        ><RefreshCw class="icon" aria-hidden="true" />Try again</SubmitButton
-      >
-    </section>
+      :title="`We couldn’t load ${reference}`"
+      :level="1"
+      :pending="request.isFetching.value"
+      @retry="request.refetch()"
+    />
     <p
       v-else-if="request.isPending.value"
       class="settings-section field-hint"

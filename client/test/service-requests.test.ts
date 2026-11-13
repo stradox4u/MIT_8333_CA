@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/vue";
 import userEvent from "@testing-library/user-event";
 import { createMemoryHistory } from "vue-router";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse, type JsonBodyType } from "msw";
 import App from "../src/App.vue";
 import { createClientRuntime } from "../src/app";
 import { server } from "./setup";
@@ -150,7 +150,7 @@ test("Report a fault says when the Request Categories couldn't load, and tries a
  * A session that is live when the page opens, ends at the page's first read
  * of `path` (which answers 401), and is live again once the User signs in.
  */
-function sessionEndingAt(path: string, body: unknown) {
+function sessionEndingAt(path: string, body: JsonBodyType) {
   let session: "live" | "ended" | "back" = "live";
   server.use(
     http.get(`${api}/auth/me`, () =>
@@ -834,6 +834,60 @@ test("My requests explains an empty list, and an empty filter can be cleared", a
   await user.click(screen.getByRole("button", { name: "Clear the filter" }));
   await screen.findByText("Leaking pipe", { selector: "table a" });
   expect(runtime.router.currentRoute.value.fullPath).toBe("/requests");
+  runtime.queryClient.clear();
+});
+
+test("while a new filter loads, My requests doesn't choose an empty state from the previous answer", async () => {
+  signedIn();
+  let release!: () => void;
+  let hold = false;
+  server.use(
+    http.get(`${api}/service-requests`, async ({ request }) => {
+      const status = new URL(request.url).searchParams.get("status");
+      if (status === "verified")
+        return HttpResponse.json({ items: [], page: 1, pageSize: 20, total: 0 });
+      if (hold)
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      return HttpResponse.json({
+        items: [summary("SR-PLUMB-1", "Leaking pipe")],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+      });
+    }),
+  );
+  const { runtime, user } = open("/requests?status=verified");
+  await screen.findByRole("heading", { name: "No Service Requests match" });
+  hold = true;
+  await user.click(screen.getByRole("button", { name: "Clear the filter" }));
+  await waitFor(() =>
+    expect(runtime.router.currentRoute.value.fullPath).toBe("/requests"),
+  );
+  expect(
+    screen.queryByRole("heading", {
+      name: "You haven’t reported any faults yet",
+    }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole("heading", { name: "No Service Requests match" }),
+  ).toBeNull();
+  expect(screen.getByText("Loading Service Requests…")).toBeTruthy();
+  release();
+  await screen.findByText("Leaking pipe", { selector: "table a" });
+  runtime.queryClient.clear();
+});
+
+test("a hand-typed page number that isn't a plain whole number asks for page 1", async () => {
+  signedIn();
+  const queries = withRequests([summary("SR-PLUMB-1", "Leaking pipe")]);
+  const { runtime } = open("/requests?page=1e21");
+  await screen.findByText("Leaking pipe", { selector: "table a" });
+  expect(queries.at(-1)?.get("page")).toBe("1");
+  await runtime.router.push("/requests?page=99999999999999999999");
+  await waitFor(() => expect(queries).toHaveLength(1));
+  expect(queries.every((query) => query.get("page") === "1")).toBe(true);
   runtime.queryClient.clear();
 });
 
