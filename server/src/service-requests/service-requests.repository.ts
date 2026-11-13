@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { alias, type SelectedFields } from 'drizzle-orm/pg-core';
 import { Clock } from '../clock.js';
 import { InjectDatabase, type Database } from '../database/database.js';
 import {
+  OPEN_STATUSES,
   type Priority,
   requestCategories,
   serviceRequests,
@@ -14,6 +15,7 @@ import {
 import { displayName } from '../users/display-name.js';
 import type { RequestCategory } from './request-categories.js';
 import type { UnknownCategory } from './refusals.js';
+import type { StatusFilter } from './service-request.schemas.js';
 
 const requesters = alias(users, 'requester');
 const actors = alias(users, 'actor');
@@ -87,6 +89,13 @@ const summaryColumns = {
   submittedAt: serviceRequests.submittedAt,
 };
 
+/** A Status filter as a condition: that one Status, or any Open one. */
+function hasStatus(filter: StatusFilter) {
+  return filter === 'open'
+    ? inArray(serviceRequests.status, OPEN_STATUSES)
+    : eq(serviceRequests.status, filter);
+}
+
 @Injectable()
 export class ServiceRequestsRepository {
   constructor(
@@ -157,12 +166,12 @@ export class ServiceRequestsRepository {
   /** One page of the Service Requests a User raised, newest first. */
   async listRequestedBy(
     requesterId: string,
-    filters: { status?: ServiceRequestStatus; page: number; pageSize: number },
+    filters: { status?: StatusFilter; page: number; pageSize: number },
   ): Promise<Page<ServiceRequestSummary>> {
     const { page, pageSize } = filters;
     const matching = and(
       eq(serviceRequests.requesterId, requesterId),
-      filters.status ? eq(serviceRequests.status, filters.status) : undefined,
+      filters.status ? hasStatus(filters.status) : undefined,
     );
     const items = await this.selectSummaries()
       .where(matching)

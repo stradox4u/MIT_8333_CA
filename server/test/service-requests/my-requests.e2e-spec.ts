@@ -142,6 +142,17 @@ describe('Listing the Service Requests a User raised', () => {
     expect(completed.body).toMatchObject({ items: [], total: 0 });
   });
 
+  // Slice 1 can only make Submitted requests, so this can't yet show `open`
+  // leaving out Completed, Verified and Cancelled ones; later slices can.
+  it('filters by Open: Submitted, Assigned or In Progress', async () => {
+    const ada = await app.signUp('ada@example.com');
+    const reference = await submit(ada);
+
+    const open = await list(ada, { status: 'open' }).expect(200);
+
+    expect(open.body).toMatchObject({ items: [{ reference }], total: 1 });
+  });
+
   it.each([
     ['pageSize', 'over 100', { pageSize: 101 }],
     ['pageSize', 'of 0', { pageSize: 0 }],
