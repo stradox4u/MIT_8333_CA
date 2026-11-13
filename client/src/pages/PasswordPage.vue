@@ -49,7 +49,11 @@ function submit() {
 <template>
   <AuthLayout>
     <h1>Sign in.</h1>
-    <p class="intro">Use your email address and password.</p>
+    <p
+      class="intro mt-0 mx-0 mb-6.5 text-[13px] leading-[1.7] text-campus-muted wrap-anywhere"
+    >
+      Use your email address and password.
+    </p>
     <form novalidate class="space-y-5" @submit.prevent="submit">
       <FormField
         v-model="form.values.email"
@@ -69,33 +73,43 @@ function submit() {
         @blur="form.blur('password')"
         @update:model-value="form.changed('password')"
       />
-      <label class="check"
-        ><input v-model="keepSignedIn" type="checkbox" /><span
-          >Keep me signed in</span
-        ></label
+      <label
+        class="flex items-center gap-2.25 w-fit text-campus-muted text-[12px] leading-[1.6] phone:min-h-9.5"
+        ><input
+          class="w-4 h-4 flex-none m-0 accent-campus-navy"
+          v-model="keepSignedIn"
+          type="checkbox"
+        /><span>Keep me signed in</span></label
       >
       <SubmitButton :pending="signin.isPending.value" arrow
         >Sign in</SubmitButton
       >
-      <p v-if="form.formError.value" class="field-error" role="alert">
+      <p
+        v-if="form.formError.value"
+        class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
+        role="alert"
+      >
         {{ form.formError.value }}
       </p>
     </form>
     <RouterLink
-      class="text-link centered"
+      class="inline-block border-0 py-2 px-0.5 text-campus-navy bg-transparent text-[12px] underline underline-offset-4 [&.centered]:block [&.centered]:w-fit [&.centered]:mt-1.75 [&.centered]:mx-auto [&.centered]:mb-0 [&.centered]:text-center phone:min-h-11 centered"
       to="/recover"
       @click="ui.email = form.values.email"
       >Forgot your password?</RouterLink
     >
     <RouterLink
-      class="text-link centered"
+      class="inline-block border-0 py-2 px-0.5 text-campus-navy bg-transparent text-[12px] underline underline-offset-4 [&.centered]:block [&.centered]:w-fit [&.centered]:mt-1.75 [&.centered]:mx-auto [&.centered]:mb-0 [&.centered]:text-center phone:min-h-11 centered"
       to="/sign-in"
       @click="ui.email = form.values.email"
       >Use a Sign-in Link instead</RouterLink
     >
-    <p class="switch-link">
+    <p class="mt-5.5 mx-0 mb-0 text-center text-[12px] text-campus-muted">
       New to the portal?
-      <RouterLink to="/sign-up" @click="ui.email = form.values.email"
+      <RouterLink
+        class="text-campus-navy font-semibold underline underline-offset-[3px]"
+        to="/sign-up"
+        @click="ui.email = form.values.email"
         >Sign up</RouterLink
       >
     </p>
