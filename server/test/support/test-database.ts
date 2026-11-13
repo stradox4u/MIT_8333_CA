@@ -33,6 +33,8 @@ export async function createTestDatabase() {
       if (tables.length > 0) {
         await client.exec(`truncate ${tables.join(', ')} cascade`);
       }
+      // Each test's References start again from 1.
+      await client.exec('update request_categories set last_number = 0');
     },
     /** Whether any row of any table contains `text`: for data-protection checks. */
     async mentions(text: string) {

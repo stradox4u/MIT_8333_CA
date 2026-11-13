@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -164,3 +165,48 @@ export const requestCategories = pgTable('request_categories', {
   lastNumber: integer().notNull().default(0),
   sortOrder: integer().notNull(),
 });
+
+export const SERVICE_REQUEST_STATUSES = [
+  'submitted',
+  'assigned',
+  'in_progress',
+  'completed',
+  'verified',
+  'cancelled',
+] as const;
+export type ServiceRequestStatus = (typeof SERVICE_REQUEST_STATUSES)[number];
+
+export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+export type Priority = (typeof PRIORITIES)[number];
+
+/** Service Requests: faults on campus, reported by their Requesters (GLOSSARY.md). */
+export const serviceRequests = pgTable(
+  'service_requests',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    /** Such as SR-PLUMB-42. It never changes, even if the Request Category does. */
+    reference: text().notNull(),
+    categoryId: text()
+      .notNull()
+      .references(() => requestCategories.id),
+    requesterId: uuid()
+      .notNull()
+      .references(() => users.id),
+    title: text().notNull(),
+    location: text().notNull(),
+    description: text().notNull(),
+    status: text().$type<ServiceRequestStatus>().notNull(),
+    priority: text().$type<Priority>().notNull().default('normal'),
+    submittedAt: instant().notNull(),
+    completedAt: instant(),
+    verifiedAt: instant(),
+    cancelledAt: instant(),
+  },
+  (table) => [
+    uniqueIndex().on(table.reference),
+    index().on(table.requesterId),
+    index().on(table.status),
+    index().on(table.categoryId),
+    index().on(table.submittedAt),
+  ],
+);
