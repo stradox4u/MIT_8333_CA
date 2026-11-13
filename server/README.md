@@ -46,6 +46,23 @@ No demo accounts are created automatically. When explicitly configured,
 `npm run db:seed` is available in the runtime image after migrations; see the
 root instructions for supplying the demo password and invoking it.
 
+The seed also creates twelve demonstration Service Requests: one in every
+Status for Student and Staff, with current work and Assignment history for the
+officer and all requests visible to the Administrator. Reruns preserve existing
+demo requests and their history; a private unique seed key prevents duplicates.
+
+## Closing Service Requests
+
+Requester and Administrator verification, Requester Not fixed answers, cancellation,
+partial detail edits and Administrator Priority changes return the updated request
+with `200`. Invalid Status transitions return `409`; Cancel and Not fixed require
+a trimmed reason of 3–1,000 characters. Requesters can edit all details while
+Submitted, and Administrators can correct category and location while Open.
+
+The daily 03:00 job verifies Completed requests unanswered for at least seven
+days, including when their Requester has left; the Status Update and Activity Log
+have no actor. A new completion after Not fixed starts a fresh seven-day deadline.
+
 ## Concurrency tests
 
 `npm run test:postgres` runs the HTTP concurrency regressions against real

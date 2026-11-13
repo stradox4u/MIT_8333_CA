@@ -63,3 +63,46 @@ export async function assign(
     .send({ officerId })
     .expect(200);
 }
+
+/** Builds a request's Status through public actions for permission and lifecycle checks. */
+export async function requestInStatus(
+  app: TestApp,
+  status:
+    | 'submitted'
+    | 'assigned'
+    | 'in_progress'
+    | 'completed'
+    | 'verified'
+    | 'cancelled',
+) {
+  const requester = await app.signUp('requester@example.com');
+  const admin = await app.signInAsAdministrator();
+  const officer = await app.signInAsMaintenanceOfficer();
+  const requesterId = await idOf(requester);
+  const officerId = await idOf(officer);
+  const reference = await submitServiceRequest(requester);
+  if (status !== 'submitted') {
+    await assign(admin, reference, officerId);
+    if (status === 'cancelled')
+      await admin
+        .post(`/api/service-requests/${reference}/cancel`)
+        .send({ reason: 'Duplicate report.' })
+        .expect(200);
+    else if (status !== 'assigned') {
+      await officer
+        .post(`/api/service-requests/${reference}/start`)
+        .expect(200);
+      if (status !== 'in_progress') {
+        await officer
+          .post(`/api/service-requests/${reference}/complete`)
+          .send({ note: 'Replaced the washer.' })
+          .expect(200);
+        if (status === 'verified')
+          await requester
+            .post(`/api/service-requests/${reference}/verify`)
+            .expect(200);
+      }
+    }
+  }
+  return { requester, requesterId, admin, officer, officerId, reference };
+}
