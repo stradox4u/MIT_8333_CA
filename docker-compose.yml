@@ -1,0 +1,99 @@
+name: mit8333
+
+services:
+  client:
+    build:
+      context: ./client
+    ports:
+      - "127.0.0.1:${CLIENT_PORT:-5173}:8080"
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  server:
+    build:
+      context: ./server
+      target: runtime
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      APP_URL: "http://localhost:${CLIENT_PORT:-5173}"
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/mit8333
+      SMTP_URL: smtp://mailpit:1025
+      SMTP_STARTTLS: opportunistic
+      MAIL_FROM: "MIT 8333 Maintenance <no-reply@example.com>"
+      # For real Google sign-in, pass --env-file server/.env to Compose.
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-local-google-not-configured}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-local-google-not-configured}"
+      TRUST_PROXY_HOPS: "1"
+      COOKIE_SECURE: "false"
+      DEMO_ACCOUNTS_DOMAIN: "${DEMO_ACCOUNTS_DOMAIN:-demo.mit8333.example}"
+      DEMO_ACCOUNTS_PASSWORD: "${DEMO_ACCOUNTS_PASSWORD:-}"
+      # Keep this local stack disconnected from production telemetry.
+      OBSERVE_APP_KEY: ""
+      OBSERVE_APP_SECRET: ""
+    expose:
+      - "3000"
+    init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          'fetch("http://127.0.0.1:3000/api/docs-json").then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))',
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ./server
+      target: migrate
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/mit8333
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mit8333
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mit8333"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

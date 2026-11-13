@@ -14,6 +14,7 @@ import { DrizzleAuthStore } from './drizzle-auth.store.js';
 import { FreshAuthentication } from './fresh-authentication.js';
 import { GoogleAccounts } from './google-accounts.resolver.js';
 import { GoogleController } from './google.controller.js';
+import { GoogleCallbackFilter } from './google-callback.filter.js';
 import { GoogleFetch, GoogleFetchModule } from './google-fetch.js';
 import { KeepSignedInCookie } from './keep-signed-in.cookie.js';
 import { PasswordAttempts } from './password-attempts.js';
@@ -91,6 +92,7 @@ import './authentication-types.js';
     SessionAuth,
     SignInLinks,
     GoogleAccounts,
+    GoogleCallbackFilter,
     {
       provide: DrizzleAuthStore,
       inject: [DATABASE, AuthenticationStorage],

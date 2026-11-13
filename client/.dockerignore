@@ -1,0 +1,12 @@
+# Only application/build inputs enter the image context, never local .env files.
+**
+!package.json
+!package-lock.json
+!index.html
+!tsconfig.json
+!vite.config.ts
+!nginx.conf
+!src/
+!src/**
+!public/
+!public/**

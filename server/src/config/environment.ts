@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { MAIL_TRANSPORT_KINDS } from '../mail/mail-transport.js';
+import {
+  MAIL_TRANSPORT_KINDS,
+  SMTP_STARTTLS_MODES,
+} from '../mail/mail-transport.js';
 
 /**
  * Every environment variable the API reads, checked once at startup by
@@ -18,6 +21,8 @@ export const environment = z.object({
 
   MAIL_TRANSPORT: z.enum(MAIL_TRANSPORT_KINDS).default('smtp'),
   SMTP_URL: z.string().min(1),
+  /** Explicit opt-in for trusted plaintext relays such as Docker Mailpit. */
+  SMTP_STARTTLS: z.enum(SMTP_STARTTLS_MODES).optional(),
   MAIL_FROM: z.string().min(1),
 
   GOOGLE_CLIENT_ID: z.string().min(1),

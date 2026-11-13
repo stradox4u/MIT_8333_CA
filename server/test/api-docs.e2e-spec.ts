@@ -3,6 +3,7 @@ import { createTestApp, type TestApp } from './support/test-app.js';
 describe('API documentation', () => {
   let app: TestApp;
   let document: {
+    info: { description: string };
     paths: Record<string, Record<string, any>>;
     components: { securitySchemes: Record<string, unknown> };
   };
@@ -50,5 +51,13 @@ describe('API documentation', () => {
     expect(document.components.securitySchemes).toMatchObject({
       session: { type: 'apiKey', in: 'cookie' },
     });
+  });
+
+  it('documents the additive field issues and Google callback failure redirects', () => {
+    expect(document.info.description).toContain('issues:');
+    expect(
+      document.paths['/api/auth/oidc/{provider}/callback'].get.responses['302']
+        .description,
+    ).toContain('google_sign_in_failed');
   });
 });

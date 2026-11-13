@@ -1,5 +1,6 @@
 import { createTestApp, type TestApp } from '../support/test-app.js';
 import type { GoogleAccount } from '../support/fake-google.js';
+import { Logger } from '@nestjs/common';
 
 const ADA: GoogleAccount = {
   sub: 'google-ada',
@@ -8,15 +9,18 @@ const ADA: GoogleAccount = {
   familyName: 'Lovelace',
 };
 const DAY = 24 * 60 * 60 * 1000;
+const CLIENT_URL = 'https://maintenance.example';
+const FAILED_SIGN_IN = `${CLIENT_URL}/sign-in?error=google_sign_in_failed`;
 
 describe('Continue with Google', () => {
   let app: TestApp;
 
   beforeAll(async () => {
-    app = await createTestApp();
+    app = await createTestApp({ config: { appUrl: CLIENT_URL } });
   });
   beforeEach(() => app.reset());
   afterAll(() => app.close());
+  afterEach(() => vi.restoreAllMocks());
 
   const signInWithGoogle = async (
     account: GoogleAccount,
@@ -100,7 +104,8 @@ describe('Continue with Google', () => {
       emailVerified: false,
     });
 
-    expect(callback.status).toBe(403);
+    expect(callback.status).toBe(302);
+    expect(callback.headers.location).toBe(FAILED_SIGN_IN);
     await browser.get('/api/auth/me').expect(401);
   });
 
@@ -115,8 +120,90 @@ describe('Continue with Google', () => {
 
     const callback = await app.continueWithGoogle(app.browser(), ADA);
 
-    expect(callback.status).toBe(403);
-    expect(callback.body).toMatchObject({ error: 'account_deactivated' });
+    expect(callback.status).toBe(302);
+    expect(callback.headers.location).toBe(
+      `${CLIENT_URL}/sign-in?error=account_deactivated`,
+    );
+  });
+
+  it('preserves the successful relative redirect destination', async () => {
+    const browser = app.browser();
+    const callback = await app.continueWithGoogle(browser, ADA, {
+      redirectTo: '/requests?status=open',
+    });
+
+    expect(callback.status).toBe(302);
+    expect(callback.headers.location).toBe('/requests?status=open');
+    await browser.get('/api/auth/me').expect(200);
+  });
+
+  it.each([
+    '/api/auth/oidc/google/callback',
+    '/api/auth/oidc/github/callback?code=private-code&state=private-state',
+    '/api/auth/oidc/google/callback?state=one&state=two',
+    '/api/auth/oidc/google/callback?code=private-code&state=private-state',
+  ])('redirects a bad callback to the trusted client: %s', async (path) => {
+    const browser = app.browser();
+    const callback = await browser
+      .get(path)
+      .query({ redirectTo: 'https://evil.example/private-token' })
+      .set('Host', 'evil.example')
+      .expect(302);
+
+    expect(callback.headers.location).toBe(FAILED_SIGN_IN);
+    expect(callback.headers['cache-control']).toBe('no-store');
+    await browser.get('/api/auth/me').expect(401);
+  });
+
+  it.each(['denied', 'bad-code', 'expired'])(
+    'redirects a %s Google transaction without exposing callback data',
+    async (failure) => {
+      const browser = app.browser();
+      const login = await browser
+        .get('/api/auth/oidc/google/login')
+        .query({ redirectTo: '/private-destination' })
+        .expect(302);
+      const state = new URL(login.headers.location).searchParams.get('state');
+      if (failure === 'expired') app.clock.advance(11 * 60 * 1000);
+
+      const callback = await browser
+        .get('/api/auth/oidc/google/callback')
+        .query({
+          state,
+          ...(failure === 'denied'
+            ? {
+                error: 'access_denied',
+                error_description: 'private-description',
+              }
+            : { code: 'private-invalid-code' }),
+        })
+        .expect(302);
+
+      expect(callback.headers.location).toBe(FAILED_SIGN_IN);
+      await browser.get('/api/auth/me').expect(401);
+    },
+  );
+
+  it('logs a provider failure without putting sensitive details in the redirect or log', async () => {
+    const browser = app.browser();
+    const login = await browser.get('/api/auth/oidc/google/login').expect(302);
+    const state = new URL(login.headers.location).searchParams.get('state');
+    const log = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
+    vi.spyOn(app.googleFetch, 'fetch').mockRejectedValueOnce(
+      new Error('private-provider-error'),
+    );
+
+    const callback = await browser
+      .get('/api/auth/oidc/google/callback')
+      .query({ state, code: 'private-code' })
+      .expect(302);
+
+    expect(callback.headers.location).toBe(FAILED_SIGN_IN);
+    expect(log).toHaveBeenCalled();
+    expect(JSON.stringify(log.mock.calls)).not.toContain('private-');
+    await browser.get('/api/auth/me').expect(401);
   });
 
   it('refuses a sign-in provider other than Google', async () => {

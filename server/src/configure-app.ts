@@ -1,10 +1,8 @@
-import {
-  type INestApplication,
-  StandardSchemaValidationPipe,
-} from '@nestjs/common';
+import { type INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { Express } from 'express';
 import { AppConfig } from './config/app-config.js';
+import { createValidationPipe } from './validation.js';
 
 /** App-wide HTTP settings, shared by `main.ts` and the tests. */
 export function configureApp(app: INestApplication) {
@@ -17,7 +15,7 @@ export function configureApp(app: INestApplication) {
   // Refuse state-changing requests from other sites' pages (ADR-0001).
   app.enableCsrfProtection({ trustedOrigins: config.trustedOrigins });
   // Validates every `@Body({ schema })`, `@Param(…, { schema })`, … (Zod).
-  app.useGlobalPipes(new StandardSchemaValidationPipe());
+  app.useGlobalPipes(createValidationPipe());
   serveApiDocs(app, config);
 }
 
@@ -32,7 +30,10 @@ function serveApiDocs(app: INestApplication, config: AppConfig) {
     .setDescription(
       'Service requests for university maintenance. Sign in through ' +
         '`/api/auth/sign-in-link` or `/api/auth/sign-in`; the session cookie ' +
-        'then authenticates every other request.',
+        'then authenticates every other request. Validation errors retain ' +
+        '`statusCode`, `error` and the legacy `message` array, and add ' +
+        '`issues: [{ path: ["firstName"], message: "..." }]`. Paths are ' +
+        'relative to the validated input; an empty path is a form-level error.',
     )
     .setVersion('1.0')
     .addCookieAuth(
