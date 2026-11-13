@@ -9,6 +9,7 @@ import {
   signInLinks,
   users,
 } from '../database/schema.js';
+import { activeWithRole } from './active-users.js';
 import { displayName } from './display-name.js';
 import type { LastAdministrator, NotFound, UserErased } from './refusals.js';
 import type { User } from './user.js';
@@ -57,17 +58,8 @@ const managedUserColumns = {
   createdAt: users.createdAt,
 };
 
-/**
- * An active Administrator: one who can actually sign in and manage the
- * system. They have signed in at least once (an Invitation still pending
- * doesn't count), and are neither deactivated nor erased.
- */
-const activeAdministrator = and(
-  eq(users.roleId, 'administrator'),
-  isNotNull(users.emailVerifiedAt),
-  isNull(users.deactivatedAt),
-  isNull(users.erasedAt),
-);
+/** An active Administrator: one who can actually sign in and manage the system. */
+const activeAdministrator = activeWithRole('administrator');
 
 export interface NewUser {
   email: string;

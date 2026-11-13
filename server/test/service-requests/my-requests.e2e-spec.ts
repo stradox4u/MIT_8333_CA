@@ -2,7 +2,11 @@ import {
   aServiceRequest,
   submitServiceRequest,
 } from '../support/service-requests.js';
-import { createTestApp, type TestApp } from '../support/test-app.js';
+import {
+  type Browser,
+  createTestApp,
+  type TestApp,
+} from '../support/test-app.js';
 
 const MINUTE = 60 * 1000;
 
@@ -14,8 +18,6 @@ describe('Listing the Service Requests a User raised', () => {
   });
   beforeEach(() => app.reset());
   afterAll(() => app.close());
-
-  type Browser = Awaited<ReturnType<TestApp['signUp']>>;
 
   const list = (browser: Browser, query: Record<string, unknown> = {}) =>
     browser
@@ -64,6 +66,7 @@ describe('Listing the Service Requests a User raised', () => {
           status: 'submitted',
           requester: { id: me.body.id, name: 'Ada Lovelace' },
           submittedAt: '2026-11-12T09:02:00.000Z',
+          assignment: null,
         },
         expect.objectContaining({
           reference: 'SR-PLUMB-1',
@@ -179,18 +182,15 @@ describe('Listing the Service Requests a User raised', () => {
     ]);
   });
 
-  it.each(['assigned', 'all'])(
-    'refuses the %s scope with a clear 400, for now',
-    async (scope) => {
-      const admin = await app.signInAsAdministrator();
+  it('refuses a scope that doesn’t exist', async () => {
+    const ada = await app.signUp('ada@example.com');
 
-      const refused = await list(admin, { scope }).expect(400);
+    const refused = await list(ada, { scope: 'mine' }).expect(400);
 
-      expect(refused.body.issues).toEqual([
-        { path: ['scope'], message: expect.stringContaining('requested') },
-      ]);
-    },
-  );
+    expect(refused.body.issues).toEqual([
+      { path: ['scope'], message: expect.any(String) },
+    ]);
+  });
 
   it('needs a scope', async () => {
     const ada = await app.signUp('ada@example.com');

@@ -1,5 +1,6 @@
 import {
   aServiceRequest,
+  idOf,
   submitServiceRequest,
 } from '../support/service-requests.js';
 import { createTestApp, type TestApp } from '../support/test-app.js';
@@ -12,13 +13,6 @@ describe('Tracking a Service Request', () => {
   });
   beforeEach(() => app.reset());
   afterAll(() => app.close());
-
-  type Browser = Awaited<ReturnType<TestApp['signUp']>>;
-
-  const idOf = async (browser: Browser) => {
-    const me = await browser.get('/api/auth/me').expect(200);
-    return me.body.id as string;
-  };
 
   it('shows its Requester the details, Submitted, and the timeline', async () => {
     const ada = await app.signUp('ada@example.com', {
@@ -49,6 +43,7 @@ describe('Tracking a Service Request', () => {
       status: 'submitted',
       requester: { id: adaId, name: 'Ada Lovelace' },
       submittedAt: '2026-11-12T09:00:00.000Z',
+      assignment: null,
       timeline: [
         {
           type: 'status_update',
@@ -57,6 +52,7 @@ describe('Tracking a Service Request', () => {
           fromStatus: null,
           toStatus: 'submitted',
           reason: null,
+          note: null,
         },
       ],
     });

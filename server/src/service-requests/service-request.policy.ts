@@ -1,10 +1,22 @@
 import { Policy } from '@nestjs/authorization';
 import type { User } from '../users/user.js';
 
+/** Who is connected to a Service Request: what its access rules turn on. */
+export interface ServiceRequestAccess {
+  requesterId: string;
+  /** The officer of its current Assignment, if it has one. */
+  currentOfficerId: string | null;
+  /** Every officer who has ever held an Assignment for it, the current one included. */
+  officerIds: string[];
+}
+
+const isOfficer = (user: User) => user.roleId === 'maintenance_officer';
+const isAdministrator = (user: User | null) => user?.roleId === 'administrator';
+
 /**
  * Who may do what with Service Requests (docs/service-requests.md). Every
  * Role is granted explicitly: being an Administrator grants nothing by
- * itself (ADR-0003).
+ * itself, so it never grants an officer's actions (ADR-0003).
  */
 @Policy()
 export class ServiceRequestPolicy {
@@ -17,18 +29,45 @@ export class ServiceRequestPolicy {
   }
 
   /**
-   * Seeing one Service Request: its Requester and Administrators. Anyone
-   * else is told it doesn't exist (404), so nobody learns that it does.
+   * Administrators managing Service Requests: assigning and unassigning
+   * them, listing them all, and choosing among the officers.
    */
-  view(user: User, request: { requester: { id: string } }) {
-    return request.requester.id === user.id || user.roleId === 'administrator';
+  manage(user: User | null) {
+    return isAdministrator(user);
+  }
+
+  /** Listing the Service Requests one has held an Assignment for. */
+  listAssigned(user: User | null) {
+    return user !== null && isOfficer(user);
   }
 
   /**
-   * Seeing a Service Request's Priority: Administrators, and (from slice 2)
-   * its assigned officer. Requesters don't see it, even their own.
+   * Seeing one Service Request: its Requester, Administrators, and any
+   * Maintenance Officer who has ever held an Assignment for it. Anyone else
+   * is told it doesn't exist (404), so nobody learns that it does.
    */
-  seePriority(user: User) {
-    return user.roleId === 'administrator';
+  view(user: User, request: ServiceRequestAccess) {
+    return (
+      request.requesterId === user.id ||
+      isAdministrator(user) ||
+      (isOfficer(user) && request.officerIds.includes(user.id))
+    );
+  }
+
+  /** Starting and completing the work: only the request's current officer. */
+  work(user: User, request: Pick<ServiceRequestAccess, 'currentOfficerId'>) {
+    return isOfficer(user) && request.currentOfficerId === user.id;
+  }
+
+  /**
+   * Seeing a Service Request's Priority: Administrators and its current
+   * officer. Requesters don't, even for their own; nor do officers it was
+   * taken away from.
+   */
+  seePriority(
+    user: User,
+    request: Pick<ServiceRequestAccess, 'currentOfficerId'>,
+  ) {
+    return isAdministrator(user) || this.work(user, request);
   }
 }

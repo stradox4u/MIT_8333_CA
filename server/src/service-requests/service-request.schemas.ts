@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SERVICE_REQUEST_STATUSES } from '../database/schema.js';
+import { userId } from '../users/user.schemas.js';
 
 /** Zod pieces for Service Request data (docs/service-requests.md, Validation). */
 
@@ -15,7 +16,10 @@ export const categoryId = z.string().min(1).max(64);
 export const status = z.enum(SERVICE_REQUEST_STATUSES);
 
 /** A list's Status filter: any Status, or `open` for Submitted, Assigned or In Progress. */
-export const statusFilter = z.enum([...SERVICE_REQUEST_STATUSES, 'open']);
+export const statusFilter = z.enum([...SERVICE_REQUEST_STATUSES, 'open']).meta({
+  description:
+    'Any Status, or `open`: Submitted, Assigned or In Progress, so the work hasn’t finished',
+});
 export type StatusFilter = z.infer<typeof statusFilter>;
 
 /** How the API addresses a Service Request, such as SR-PLUMB-42. */
@@ -31,13 +35,21 @@ export const submitBody = z.object({
   description,
 });
 
-/** Which Service Requests a list shows. `assigned` and `all` come in slice 2. */
-const scope = z.literal('requested', {
-  error: 'must be requested: the assigned and all scopes aren’t available yet',
+export const assignBody = z.object({
+  /** An active Maintenance Officer's id. Whether they are one is checked on use. */
+  officerId: userId,
 });
 
+/**
+ * Which Service Requests a list shows: those the User raised (`requested`),
+ * those they've held an Assignment for (`assigned`, Maintenance Officers),
+ * or every one (`all`, Administrators).
+ */
+export const listScope = z.enum(['requested', 'assigned', 'all']);
+export type ListScopeName = z.infer<typeof listScope>;
+
 export const listQuery = z.object({
-  scope,
+  scope: listScope,
   status: statusFilter.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),

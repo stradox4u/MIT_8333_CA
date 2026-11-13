@@ -78,6 +78,13 @@
       "when": 1794556489381,
       "tag": "0010_status_updates",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794566053678,
+      "tag": "0011_assignments",
+      "breakpoints": true
     }
   ]
 }

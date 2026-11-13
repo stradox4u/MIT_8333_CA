@@ -1,7 +1,9 @@
+import { sql } from 'drizzle-orm';
 import {
   index,
   integer,
   jsonb,
+  pgSequence,
   pgTable,
   text,
   timestamp,
@@ -218,12 +220,63 @@ export const serviceRequests = pgTable(
   ],
 );
 
+/**
+ * One counter for the rows a Service Request's timeline is built from
+ * (Assignments and Status Updates), so entries at the same instant keep the
+ * order they happened in.
+ */
+export const timelineSequence = pgSequence('timeline_sequence');
+
+const timelineId = () =>
+  integer()
+    .primaryKey()
+    .default(sql`nextval('timeline_sequence')`);
+
+export const ASSIGNMENT_END_REASONS = [
+  'reassigned',
+  'unassigned',
+  /** The officer was demoted, deactivated or erased. */
+  'officer_left',
+] as const;
+export type AssignmentEndReason = (typeof ASSIGNMENT_END_REASONS)[number];
+
+/**
+ * Assignments: an Administrator giving a Service Request to a Maintenance
+ * Officer (GLOSSARY.md). A request has at most one current Assignment, the
+ * one not yet ended; earlier ones stay on record.
+ */
+export const assignments = pgTable(
+  'assignments',
+  {
+    id: timelineId(),
+    serviceRequestId: uuid()
+      .notNull()
+      .references(() => serviceRequests.id),
+    officerId: uuid()
+      .notNull()
+      .references(() => users.id),
+    assignedById: uuid()
+      .notNull()
+      .references(() => users.id),
+    assignedAt: instant().notNull(),
+    /** Empty while it's the request's current Assignment. */
+    endedAt: instant(),
+    endedById: uuid().references(() => users.id),
+    endReason: text().$type<AssignmentEndReason>(),
+  },
+  (table) => [
+    uniqueIndex('assignments_one_current_index')
+      .on(table.serviceRequestId)
+      .where(sql`${table.endedAt} is null`),
+    index().on(table.officerId),
+  ],
+);
+
 /** Status Updates: every change to a Service Request's Status (GLOSSARY.md). */
 export const statusUpdates = pgTable(
   'status_updates',
   {
-    /** Also the order they happened in, when times tie. */
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    id: timelineId(),
     serviceRequestId: uuid()
       .notNull()
       .references(() => serviceRequests.id),
@@ -232,7 +285,15 @@ export const statusUpdates = pgTable(
     /** Empty for the move to Submitted when the request is first submitted. */
     fromStatus: text().$type<ServiceRequestStatus>(),
     toStatus: text().$type<ServiceRequestStatus>().notNull(),
+    /** Why, when the action takes one: cancelling, or Not fixed. */
     reason: text(),
+    /** The officer's optional note when they complete the work. */
+    note: text(),
+    /**
+     * The Assignment change that came with it: the Assignment it started
+     * (to Assigned), or the one it ended (back to Submitted).
+     */
+    assignmentId: integer().references(() => assignments.id),
     occurredAt: instant().notNull(),
   },
   (table) => [index().on(table.serviceRequestId)],

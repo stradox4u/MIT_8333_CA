@@ -1,34 +1,63 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { CurrentUser } from '@nestjs/authentication';
 import { AuthorizationService, Can } from '@nestjs/authorization';
 import {
   ApiBadRequestResponse,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
 } from '@nestjs/swagger';
 import type { z } from 'zod';
-import type { Priority } from '../database/schema.js';
 import type { User } from '../users/user.js';
 import { refuseIf, refuseUnlessVisible } from './refusals.js';
+import { ServiceRequestLifecycle } from './service-request-lifecycle.js';
 import {
   serviceRequestDetailsResponse,
   serviceRequestPageResponse,
   submittedResponse,
 } from './service-request.responses.js';
 import {
+  assignBody,
   listQuery,
+  type ListScopeName,
   referenceParam,
   submitBody,
 } from './service-request.schemas.js';
-import { ServiceRequestPolicy } from './service-request.policy.js';
-import { ServiceRequestsRepository } from './service-requests.repository.js';
+import {
+  type ServiceRequestAccess,
+  ServiceRequestPolicy,
+} from './service-request.policy.js';
+import {
+  type ListScope,
+  ServiceRequestsRepository,
+} from './service-requests.repository.js';
+
+const HIDDEN =
+  'No such Service Request, or one the User may not see: the same answer';
+
+/** Answers the request as it stands after the change, as the actor sees it. */
+const ANSWERS_THE_REQUEST = {
+  description: 'The Service Request after the change',
+  standardSchema: serviceRequestDetailsResponse,
+};
 
 @Can(ServiceRequestPolicy, 'use')
 @Controller('service-requests')
 export class ServiceRequestsController {
   constructor(
     private readonly serviceRequests: ServiceRequestsRepository,
+    private readonly lifecycle: ServiceRequestLifecycle,
     private readonly authorization: AuthorizationService,
   ) {}
 
@@ -46,7 +75,7 @@ export class ServiceRequestsController {
     @CurrentUser() requester: User,
     @Body({ schema: submitBody }) body: z.infer<typeof submitBody>,
   ) {
-    const submitted = await this.serviceRequests.submit({
+    const submitted = await this.lifecycle.submit({
       ...body,
       // Last, so nothing in the body can raise it in another User's name.
       requesterId: requester.id,
@@ -55,55 +84,154 @@ export class ServiceRequestsController {
     return { reference: submitted.reference };
   }
 
-  /** A page of Service Requests: so far, those the User raised (`requested`). */
+  /**
+   * A page of Service Requests: those the User raised (`requested`), those
+   * a Maintenance Officer has held an Assignment for (`assigned`), or, for
+   * Administrators, all of them (`all`).
+   */
   @Get()
   @ApiOkResponse({ standardSchema: serviceRequestPageResponse })
   async list(
     @CurrentUser() user: User,
     @Query({ schema: listQuery }) query: z.infer<typeof listQuery>,
   ) {
-    // The schema admits only `requested` so far: the User's own.
-    const listed = await this.serviceRequests.listRequestedBy(user.id, query);
-    const priorityShown = await this.seesPriority(user);
-    return {
-      ...listed,
-      items: listed.items.map((item) => withPriorityIf(priorityShown, item)),
-    };
+    const { scope, ...filters } = query;
+    const listed = await this.serviceRequests.list(
+      await this.scopeFor(user, scope),
+      filters,
+    );
+    const items = await Promise.all(
+      listed.items.map(async (item) =>
+        withPriorityIfVisible(
+          await this.priorityVisible(user, {
+            currentOfficerId: item.assignment?.officer.id ?? null,
+          }),
+          item,
+        ),
+      ),
+    );
+    return { ...listed, items };
   }
 
   /** The tracking page: the details, and the timeline oldest first. */
   @Get(':reference')
   @ApiOkResponse({ standardSchema: serviceRequestDetailsResponse })
-  @ApiNotFoundResponse({
-    description:
-      'No such Service Request, or one the User may not see: the same answer',
-  })
-  async find(
+  @ApiNotFoundResponse({ description: HIDDEN })
+  find(
     @CurrentUser() user: User,
     @Param('reference', { schema: referenceParam }) reference: string,
   ) {
-    const request = await this.serviceRequests.findByReference(reference);
-    refuseIf(request);
-    refuseUnlessVisible(
-      await this.authorization.can(ServiceRequestPolicy, 'view', user, request),
-    );
-    return withPriorityIf(await this.seesPriority(user), request);
+    return this.show(user, reference);
   }
 
-  private seesPriority(user: User) {
-    return this.authorization.can(ServiceRequestPolicy, 'seePriority', user);
+  /**
+   * Gives the request to an active Maintenance Officer: assigns a Submitted
+   * one, or reassigns an Assigned or In Progress one. Either way it's then
+   * Assigned. Giving it to the officer who holds it changes nothing.
+   */
+  @Put(':reference/assignment')
+  @Can(ServiceRequestPolicy, 'manage')
+  @ApiOkResponse(ANSWERS_THE_REQUEST)
+  @ApiBadRequestResponse({
+    description: '`officerId` isn’t an active Maintenance Officer',
+  })
+  @ApiNotFoundResponse({ description: 'No such Service Request' })
+  @ApiConflictResponse({ description: 'It’s Completed, Verified or Cancelled' })
+  async assign(
+    @CurrentUser() admin: User,
+    @Param('reference', { schema: referenceParam }) reference: string,
+    @Body({ schema: assignBody }) body: z.infer<typeof assignBody>,
+  ) {
+    refuseIf(
+      await this.lifecycle.assign(reference, body.officerId, admin.id),
+      'assigned',
+    );
+    return this.show(admin, reference);
+  }
+
+  /** Ends the current Assignment, handing the request back to Submitted. */
+  @Delete(':reference/assignment')
+  @Can(ServiceRequestPolicy, 'manage')
+  @HttpCode(200)
+  @ApiOkResponse(ANSWERS_THE_REQUEST)
+  @ApiNotFoundResponse({ description: 'No such Service Request' })
+  @ApiConflictResponse({ description: 'It isn’t Assigned or In Progress' })
+  async unassign(
+    @CurrentUser() admin: User,
+    @Param('reference', { schema: referenceParam }) reference: string,
+  ) {
+    refuseIf(await this.lifecycle.unassign(reference, admin.id), 'unassigned');
+    return this.show(admin, reference);
+  }
+
+  /**
+   * A request as `user` sees it: 404 unless they may see it, and without
+   * its Priority unless they may see that too.
+   */
+  private async show(user: User, reference: string) {
+    const access = await this.findVisible(user, reference);
+    const request = await this.serviceRequests.findDetails(reference);
+    refuseIf(request);
+    return withPriorityIfVisible(
+      await this.priorityVisible(user, access),
+      request,
+    );
+  }
+
+  /** Who is connected to the request, after checking `user` may see it. */
+  private async findVisible(user: User, reference: string) {
+    const access = await this.serviceRequests.findAccess(reference);
+    refuseIf(access);
+    refuseUnlessVisible(
+      await this.authorization.can(ServiceRequestPolicy, 'view', user, access),
+    );
+    return access;
+  }
+
+  private priorityVisible(
+    user: User,
+    request: Pick<ServiceRequestAccess, 'currentOfficerId'>,
+  ) {
+    return this.authorization.can(
+      ServiceRequestPolicy,
+      'seePriority',
+      user,
+      request,
+    );
+  }
+
+  /** A list's scope, once `user` may list it. */
+  private async scopeFor(user: User, scope: ListScopeName): Promise<ListScope> {
+    switch (scope) {
+      case 'requested':
+        return { requestedBy: user.id };
+      case 'assigned':
+        await this.authorization.authorize(
+          ServiceRequestPolicy,
+          'listAssigned',
+          user,
+        );
+        return { assignedTo: user.id };
+      case 'all':
+        await this.authorization.authorize(
+          ServiceRequestPolicy,
+          'manage',
+          user,
+        );
+        return { all: true };
+    }
   }
 }
 
 /**
- * The request as shown: without its `priority` key at all, not `null`, for
- * Users the policy doesn't show the Priority to.
+ * The request as answered: without its `priority` key at all, not `null`,
+ * for Users the policy doesn't let see the Priority.
  */
-function withPriorityIf<Shown extends { priority?: Priority }>(
-  shown: boolean,
-  request: Shown,
-): Shown | Omit<Shown, 'priority'> {
-  if (shown) {
+function withPriorityIfVisible<Request extends { priority: unknown }>(
+  priorityVisible: boolean,
+  request: Request,
+): Request | Omit<Request, 'priority'> {
+  if (priorityVisible) {
     return request;
   }
   const { priority: _hidden, ...withoutPriority } = request;

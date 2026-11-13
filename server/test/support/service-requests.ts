@@ -1,6 +1,4 @@
-import type { TestApp } from './test-app.js';
-
-type Browser = ReturnType<TestApp['browser']>;
+import type { Browser } from './test-app.js';
 
 /** A valid body for `POST /api/service-requests`, to override field by field. */
 export const aServiceRequest = (
@@ -28,4 +26,22 @@ export async function submitServiceRequest(
     .send(body)
     .expect(201);
   return submitted.body.reference;
+}
+
+/** The id of the User a browser is signed in as. */
+export async function idOf(browser: Browser): Promise<string> {
+  const me = await browser.get('/api/auth/me').expect(200);
+  return me.body.id;
+}
+
+/** An Administrator gives a Service Request to a Maintenance Officer. */
+export async function assign(
+  admin: Browser,
+  reference: string,
+  officerId: string,
+) {
+  return admin
+    .put(`/api/service-requests/${reference}/assignment`)
+    .send({ officerId })
+    .expect(200);
 }

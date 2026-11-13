@@ -38,6 +38,9 @@ export class TestClock extends Clock {
 
 export type TestApp = Awaited<ReturnType<typeof createTestApp>>;
 
+/** A test client that keeps its cookies, like a browser. */
+export type Browser = ReturnType<TestApp['browser']>;
+
 /**
  * The whole application over HTTP, with the three system boundaries
  * replaced: an in-process database, a mailbox that keeps what is sent, and a
@@ -160,6 +163,23 @@ export async function createTestApp({
     return signInByLink(email);
   };
 
+  /**
+   * A new browser, signed in as an active Maintenance Officer: created as an
+   * Administrator's Invitation creates one, then signed in once.
+   */
+  const signInAsMaintenanceOfficer = async (
+    email = 'officer@example.com',
+    { firstName = 'Chinedu', lastName = 'Eze' } = {},
+  ) => {
+    await app.get(UsersRepository).createUser({
+      email,
+      firstName,
+      lastName,
+      roleId: 'maintenance_officer',
+    });
+    return signInByLink(email);
+  };
+
   /** The browser that started sign-in visits this fake Google callback. */
   const googleCallbackFor = (
     authorizationUrl: string,
@@ -226,6 +246,7 @@ export async function createTestApp({
     signInByLink,
     signUp,
     signInAsAdministrator,
+    signInAsMaintenanceOfficer,
     databaseMentions: (text: string) => database.mentions(text),
     async reset() {
       mailbox.clear();
