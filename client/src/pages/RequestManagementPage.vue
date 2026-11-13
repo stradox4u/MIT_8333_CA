@@ -50,12 +50,14 @@ function assigned(details: ServiceRequestDetails, officer: MaintenanceOfficer) {
             assigning = item;
           "
         >
-          <UserRoundPlus class="inline-block w-3.75 h-3.75" aria-hidden="true" />Assign
+          <UserRoundPlus
+            class="inline-block w-3.75 h-3.75"
+            aria-hidden="true"
+          />Assign
         </button>
         <template v-else-if="item.assignment">{{
           item.assignment.officer.name
-        }}</template
-        ><span v-else class="text-campus-muted">None</span>
+        }}</template><span v-else class="text-campus-muted">None</span>
       </template>
     </ServiceRequestList>
     <AssignPicker

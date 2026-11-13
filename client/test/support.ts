@@ -10,7 +10,8 @@ import { server } from "./setup";
 
 export const api = "http://localhost:5173/api";
 
-export type Role = "student" | "staff" | "maintenance_officer" | "administrator";
+export type Role =
+  "student" | "staff" | "maintenance_officer" | "administrator";
 
 /** Signs in as a completed User with this Role. */
 export function signedIn(
@@ -92,10 +93,7 @@ export function summary(
 }
 
 /** Answers the list from `items`, a page at a time, recording each query. */
-export function withRequests(
-  items: Item[],
-  queries: URLSearchParams[] = [],
-) {
+export function withRequests(items: Item[], queries: URLSearchParams[] = []) {
   server.use(
     http.get(`${api}/service-requests`, ({ request }) => {
       const query = new URL(request.url).searchParams;

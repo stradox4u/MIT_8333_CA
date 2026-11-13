@@ -116,6 +116,9 @@ function assigned(_: unknown, officer: MaintenanceOfficer) {
   const verb = assigning.value === "reassign" ? "reassigned" : "assigned";
   report(`${reference.value} ${verb} to ${officer.name}. It’s now Assigned.`);
 }
+/** The Manage card sits beside the timeline, and between the panel and it on small screens. */
+const withSide =
+  "grid grid-cols-[minmax(0,1fr)_320px] grid-rows-[auto_1fr] items-start gap-x-4.5 [grid-template-areas:'next_side'_'main_side'] tablet:grid-cols-1 tablet:grid-rows-none tablet:[grid-template-areas:'next'_'side'_'main']";
 /** Administrators manage an Open request's Assignment from the side card. */
 const manageable = computed(
   () =>
@@ -368,13 +371,7 @@ const cancellation = computed(() => {
           </button>
         </template>
       </section>
-      <div
-        :class="
-          manageable
-            ? 'grid grid-cols-[minmax(0,1fr)_320px] grid-rows-[auto_1fr] items-start gap-x-4.5 [grid-template-areas:\'next_side\'_\'main_side\'] laptop:grid-cols-[minmax(0,1fr)_290px] tablet:grid-cols-1 tablet:grid-rows-none tablet:[grid-template-areas:\'next\'_\'side\'_\'main\']'
-            : ''
-        "
-      >
+      <div :class="manageable ? withSide : ''">
         <div class="min-w-0 [grid-area:next]">
           <p
             v-if="viewer === 'former'"

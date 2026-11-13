@@ -69,7 +69,6 @@ test("the Menu button opens the navigation for small screens, and Escape or a li
   runtime.queryClient.clear();
 });
 
-
 test("Report a fault asks for a title, a Request Category from the API, a location and a description", async () => {
   signedIn();
   withCategories();
@@ -329,7 +328,6 @@ test("submitting sends the trimmed report once, then shows the new request with 
   runtime.queryClient.clear();
 });
 
-
 test("the tracking page shows the Requester their request's header, description and timeline, without Priority", async () => {
   signedIn("student");
   server.use(
@@ -556,7 +554,6 @@ test("the tracking page offers another try when it couldn't load", async () => {
   runtime.queryClient.clear();
 });
 
-
 test("My requests lists the requests the User raised, without Priority, even for an Administrator", async () => {
   signedIn("administrator");
   const year = new Date().getFullYear();
@@ -768,7 +765,12 @@ test("while a new filter loads, My requests doesn't choose an empty state from t
     http.get(`${api}/service-requests`, async ({ request }) => {
       const status = new URL(request.url).searchParams.get("status");
       if (status === "verified")
-        return HttpResponse.json({ items: [], page: 1, pageSize: 20, total: 0 });
+        return HttpResponse.json({
+          items: [],
+          page: 1,
+          pageSize: 20,
+          total: 0,
+        });
       if (hold)
         await new Promise<void>((resolve) => {
           release = resolve;

@@ -43,9 +43,8 @@ function input(event: Event) {
     class="min-w-0 [&_>_label]:block grid gap-1.75 [&_>_label]:m-0 [&_>_label]:text-[12px] [&_>_label]:font-semibold"
   >
     <div class="flex items-baseline justify-between gap-3">
-      <label class="m-0 text-[12px] font-semibold" :for="id">{{
-        label
-      }}</label><span
+      <label class="m-0 text-[12px] font-semibold" :for="id">{{ label }}</label
+      ><span
         v-if="max"
         class="text-campus-muted text-[11px] tabular-nums whitespace-nowrap [&.over]:text-error [&.over]:font-semibold"
         :class="{ over: count > max }"

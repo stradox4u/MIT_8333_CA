@@ -252,7 +252,7 @@ function submit() {
             {{
               ordered.length
                 ? "No active Maintenance Officer matches that name."
-                : "There are no active Maintenance Officers."
+                : "There are no active Maintenance Officers. Invited officers appear once they’ve signed in."
             }}
           </p>
         </fieldset>
