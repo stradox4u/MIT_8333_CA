@@ -57,8 +57,9 @@ function assignmentTitle(entry: AssignmentChange) {
       return `Reassigned from ${entry.previousOfficer ? named(entry.previousOfficer) : "another officer"} to ${officer}`;
     case "unassigned":
       return `Unassigned ${officer}`;
+    // Demoted, deactivated or erased: true of each, without saying which.
     case "officer_left":
-      return `${entry.officer.id === props.viewerId ? "You are" : `${entry.officer.name} is`} no longer a Maintenance Officer`;
+      return `${entry.officer.id === props.viewerId ? "Your" : `${entry.officer.name}’s`} Assignment ended`;
   }
 }
 const assignmentIcons = {
@@ -148,14 +149,6 @@ const label =
             {{ assignmentTitle(entry) }}
           </p>
           <p
-            v-if="entry.statusUpdate"
-            class="tl-detail flex flex-wrap items-center gap-1.25 mt-1 mb-0 text-campus-muted text-[11px]"
-          >
-            <Flag class="w-3 h-3" aria-hidden="true" />Status Update:
-            {{ statusNames[entry.statusUpdate.fromStatus] }} →
-            {{ statusNames[entry.statusUpdate.toStatus] }}
-          </p>
-          <p
             class="tl-meta mt-0.75 mb-0 text-campus-muted text-[11px] [&_strong]:text-campus-navy [&_strong]:font-semibold"
           >
             Assignment · <strong>{{ actorName(entry) }}</strong>
@@ -163,6 +156,14 @@ const label =
             <time :datetime="entry.occurredAt">{{
               formatDateTime(entry.occurredAt)
             }}</time>
+          </p>
+          <p
+            v-if="entry.statusUpdate"
+            class="tl-detail flex flex-wrap items-center gap-1.25 mt-1 mb-0 text-campus-muted text-[11px]"
+          >
+            <Flag class="w-3 h-3" aria-hidden="true" />Status Update:
+            {{ statusNames[entry.statusUpdate.fromStatus] }} →
+            {{ statusNames[entry.statusUpdate.toStatus] }}
           </p>
         </div>
       </template>

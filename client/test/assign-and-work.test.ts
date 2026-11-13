@@ -341,7 +341,10 @@ test.each([
     withOfficers();
     server.use(
       http.put(`${api}/service-requests/SR-ELEC-1/assignment`, () =>
-        HttpResponse.json({ message: "Refused", statusCode: status }, { status }),
+        HttpResponse.json(
+          { message: "Refused", statusCode: status },
+          { status },
+        ),
       ),
     );
     const { runtime, user } = open("/admin/requests");
@@ -354,9 +357,9 @@ test.each([
     );
     const reads = queries.length;
     await user.click(within(dialog).getByRole("button", { name: "Assign" }));
-    expect(
-      (await within(dialog).findByRole("alert")).textContent?.trim(),
-    ).toBe(message);
+    expect((await within(dialog).findByRole("alert")).textContent?.trim()).toBe(
+      message,
+    );
     await waitFor(() => expect(queries.length).toBeGreaterThan(reads));
     runtime.queryClient.clear();
   },
@@ -386,13 +389,17 @@ test("while an assignment is sending the picker can't be closed, and the list sh
   );
   const { runtime, user } = open("/admin/requests");
   await user.click(await assignButton("SR-ELEC-1"));
-  const dialog = await screen.findByRole("dialog", { name: "Assign SR-ELEC-1" });
+  const dialog = await screen.findByRole("dialog", {
+    name: "Assign SR-ELEC-1",
+  });
   await user.click(
     await within(dialog).findByRole("radio", { name: /Tunde Bakare/ }),
   );
   await user.click(within(dialog).getByRole("button", { name: "Assign" }));
   const cancel = within(dialog).getByRole("button", { name: "Cancel" });
-  await waitFor(() => expect((cancel as HTMLButtonElement).disabled).toBe(true));
+  await waitFor(() =>
+    expect((cancel as HTMLButtonElement).disabled).toBe(true),
+  );
   expect(
     (within(dialog).getByRole("button", { name: "Close" }) as HTMLButtonElement)
       .disabled,
@@ -403,7 +410,9 @@ test("while an assignment is sending the picker can't be closed, and the list sh
   expect(escape.defaultPrevented).toBe(true);
   expect((dialog as HTMLDialogElement).open).toBe(true);
   release();
-  await screen.findByText("SR-ELEC-1 assigned to Tunde Bakare. It’s now Assigned.");
+  await screen.findByText(
+    "SR-ELEC-1 assigned to Tunde Bakare. It’s now Assigned.",
+  );
   await screen.findByText("Tunde Bakare", { selector: "td" });
   runtime.queryClient.clear();
 });
@@ -431,7 +440,9 @@ test("an assignment that lands after leaving the page still updates the cached r
       name: "Assign a Maintenance Officer",
     }),
   );
-  const dialog = await screen.findByRole("dialog", { name: "Assign SR-PLUMB-1" });
+  const dialog = await screen.findByRole("dialog", {
+    name: "Assign SR-PLUMB-1",
+  });
   await user.click(
     await within(dialog).findByRole("radio", { name: /Tunde Bakare/ }),
   );
@@ -557,14 +568,14 @@ function withRequest(overrides: Record<string, unknown> = {}) {
     },
   };
 }
-/** Each timeline entry as "title | detail | meta", with the time left out. */
+/** Each timeline entry's lines in page order, joined by " | ", with the time left out. */
 const timeline = () =>
   within(screen.getByRole("region", { name: "Timeline" }))
     .getAllByRole("listitem")
     .map((entry) =>
-      [".tl-title", ".tl-detail", ".tl-meta"]
-        .map((part) =>
-          [...(entry.querySelector(part)?.childNodes ?? [])]
+      [...entry.querySelectorAll(".tl-title, .tl-meta, .tl-detail")]
+        .map((line) =>
+          [...line.childNodes]
             .filter((node) => node.nodeType !== Node.COMMENT_NODE)
             .map((node) => node.textContent?.trim())
             .filter(Boolean)
@@ -609,12 +620,12 @@ test("the tracking page names the Maintenance Officer, and the timeline shows ea
   expect(details("Maintenance Officer")).toBe("Tunde Bakare");
   expect(timeline()).toEqual([
     "Submitted Fault reported | Status Update · You · Requester",
-    "Assigned to Chinedu Eze | Status Update: Submitted → Assigned | Assignment · Funmi Adeyemi",
+    "Assigned to Chinedu Eze | Assignment · Funmi Adeyemi | Status Update: Submitted → Assigned",
     "In Progress Work started | Status Update · Chinedu Eze",
-    "Reassigned from Chinedu Eze to Tunde Bakare | Status Update: In Progress → Assigned | Assignment · Funmi Adeyemi",
+    "Reassigned from Chinedu Eze to Tunde Bakare | Assignment · Funmi Adeyemi | Status Update: In Progress → Assigned",
     "Reassigned from Tunde Bakare to Chinedu Eze | Assignment · Funmi Adeyemi",
-    "Unassigned Chinedu Eze | Status Update: Assigned → Submitted | Assignment · Funmi Adeyemi",
-    "Assigned to Tunde Bakare | Status Update: Submitted → Assigned | Assignment · Funmi Adeyemi",
+    "Unassigned Chinedu Eze | Assignment · Funmi Adeyemi | Status Update: Assigned → Submitted",
+    "Assigned to Tunde Bakare | Assignment · Funmi Adeyemi | Status Update: Submitted → Assigned",
     "In Progress Work started | Status Update · Tunde Bakare",
     "Completed Work completed | Status Update · Tunde Bakare",
   ]);
@@ -1093,7 +1104,7 @@ test("an officer who left reads as their Assignment ending, and a request with n
   await screen.findByRole("heading", { name: "Leaking pipe under the sink" });
   expect(details("Maintenance Officer")).toBe("Not assigned yet");
   expect(timeline()[2]).toBe(
-    "Chinedu Eze is no longer a Maintenance Officer | Status Update: Assigned → Submitted | Assignment · You",
+    "Chinedu Eze’s Assignment ended | Assignment · You | Status Update: Assigned → Submitted",
   );
   runtime.queryClient.clear();
 });

@@ -108,11 +108,17 @@ test("a fault is reported, assigned, started and completed, and its Requester re
     admin.getByRole("heading", { name: "Request management" }),
   ).toBeVisible();
   await capture(admin, "request-management-desktop");
-  await admin
+  const assign = admin
     .getByRole("table")
-    .getByRole("button", { name: "Assign SR-PLUMB-1" })
-    .click();
+    .getByRole("button", { name: "Assign SR-PLUMB-1" });
   const picker = admin.getByRole("dialog", { name: "Assign SR-PLUMB-1" });
+  // With nothing sending, Escape closes the picker and returns focus.
+  await assign.click();
+  await expect(picker).toBeVisible();
+  await admin.keyboard.press("Escape");
+  await expect(picker).toBeHidden();
+  await expect(assign).toBeFocused();
+  await assign.click();
   await expect(picker.getByText("0 Open Assignments")).toBeVisible();
   await capture(admin, "assign-picker-desktop");
   await picker.getByRole("radio", { name: /Chinedu Eze/ }).check();
