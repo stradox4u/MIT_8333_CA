@@ -19,8 +19,14 @@ import { isLoadFailure, useExpiredSession } from "../lib/expired-session";
 import { ApiError } from "../lib/api";
 import LoadFailure from "../components/LoadFailure.vue";
 import CircleHelp from "~icons/lucide/circle-help";
+import NextStepPanel from "../components/NextStepPanel.vue";
+import PageNotice from "../components/PageNotice.vue";
+import AssignPicker from "../components/AssignPicker.vue";
+import Lock from "~icons/lucide/lock";
+import type { Report } from "../service-requests/actions";
 import {
   serviceRequestOptions,
+  type MaintenanceOfficer,
   type Status,
   type StatusUpdate,
 } from "../service-requests/api";
@@ -63,6 +69,43 @@ const notFound = computed(() => {
   );
 });
 
+/** How the signed-in User relates to this request; it decides the actions shown. */
+const viewer = computed(() => {
+  const data = request.data.value;
+  const user = me.data.value;
+  if (!data || !user) return null;
+  if (user.role === "administrator") return "admin";
+  if (data.assignment?.officer.id === user.id) return "officer";
+  if (data.requester.id === user.id) return "requester";
+  // Officers see requests they held before: read only.
+  if (user.role === "maintenance_officer") return "former";
+  return null;
+});
+const back = computed(() =>
+  viewer.value === "admin"
+    ? { to: "/admin/requests", label: "Request management", section: "management" as const }
+    : viewer.value === "former" ||
+        (viewer.value === "officer" && me.data.value?.role === "maintenance_officer")
+      ? { to: "/assignments", label: "My assignments", section: "assignments" as const }
+      : { to: "/requests", label: "My requests", section: "requests" as const },
+);
+
+/** Feedback from the last action on this page. */
+const actionNotice = ref<{ message: string; kind: "success" | "error" } | null>(
+  null,
+);
+const report: Report = (message, kind = "success") => {
+  justSubmitted.value = false;
+  actionNotice.value = { message, kind };
+};
+watch(reference, () => {
+  actionNotice.value = null;
+});
+const assigning = ref(false);
+function assigned(_: unknown, officer: MaintenanceOfficer) {
+  report(`${reference.value} assigned to ${officer.name}. It’s now Assigned.`);
+}
+
 const requesterName = computed(() => {
   const requester = request.data.value?.requester;
   if (!requester) return "";
@@ -95,15 +138,20 @@ const cancellation = computed(() => {
 });
 </script>
 <template>
-  <WorkspaceLayout width="narrow">
+  <WorkspaceLayout width="narrow" :section="back.section">
     <RouterLink
-      to="/requests"
+      :to="back.to"
       class="inline-flex items-center gap-1.5 min-h-9 mb-2.5 text-campus-navy text-[12px] underline-offset-4"
       ><ArrowLeft
         class="icon inline-block w-4 h-4 flex-none align-[-3px]"
         aria-hidden="true"
-      />My requests</RouterLink
+      />{{ back.label }}</RouterLink
     >
+    <PageNotice
+      v-if="actionNotice"
+      :message="actionNotice.message"
+      :kind="actionNotice.kind"
+    />
     <p
       v-if="justSubmitted"
       ref="notice"
@@ -300,6 +348,27 @@ const cancellation = computed(() => {
           </button>
         </template>
       </section>
+      <p
+        v-if="viewer === 'former'"
+        class="flex items-start gap-2.5 mb-4.5 py-3.25 px-3.75 border border-dashed border-campus-control rounded-[10px] bg-campus-surface text-[12px] leading-[1.6]"
+      >
+        <Lock class="w-4 h-4 flex-none mt-0.5" aria-hidden="true" /><span
+          ><strong>You’re no longer assigned to this Service Request.</strong>
+          {{
+            request.data.value.assignment
+              ? `It was reassigned to ${request.data.value.assignment.officer.name}.`
+              : "It has no Maintenance Officer now."
+          }}
+          You can still read it, but you can’t act on it.</span
+        >
+      </p>
+      <NextStepPanel
+        v-else-if="viewer"
+        :request="request.data.value"
+        :viewer="viewer"
+        :report="report"
+        @assign="assigning = true"
+      />
       <section
         class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 phone:px-3.75"
         aria-labelledby="desc-title"
@@ -349,6 +418,12 @@ const cancellation = computed(() => {
           :viewer-id="me.data.value?.id"
         />
       </section>
+      <AssignPicker
+        v-if="assigning"
+        :request="request.data.value"
+        @close="assigning = false"
+        @assigned="assigned"
+      />
     </template>
   </WorkspaceLayout>
 </template>

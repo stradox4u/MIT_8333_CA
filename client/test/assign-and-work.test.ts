@@ -473,6 +473,203 @@ test("the tracking page names the Maintenance Officer, and the timeline shows ea
   runtime.queryClient.clear();
 });
 
+/** The "what's next" panel, found by its heading. */
+const panel = (name: string | RegExp) =>
+  screen.findByRole("region", { name });
+/** Answers an action on SR-PLUMB-1 with the request's new details. */
+function withAction(
+  method: "post" | "put" | "delete",
+  path: string,
+  answer: (body: unknown) => Record<string, unknown> | Response,
+) {
+  const bodies: unknown[] = [];
+  server.use(
+    http[method](`${api}/service-requests/SR-PLUMB-1${path}`, async ({ request }) => {
+      const text = await request.text();
+      const body = text ? JSON.parse(text) : undefined;
+      bodies.push(body);
+      const result = answer(body);
+      return result instanceof Response ? result : HttpResponse.json(result);
+    }),
+  );
+  return bodies;
+}
+const conflict = (verb: string) =>
+  HttpResponse.json(
+    {
+      message: `A Service Request that’s Completed can’t be ${verb}`,
+      error: "Conflict",
+      statusCode: 409,
+    },
+    { status: 409 },
+  );
+
+test("the current officer starts the work, then completes it with an optional note", async () => {
+  signedIn("maintenance_officer", officer);
+  const request = withRequest({
+    status: "assigned",
+    priority: "high",
+    assignment: assignedTo(chinedu),
+  });
+  const starts = withAction("post", "/start", () =>
+    request.set({
+      status: "in_progress",
+      timeline: [
+        ...(request.get().timeline as unknown[]),
+        statusUpdate(11, chinedu, "assigned", "in_progress"),
+      ],
+    }),
+  );
+  const completions = withAction("post", "/complete", (body) =>
+    request.set({
+      status: "completed",
+      priority: "high",
+      timeline: [
+        ...(request.get().timeline as unknown[]),
+        statusUpdate(12, chinedu, "in_progress", "completed", {
+          note: (body as { note?: string }).note,
+        }),
+      ],
+    }),
+  );
+  const { runtime, user } = open("/requests/SR-PLUMB-1");
+  const ready = await panel("Ready to start?");
+  expect(within(ready).getByText(/Starting moves it to In Progress/)).toBeTruthy();
+  await user.click(within(ready).getByRole("button", { name: "Start work" }));
+  expect(starts).toEqual([undefined]);
+  expect(
+    (await screen.findByText("Started. SR-PLUMB-1 is In Progress.")).closest(
+      "[role=status]",
+    ),
+  ).toBeTruthy();
+  const finish = await panel("Finished the work?");
+  await user.click(within(finish).getByRole("button", { name: "Complete" }));
+  const form = within(finish).getByRole("form", { name: "Complete SR-PLUMB-1" });
+  const note = within(form).getByLabelText(/Note for the Requester/);
+  expect(document.activeElement).toBe(note);
+  await user.click(note);
+  await user.paste("x".repeat(2001));
+  await user.click(within(form).getByRole("button", { name: "Mark as Completed" }));
+  expect(within(form).getByText("Use 2,000 characters or fewer.")).toBeTruthy();
+  expect(completions).toEqual([]);
+  await user.clear(note);
+  await user.type(note, "  Replaced the washer. ");
+  await user.click(within(form).getByRole("button", { name: "Mark as Completed" }));
+  await screen.findByText("SR-PLUMB-1 is Completed.");
+  expect(completions).toEqual([{ note: "Replaced the washer." }]);
+  expect(await panel("Waiting for the Requester")).toBeTruthy();
+  expect(
+    within(screen.getByRole("region", { name: "Timeline" })).getByText(
+      "Replaced the washer.",
+    ),
+  ).toBeTruthy();
+  runtime.queryClient.clear();
+});
+
+test("completing without a note sends no note", async () => {
+  signedIn("maintenance_officer", officer);
+  const request = withRequest({
+    status: "in_progress",
+    assignment: assignedTo(chinedu),
+  });
+  const completions = withAction("post", "/complete", () =>
+    request.set({ status: "completed" }),
+  );
+  const { runtime, user } = open("/requests/SR-PLUMB-1");
+  const finish = await panel("Finished the work?");
+  await user.click(within(finish).getByRole("button", { name: "Complete" }));
+  await user.click(within(finish).getByRole("button", { name: "Mark as Completed" }));
+  await screen.findByText("SR-PLUMB-1 is Completed.");
+  expect(completions).toEqual([{}]);
+  runtime.queryClient.clear();
+});
+
+test("a 409 refreshes the request and explains, and a 403 says the officer is no longer assigned", async () => {
+  signedIn("maintenance_officer", officer);
+  const request = withRequest({
+    status: "assigned",
+    assignment: assignedTo(chinedu),
+  });
+  let answer: "conflict" | "forbidden" = "conflict";
+  withAction("post", "/start", () => {
+    if (answer === "conflict") {
+      request.set({ status: "completed" });
+      return conflict("started");
+    }
+    request.set({ status: "assigned", assignment: assignedTo(tunde) });
+    return HttpResponse.json(
+      { message: "Forbidden", statusCode: 403 },
+      { status: 403 },
+    );
+  });
+  const { runtime, user } = open("/requests/SR-PLUMB-1");
+  await user.click(
+    within(await panel("Ready to start?")).getByRole("button", {
+      name: "Start work",
+    }),
+  );
+  expect((await screen.findByRole("alert")).textContent?.trim()).toBe(
+    "SR-PLUMB-1 changed while you had it open. We’ve refreshed it, so check its Status before trying again.",
+  );
+  await waitFor(() =>
+    expect(screen.getByText("Status:").parentElement?.textContent).toBe(
+      "Status: Completed",
+    ),
+  );
+  request.set({ status: "assigned" });
+  answer = "forbidden";
+  await runtime.queryClient.invalidateQueries();
+  await user.click(
+    within(await panel("Ready to start?")).getByRole("button", {
+      name: "Start work",
+    }),
+  );
+  expect(
+    await screen.findByText(
+      "You’re no longer assigned to SR-PLUMB-1, so you can’t do that.",
+    ),
+  ).toBeTruthy();
+  expect(
+    await screen.findByText(/You’re no longer assigned to this Service Request/),
+  ).toBeTruthy();
+  runtime.queryClient.clear();
+});
+
+test("an officer reassigned away reads the request with a read-only banner and no actions", async () => {
+  signedIn("maintenance_officer", officer);
+  withRequest({ status: "in_progress", assignment: assignedTo(tunde) });
+  const { runtime } = open("/requests/SR-PLUMB-1");
+  const banner = await screen.findByText(
+    /You’re no longer assigned to this Service Request/,
+  );
+  expect(banner.closest("p")?.textContent?.replace(/\s+/g, " ").trim()).toBe(
+    "You’re no longer assigned to this Service Request. It was reassigned to Tunde Bakare. You can still read it, but you can’t act on it.",
+  );
+  expect(screen.queryByRole("button", { name: /Start|Complete/ })).toBeNull();
+  expect(screen.queryByText(/Priority/)).toBeNull();
+  expect(
+    screen.getByRole("link", { name: "My assignments" }).getAttribute("href"),
+  ).toBe("/assignments");
+  runtime.queryClient.clear();
+});
+
+test.each([
+  ["submitted", null, "Waiting for an Assignment", "An Administrator will assign a Maintenance Officer to it."],
+  ["assigned", chinedu, "Assigned to Chinedu Eze", "They’ll start soon."],
+  ["in_progress", chinedu, "Chinedu Eze is working on it", "You’ll see here when it’s Completed."],
+])(
+  "the Requester sees what happens next while it's %s, and no actions",
+  async (status, holder, heading, text) => {
+    signedIn("student");
+    withRequest({ status, assignment: holder ? assignedTo(holder) : null });
+    const { runtime } = open("/requests/SR-PLUMB-1");
+    const next = await panel(heading);
+    expect(next.textContent).toContain(text);
+    expect(within(next).queryByRole("button")).toBeNull();
+    runtime.queryClient.clear();
+  },
+);
+
 test("an officer who left reads as their Assignment ending, and a request with no officer says so", async () => {
   signedIn("administrator", admin);
   withRequest({
