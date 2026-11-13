@@ -55,7 +55,10 @@ export class UsersController {
     @Body({ schema: changeRoleBody }) body: z.infer<typeof changeRoleBody>,
   ) {
     const before = await this.users.findById(id);
-    refuseIf(await this.users.changeRole(id, body.role), 'given another Role');
+    refuseIf(
+      await this.users.changeRole(id, body.role, actor.id),
+      'given another Role',
+    );
     if (before?.roleId !== body.role) {
       await this.activityLog.record({
         actorId: actor.id,
@@ -73,7 +76,7 @@ export class UsersController {
     @CurrentUser() actor: User,
     @Param('id', { schema: userId }) id: string,
   ) {
-    const outcome = await this.users.deactivate(id);
+    const outcome = await this.users.deactivate(id, actor.id);
     refuseIf(outcome, 'deactivated');
     if (outcome === 'deactivated') {
       await this.sessions.revokeAll(id);
@@ -110,7 +113,7 @@ export class UsersController {
     @CurrentUser() actor: User,
     @Param('id', { schema: userId }) id: string,
   ) {
-    const outcome = await this.erasure.erase(id);
+    const outcome = await this.erasure.erase(id, actor.id);
     refuseIf(outcome, 'erased');
     if (outcome === 'erased') {
       await this.activityLog.record({

@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
+import { OfficerDepartures } from '../users/officer-departures.js';
 import { MaintenanceOfficers } from './maintenance-officers.js';
 import { MaintenanceOfficersController } from './maintenance-officers.controller.js';
 import { RequestCategories } from './request-categories.js';
@@ -12,7 +13,11 @@ import { ServiceRequestsRepository } from './service-requests.repository.js';
  * Service Requests: Users reporting faults on campus, Maintenance Officers
  * working on them, and Administrators overseeing them
  * (docs/service-requests.md).
+ *
+ * Global only to provide `OfficerDepartures`, which the users module
+ * declares and needs: it can't import this module, which depends on it.
  */
+@Global()
 @Module({
   controllers: [
     RequestCategoriesController,
@@ -25,6 +30,8 @@ import { ServiceRequestsRepository } from './service-requests.repository.js';
     ServiceRequestLifecycle,
     MaintenanceOfficers,
     ServiceRequestPolicy,
+    { provide: OfficerDepartures, useExisting: ServiceRequestLifecycle },
   ],
+  exports: [OfficerDepartures],
 })
 export class ServiceRequestsModule {}

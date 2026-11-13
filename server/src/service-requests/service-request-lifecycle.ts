@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Clock } from '../clock.js';
 import { InjectDatabase, type Database } from '../database/database.js';
 import {
@@ -15,6 +15,7 @@ import {
 } from '../database/schema.js';
 import { recordActivity } from '../users/activity-log.js';
 import { activeWithRole } from '../users/active-users.js';
+import type { OfficerDepartures } from '../users/officer-departures.js';
 import {
   type NotAnActiveOfficer,
   type NotCurrentOfficer,
@@ -53,7 +54,7 @@ const HELD: ServiceRequestStatus[] = ['assigned', 'in_progress'];
  * and writes its Activity Log entry in that same transaction.
  */
 @Injectable()
-export class ServiceRequestLifecycle {
+export class ServiceRequestLifecycle implements OfficerDepartures {
   constructor(
     @InjectDatabase() private readonly db: Database,
     private readonly clock: Clock,
@@ -249,6 +250,49 @@ export class ServiceRequestLifecycle {
       await this.changeStatus(tx, request, 'completed', officerId, note);
       return 'completed';
     });
+  }
+
+  /**
+   * An officer is leaving (`OfficerDepartures`): each request they hold
+   * that's Assigned or In Progress goes back to Submitted, in `db`, the
+   * transaction changing the User. That transaction has already locked the
+   * officer's row; the requests come second, as when assigning.
+   */
+  async handBackAssignmentsOf(
+    db: Database,
+    officerId: string,
+    actorId: string,
+  ): Promise<void> {
+    const held = await db
+      .select({
+        id: serviceRequests.id,
+        status: serviceRequests.status,
+        assignmentId: assignments.id,
+      })
+      .from(assignments)
+      .innerJoin(
+        serviceRequests,
+        eq(serviceRequests.id, assignments.serviceRequestId),
+      )
+      .where(
+        and(
+          eq(assignments.officerId, officerId),
+          isNull(assignments.endedAt),
+          inArray(serviceRequests.status, HELD),
+        ),
+      )
+      .orderBy(asc(assignments.id))
+      .for('update', { of: serviceRequests });
+    for (const { assignmentId, ...request } of held) {
+      const assignment = { id: assignmentId, officerId };
+      await this.handBack(
+        db,
+        { ...request, assignment },
+        assignment,
+        'officer_left',
+        actorId,
+      );
+    }
   }
 
   /** Locks a request for a change, and reads its current Assignment. */

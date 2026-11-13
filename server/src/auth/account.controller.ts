@@ -44,7 +44,7 @@ export class AccountController {
       session,
       body?.currentPassword,
     );
-    const outcome = await this.erasure.erase(user.id);
+    const outcome = await this.erasure.erase(user.id, user.id);
     if (outcome === 'last_administrator') {
       throw new ConflictException(
         'You’re the last active Administrator: make someone else one first',
