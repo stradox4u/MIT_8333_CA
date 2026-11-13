@@ -46,6 +46,16 @@ export function useFields<T extends Record<string, string>>(
   return { values, errors, formError, blur, changed, validate, showError };
 }
 
+/** A required text, counted after trimming, as the server's limits count it. */
+export const lengthRule =
+  (what: string, min: number, max: number) => (value: string) => {
+    const length = value.trim().length;
+    if (!length) return `Enter ${what}.`;
+    if (length < min) return `Use at least ${min} characters.`;
+    if (length > max)
+      return `Use ${max.toLocaleString("en-GB")} characters or fewer.`;
+    return "";
+  };
 export const emailRule = (value: string) =>
   !value.trim()
     ? "Enter your email address."

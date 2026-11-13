@@ -7,11 +7,21 @@ export const useUiStore = defineStore("ui", () => {
   const keepSignedIn = ref(false);
   const notice = ref("");
   const retryTarget = ref("/");
+  /** The Reference just submitted, so its tracking page says so once. */
+  const submittedReference = ref("");
   function reset() {
     email.value = "";
     keepSignedIn.value = false;
     notice.value = "";
     retryTarget.value = "/";
+    submittedReference.value = "";
   }
-  return { email, keepSignedIn, notice, retryTarget, reset };
+  return {
+    email,
+    keepSignedIn,
+    notice,
+    retryTarget,
+    submittedReference,
+    reset,
+  };
 });

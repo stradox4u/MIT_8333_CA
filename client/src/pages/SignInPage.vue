@@ -61,7 +61,9 @@ function submit() {
             : "Welcome back."
       }}
     </h1>
-    <p class="intro">
+    <p
+      class="intro mt-0 mx-0 mb-6.5 text-[13px] leading-[1.7] text-campus-muted wrap-anywhere"
+    >
       {{
         recovery
           ? "Sign in with an emailed link, then set a new password in Account settings."
@@ -82,20 +84,33 @@ function submit() {
         @blur="form.blur('email')"
         @update:model-value="form.changed('email')"
       />
-      <label class="check"
-        ><input v-model="keepSignedIn" type="checkbox" /><span
-          >Keep me signed in</span
-        ></label
+      <label
+        class="flex items-center gap-2.25 w-fit text-campus-muted text-[12px] leading-[1.6] phone:min-h-9.5"
+        ><input
+          class="w-4 h-4 flex-none m-0 accent-campus-navy"
+          v-model="keepSignedIn"
+          type="checkbox"
+        /><span>Keep me signed in</span></label
       >
       <SubmitButton :pending="sendLink.isPending.value" arrow
         >Email me a Sign-in Link</SubmitButton
       >
-      <p v-if="form.formError.value" class="field-error" role="alert">
+      <p
+        v-if="form.formError.value"
+        class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
+        role="alert"
+      >
         {{ form.formError.value }}
       </p>
     </form>
     <template v-if="!signup && !recovery">
-      <div class="separator"><span></span>or<span></span></div>
+      <div
+        class="flex items-center gap-3 my-4.75 mx-0 text-campus-muted text-[11px]"
+      >
+        <span class="h-px flex-1 bg-campus-gray opacity-60"></span>or<span
+          class="h-px flex-1 bg-campus-gray opacity-60"
+        ></span>
+      </div>
       <GoogleButton
         :keep-signed-in="keepSignedIn"
         :disabled="sendLink.isPending.value"
@@ -106,7 +121,7 @@ function submit() {
         @failure="form.showError"
       />
       <RouterLink
-        class="text-link centered"
+        class="inline-block border-0 py-2 px-0.5 text-campus-navy bg-transparent text-[12px] underline underline-offset-4 [&.centered]:block [&.centered]:w-fit [&.centered]:mt-1.75 [&.centered]:mx-auto [&.centered]:mb-0 [&.centered]:text-center phone:min-h-11 centered"
         to="/sign-in/password"
         @click="ui.email = form.values.email"
         >Use a password instead</RouterLink
@@ -115,14 +130,19 @@ function submit() {
     <RouterLink
       v-if="recovery"
       to="/sign-in/password"
-      class="text-link centered"
+      class="inline-block border-0 py-2 px-0.5 text-campus-navy bg-transparent text-[12px] underline underline-offset-4 [&.centered]:block [&.centered]:w-fit [&.centered]:mt-1.75 [&.centered]:mx-auto [&.centered]:mb-0 [&.centered]:text-center phone:min-h-11 centered"
       >Back to password sign-in</RouterLink
     >
-    <p v-else class="switch-link">
+    <p
+      v-else
+      class="mt-5.5 mx-0 mb-0 text-center text-[12px] text-campus-muted"
+    >
       {{ signup ? "Already signed up?" : "New to the portal?" }}
-      <RouterLink :to="signup ? '/sign-in' : '/sign-up'">{{
-        signup ? "Sign in" : "Sign up"
-      }}</RouterLink>
+      <RouterLink
+        class="text-campus-navy font-semibold underline underline-offset-[3px]"
+        :to="signup ? '/sign-in' : '/sign-up'"
+        >{{ signup ? "Sign in" : "Sign up" }}</RouterLink
+      >
     </p>
   </AuthLayout>
 </template>
