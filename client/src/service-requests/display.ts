@@ -11,7 +11,7 @@ import Wrench from "~icons/lucide/wrench";
 import CircleCheck from "~icons/lucide/circle-check";
 import BadgeCheck from "~icons/lucide/badge-check";
 import Ban from "~icons/lucide/ban";
-import type { Priority, Status } from "./api";
+import type { Person, Priority, Status } from "./api";
 
 /** How Service Request values read and look, in GLOSSARY.md's terms. */
 
@@ -54,6 +54,9 @@ const categoryIcons: Record<string, Component> = {
   other: Shapes,
 };
 export const categoryIcon = (id: string) => categoryIcons[id] ?? Shapes;
+
+/** The API names an Erased User "Erased user" (server/docs/service-requests.md). */
+export const isErased = (person: Person) => person.name === "Erased user";
 
 const MONTHS = [
   "Jan",

@@ -1599,6 +1599,8 @@ h2 {
   }
   .mobile-menu a[aria-current="page"]::after {
     content: "Current page";
+    /* Empty alternative text: aria-current already says it. */
+    content: "Current page" / "";
     margin-left: auto;
     padding: 2px 7px;
     border-radius: 4px;

@@ -493,10 +493,10 @@ test("an Administrator sees the Priority, and the timeline names automatic actio
           .trim()}`,
     ),
   ).toEqual([
-    "Submitted Fault reported | Status Update · Erased user · Requester",
+    "Submitted Fault reported | Status Update · Erased user",
     "In Progress Work started | Status Update · Chinedu Eze",
     "Completed Work completed | Status Update · Chinedu Eze",
-    "Assigned Not fixed | Status Update · Erased user · Requester",
+    "Assigned Not fixed | Status Update · Erased user",
     "In Progress Work started | Status Update · Chinedu Eze",
     "Completed Work completed | Status Update · Chinedu Eze",
     "Verified No answer within 7 days | Status Update · Automatically, after 7 days",

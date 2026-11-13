@@ -4,6 +4,7 @@ import StatusChip from "./StatusChip.vue";
 import type { Person, StatusUpdate } from "../service-requests/api";
 import {
   formatDateTime,
+  isErased,
   statusIcons,
   statusNames,
 } from "../service-requests/display";
@@ -62,7 +63,9 @@ function actorName(actor: Person | null) {
         </p>
         <p class="tl-meta">
           Status Update · <strong>{{ actorName(entry.actor) }}</strong
-          ><template v-if="entry.actor?.id === requester.id">
+          ><template
+            v-if="entry.actor?.id === requester.id && !isErased(entry.actor)"
+          >
             · Requester</template
           >
           ·

@@ -156,10 +156,12 @@ test("on a phone, the request pages use the menu and fit the screen", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await signUpAsStudent(page, request);
   await page.getByRole("button", { name: "Menu" }).click();
-  await page
-    .locator("#mobile-menu")
-    .getByRole("link", { name: "My requests" })
-    .click();
+  const menu = page.locator("#mobile-menu");
+  // aria-current already says "current page"; the visible badge mustn't say it again.
+  await expect(
+    menu.getByRole("link", { name: "Dashboard", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await menu.getByRole("link", { name: "My requests" }).click();
   await expect(
     page.getByRole("heading", { name: "You haven’t reported any faults yet" }),
   ).toBeVisible();
