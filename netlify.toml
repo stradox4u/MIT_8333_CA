@@ -1,0 +1,4 @@
+[build]
+base = "client"
+command = "npm run build && npm run build:netlify"
+publish = "dist"

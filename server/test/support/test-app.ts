@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { setTimeout as delay } from 'node:timers/promises';
 import { ConfigService } from '@nestjs/config';
 import { InMemoryMailTransport, MailTransport } from '@nestjs/mail';
 import request from 'supertest';
@@ -44,9 +45,12 @@ export type TestApp = Awaited<ReturnType<typeof createTestApp>>;
  */
 export async function createTestApp({
   config = {},
+  port = 0,
 }: {
   /** Settings to override, by `AppConfig` property, for this file's app. */
   config?: Partial<AppConfig>;
+  /** Browser journeys use a stable port; ordinary tests keep a free one. */
+  port?: number;
 } = {}) {
   const database = await createTestDatabase();
   const mailbox = new InMemoryMailTransport();
@@ -75,20 +79,26 @@ export async function createTestApp({
     })
     .compile();
   const app = moduleRef.createNestApplication();
-  configureApp(app);
-  // Listen once on a free port: without it, supertest opens and closes a new
-  // port for every request, which can collide across parallel test files.
-  await app.listen(0, '127.0.0.1');
+  try {
+    configureApp(app);
+    // Listen once: otherwise supertest opens a new port for every request.
+    await app.listen(port, '127.0.0.1');
+  } catch (error) {
+    await app.close();
+    await database.close();
+    throw error;
+  }
 
   /** The latest mail sent to `email`, waiting briefly for it to arrive. */
-  const latestMailTo = (email: string) =>
-    vi.waitFor(() => {
-      const mail = mailbox.filter({ to: email }).at(-1);
-      if (!mail) {
-        throw new Error(`No mail sent to ${email}`);
-      }
-      return mail;
-    });
+  const latestMailTo = async (email: string) => {
+    const deadline = Date.now() + 1_000;
+    do {
+      const mail = mailbox.find({ to: email });
+      if (mail) return mail;
+      await delay(10);
+    } while (Date.now() < deadline);
+    throw new Error(`No mail sent to ${email}`);
+  };
 
   /** A client that keeps its cookies between requests, like a browser. */
   const browser = () => request.agent(app.getHttpServer());
@@ -150,11 +160,33 @@ export async function createTestApp({
     return signInByLink(email);
   };
 
-  /**
-   * Walks `signingIn` through "Continue with Google": the app's redirect to
-   * Google, Google approving `account`, and the callback. Resolves to the
-   * callback's response.
-   */
+  /** The browser that started sign-in visits this fake Google callback. */
+  const googleCallbackFor = (
+    authorizationUrl: string,
+    account: GoogleAccount,
+  ) => {
+    const authorization = new URL(authorizationUrl);
+    const nonce = authorization.searchParams.get('nonce');
+    const state = authorization.searchParams.get('state');
+    if (
+      authorization.origin !== 'https://accounts.google.com' ||
+      !nonce ||
+      !state
+    ) {
+      throw new Error(
+        'Expected a Google authorization URL with nonce and state',
+      );
+    }
+    const callback = new URL(
+      '/api/auth/oidc/google/callback',
+      app.get(AppConfig).appUrl,
+    );
+    callback.searchParams.set('code', google.approve(account, nonce));
+    callback.searchParams.set('state', state);
+    return callback.href;
+  };
+
+  /** Walks a test client through the real Google start and callback routes. */
   const continueWithGoogle = async (
     signingIn: ReturnType<typeof browser>,
     account: GoogleAccount,
@@ -170,16 +202,8 @@ export async function createTestApp({
       .get('/api/auth/oidc/google/login')
       .query({ keepSignedIn, ...(redirectTo && { redirectTo }) })
       .expect(302);
-    const authorization = new URL(login.headers.location);
-    const code = google.approve(
-      account,
-      authorization.searchParams.get('nonce')!,
-    );
-    const callback = new URL('/api/auth/oidc/google/callback', 'http://x');
-    callback.searchParams.set('code', code);
-    callback.searchParams.set(
-      'state',
-      authorization.searchParams.get('state')!,
+    const callback = new URL(
+      googleCallbackFor(login.headers.location, account),
     );
     return signingIn.get(callback.pathname + callback.search);
   };
@@ -188,6 +212,8 @@ export async function createTestApp({
     mailbox,
     clock,
     googleFetch: moduleRef.get(GoogleFetch),
+    googleCallbackFor,
+    url: await app.getUrl(),
     continueWithGoogle,
     /** What the scheduler runs once a day. */
     runDailyCleanup: () => app.get(DailyCleanup).run(),
@@ -204,11 +230,15 @@ export async function createTestApp({
     async reset() {
       mailbox.clear();
       clock.reset();
+      google.reset();
       await database.reset();
     },
     async close() {
-      await app.close();
-      await database.close();
+      try {
+        await app.close();
+      } finally {
+        await database.close();
+      }
     },
   };
 }

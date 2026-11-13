@@ -46,6 +46,11 @@ export class FakeGoogle {
     return code;
   }
 
+  reset() {
+    this.codes.clear();
+    this.accessTokens.clear();
+  }
+
   readonly fetch: typeof fetch = async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     const endpoint = url.origin + url.pathname;

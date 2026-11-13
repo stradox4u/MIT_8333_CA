@@ -18,9 +18,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
-# One job per app, run in parallel. Add a `client` job shaped like `server`,
-# and a `smoke` job with `needs: [server, client]` and
-# `if: github.event_name == 'push'`, so it runs only after a merge to main.
+# One job per app, so client and server checks run in parallel.
 jobs:
   server:
     name: Server tests
@@ -47,3 +45,50 @@ jobs:
       # Google, with env vars set in vitest.config.e2e.ts. No services or secrets.
       - name: End-to-end tests
         run: npm run test:e2e
+
+  client:
+    name: Client tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            client/package-lock.json
+            server/package-lock.json
+
+      - name: Install client dependencies
+        run: npm ci
+
+      # The browser journeys start the real API fixture from this job.
+      - name: Install API fixture dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Integration tests
+        run: npm test
+
+      - name: Type check and production build
+        run: npm run build
+
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: npm run test:e2e
+
+      - name: Upload browser diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: client-browser-diagnostics
+          path: client/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
