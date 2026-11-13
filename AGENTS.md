@@ -13,3 +13,14 @@
 - Resolve all Tailwind IntelliSense `suggestCanonicalClasses` diagnostics before completion (for example, `gap-2.5` and `aria-invalid:border-error`). Keep arbitrary values only when no canonical equivalent preserves the design.
 - Use complete literal class names in variant maps so Tailwind can discover every state.
 - Capture desktop and mobile baselines before styling changes and compare afterward. Preserve the agreed preview's colors, spacing, and responsive behavior; run the client integration tests, browser tests, and production build before handing off.
+
+## Agent skills
+
+### Issue tracker
+
+Work tracking is disabled. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Before exploring or changing a feature, read its relevant client/server
+docs and ADRs. See `docs/agents/domain.md`.
