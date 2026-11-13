@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import ThumbsDown from "~icons/lucide/thumbs-down";
 import StatusChip from "./StatusChip.vue";
-import type { Person, StatusUpdate } from "../service-requests/api";
+import { computed } from "vue";
+import type {
+  Person,
+  StatusUpdate,
+  TimelineEntry,
+} from "../service-requests/api";
 import {
   formatDateTime,
   isErased,
@@ -11,12 +16,17 @@ import {
 
 /** A Service Request's timeline, oldest first, as the API sends it. */
 const props = defineProps<{
-  entries: StatusUpdate[];
+  entries: TimelineEntry[];
   requester: Person;
   /** The signed-in User's id, so their own entries read "You". */
   viewerId?: string;
 }>();
 
+const statusUpdates = computed(() =>
+  props.entries.filter(
+    (entry): entry is StatusUpdate => entry.type === "status_update",
+  ),
+);
 const notFixed = (entry: StatusUpdate) =>
   entry.fromStatus === "completed" &&
   (entry.toStatus === "assigned" || entry.toStatus === "submitted");
@@ -45,7 +55,7 @@ function actorName(actor: Person | null) {
 <template>
   <ol class="timeline">
     <li
-      v-for="(entry, index) in entries"
+      v-for="(entry, index) in statusUpdates"
       :key="`${entry.occurredAt}-${index}`"
     >
       <span

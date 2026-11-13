@@ -26,16 +26,26 @@ export interface Person {
   name: string;
 }
 
+/** A request's current Assignment. */
+export interface Assignment {
+  officer: Person;
+  assignedAt: string;
+}
+
 export interface ServiceRequestSummary {
   reference: string;
   title: string;
   category: RequestCategory;
   location: string;
   status: Status;
-  /** Left out entirely for anyone the server doesn't show the Priority to. */
+  /**
+   * Only for Administrators and the request's current officer: left out
+   * entirely for anyone else.
+   */
   priority?: Priority;
   requester: Person;
   submittedAt: string;
+  assignment: Assignment | null;
 }
 
 export interface StatusUpdate {
@@ -46,13 +56,44 @@ export interface StatusUpdate {
   fromStatus: Status | null;
   toStatus: Status;
   reason: string | null;
+  /** The officer's completion note, on the Completed Status Update. */
+  note: string | null;
 }
+
+/** An Assignment change, with the Status change the same action made. */
+export interface AssignmentChange {
+  type: "assignment";
+  occurredAt: string;
+  actor: Person | null;
+  /** `officer_left`: the officer was demoted, deactivated or erased. */
+  change: "assigned" | "reassigned" | "unassigned" | "officer_left";
+  /** Who was given it, or whose Assignment ended. */
+  officer: Person;
+  /** Whom it was taken from, when reassigned. */
+  previousOfficer: Person | null;
+  statusChange: { fromStatus: Status; toStatus: Status } | null;
+}
+
+export type TimelineEntry = StatusUpdate | AssignmentChange;
 
 export interface ServiceRequestDetails extends ServiceRequestSummary {
   description: string;
   /** Oldest first. */
-  timeline: StatusUpdate[];
+  timeline: TimelineEntry[];
 }
+
+/** An active Maintenance Officer, with their count of Open Assignments. */
+export interface MaintenanceOfficer {
+  id: string;
+  name: string;
+  openAssignments: number;
+}
+
+/**
+ * Which list: the requests a User raised, a Maintenance Officer's
+ * Assignments (past ones included), or every request (Administrators).
+ */
+export type Scope = "requested" | "assigned" | "all";
 
 export interface Page<Item> {
   items: Item[];
@@ -84,10 +125,7 @@ export const requestCategoriesOptions = queryOptions({
   staleTime: Infinity,
 });
 
-export function serviceRequestsOptions(
-  scope: "requested",
-  filters: ListFilters,
-) {
+export function serviceRequestsOptions(scope: Scope, filters: ListFilters) {
   return queryOptions({
     queryKey: ["service-requests", scope, filters] as const,
     queryFn: ({ signal }) => {
@@ -115,6 +153,40 @@ export function serviceRequestOptions(reference: string) {
       ),
   });
 }
+
+/** Administrators only. Sorted by name; the picker orders them itself. */
+export const maintenanceOfficersOptions = queryOptions({
+  queryKey: ["maintenance-officers"] as const,
+  queryFn: ({ signal }) =>
+    api<MaintenanceOfficer[]>("/maintenance-officers", { signal }),
+  // Open Assignment counts change with every assignment.
+  staleTime: 0,
+});
+
+const action = (reference: string, path: string, init: RequestInit) =>
+  api<ServiceRequestDetails>(
+    `/service-requests/${encodeURIComponent(reference)}${path}`,
+    init,
+  );
+
+/** Assigns a Submitted request, or reassigns one; it ends up Assigned. */
+export const assignOfficer = (reference: string, officerId: string) =>
+  action(reference, "/assignment", {
+    method: "PUT",
+    body: JSON.stringify({ officerId }),
+  });
+/** Takes an Assigned or In Progress request back to Submitted. */
+export const unassignOfficer = (reference: string) =>
+  action(reference, "/assignment", { method: "DELETE" });
+/** The current officer moves Assigned to In Progress. */
+export const startWork = (reference: string) =>
+  action(reference, "/start", { method: "POST" });
+/** The current officer moves In Progress to Completed, with an optional note. */
+export const completeWork = (reference: string, note: string) =>
+  action(reference, "/complete", {
+    method: "POST",
+    body: JSON.stringify(note ? { note } : {}),
+  });
 
 export function submitServiceRequest(body: NewServiceRequest) {
   return api<{ reference: string }>("/service-requests", {

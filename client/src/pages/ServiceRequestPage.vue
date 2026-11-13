@@ -22,6 +22,7 @@ import CircleHelp from "~icons/lucide/circle-help";
 import {
   serviceRequestOptions,
   type Status,
+  type StatusUpdate,
 } from "../service-requests/api";
 import {
   formatDate,
@@ -86,7 +87,10 @@ const cancellation = computed(() => {
   return (
     [...data.timeline]
       .reverse()
-      .find((entry) => entry.toStatus === "cancelled") ?? null
+      .find(
+        (entry): entry is StatusUpdate =>
+          entry.type === "status_update" && entry.toStatus === "cancelled",
+      ) ?? null
   );
 });
 </script>

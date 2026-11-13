@@ -8,7 +8,10 @@ import {
   watch,
 } from "vue";
 import { useRoute } from "vue-router";
-import { useIsMutating, useMutation } from "@tanstack/vue-query";
+import { useIsMutating, useMutation, useQuery } from "@tanstack/vue-query";
+import ClipboardList from "~icons/lucide/clipboard-list";
+import ListChecks from "~icons/lucide/list-checks";
+import { meOptions } from "../auth/identity";
 import Plus from "~icons/lucide/plus";
 import Menu from "~icons/lucide/menu";
 import Close from "~icons/lucide/x";
@@ -21,9 +24,22 @@ import { useAuthNavigation } from "../auth/navigation";
 import { useUiStore } from "../stores/ui";
 import { errorMessage } from "../lib/api";
 
-withDefaults(defineProps<{ width?: "default" | "wide" | "narrow" }>(), {
-  width: "default",
-});
+export type Section =
+  | "dashboard"
+  | "assignments"
+  | "management"
+  | "requests"
+  | "settings"
+  | "report";
+
+const props = withDefaults(
+  defineProps<{
+    width?: "default" | "wide" | "narrow";
+    /** The part of the workspace this page belongs to, when its route doesn't say. */
+    section?: Section;
+  }>(),
+  { width: "default", section: undefined },
+);
 
 const navigation = useAuthNavigation();
 const ui = useUiStore();
@@ -39,27 +55,38 @@ const logout = useMutation({
   },
 });
 
-/** Which part of the workspace this page belongs to, for `aria-current`. */
-const sections = {
+/** Which part of the workspace each route belongs to, for `aria-current`. */
+const sections: Record<Section, readonly string[]> = {
   dashboard: ["dashboard"],
+  assignments: ["my-assignments"],
+  management: ["request-management"],
   requests: ["my-requests", "service-request"],
   settings: ["settings"],
   report: ["report-fault"],
-} as const;
-type Section = keyof typeof sections;
+};
 const active = computed(
   () =>
+    props.section ??
     (Object.keys(sections) as Section[]).find((section) =>
-      (sections[section] as readonly string[]).includes(String(route.name)),
-    ) ?? null,
+      sections[section].includes(String(route.name)),
+    ) ??
+    null,
 );
 const current = (section: Section) =>
   active.value === section ? "page" : undefined;
-const links = [
-  { section: "dashboard", to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { section: "requests", to: "/requests", label: "My requests", icon: Inbox },
-  { section: "settings", to: "/account/settings", label: "Account settings", icon: UserCog },
-] as const;
+const me = useQuery(meOptions);
+/** Everyone sees Dashboard, My requests and Account settings; officers and Administrators see their own lists. */
+const links = computed(() => [
+  { section: "dashboard" as const, to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  ...(me.data.value?.role === "maintenance_officer"
+    ? [{ section: "assignments" as const, to: "/assignments", label: "My assignments", icon: ClipboardList }]
+    : []),
+  ...(me.data.value?.role === "administrator"
+    ? [{ section: "management" as const, to: "/admin/requests", label: "Requests", icon: ListChecks }]
+    : []),
+  { section: "requests" as const, to: "/requests", label: "My requests", icon: Inbox },
+  { section: "settings" as const, to: "/account/settings", label: "Account settings", icon: UserCog },
+]);
 
 watch(
   () => route.fullPath,

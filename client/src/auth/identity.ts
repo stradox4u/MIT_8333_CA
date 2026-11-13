@@ -13,6 +13,13 @@ export interface User {
   hasPassword: boolean;
 }
 
+declare module "vue-router" {
+  interface RouteMeta {
+    /** The Roles that may open this page; any completed User when absent. */
+    roles?: Role[];
+  }
+}
+
 export const meKey = ["auth", "me"] as const;
 export const meOptions = queryOptions({
   queryKey: meKey,
