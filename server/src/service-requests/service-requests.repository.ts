@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { asc, eq, sql } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { alias, type SelectedFields } from 'drizzle-orm/pg-core';
 import { Clock } from '../clock.js';
 import { InjectDatabase, type Database } from '../database/database.js';
 import {
@@ -45,19 +45,47 @@ export interface StatusUpdateEntry {
   reason: string | null;
 }
 
-/** A Service Request's page: its details, and its timeline oldest first. */
-export interface ServiceRequestDetails {
+/** A Service Request as lists show it. */
+export interface ServiceRequestSummary {
   reference: string;
   title: string;
   category: RequestCategory;
   location: string;
-  description: string;
   status: ServiceRequestStatus;
   priority: Priority;
   requester: Person;
   submittedAt: Date;
+}
+
+/** A Service Request's page: its details, and its timeline oldest first. */
+export interface ServiceRequestDetails extends ServiceRequestSummary {
+  description: string;
   timeline: StatusUpdateEntry[];
 }
+
+/** One page of a list, and how many items the whole list holds. */
+export interface Page<Item> {
+  items: Item[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+/** The columns of a `ServiceRequestSummary`. */
+const summaryColumns = {
+  reference: serviceRequests.reference,
+  title: serviceRequests.title,
+  category: {
+    id: requestCategories.id,
+    name: requestCategories.name,
+    code: requestCategories.code,
+  },
+  location: serviceRequests.location,
+  status: serviceRequests.status,
+  priority: serviceRequests.priority,
+  requester: { id: requesters.id, name: displayName(requesters) },
+  submittedAt: serviceRequests.submittedAt,
+};
 
 @Injectable()
 export class ServiceRequestsRepository {
@@ -115,35 +143,49 @@ export class ServiceRequestsRepository {
   async findByReference(
     reference: string,
   ): Promise<ServiceRequestDetails | null> {
-    const [request] = await this.db
-      .select({
-        id: serviceRequests.id,
-        reference: serviceRequests.reference,
-        title: serviceRequests.title,
-        category: {
-          id: requestCategories.id,
-          name: requestCategories.name,
-          code: requestCategories.code,
-        },
-        location: serviceRequests.location,
-        description: serviceRequests.description,
-        status: serviceRequests.status,
-        priority: serviceRequests.priority,
-        requester: { id: requesters.id, name: displayName(requesters) },
-        submittedAt: serviceRequests.submittedAt,
-      })
-      .from(serviceRequests)
-      .innerJoin(
-        requestCategories,
-        eq(requestCategories.id, serviceRequests.categoryId),
-      )
-      .innerJoin(requesters, eq(requesters.id, serviceRequests.requesterId))
-      .where(eq(serviceRequests.reference, reference));
+    const [request] = await this.selectSummaries({
+      id: serviceRequests.id,
+      description: serviceRequests.description,
+    }).where(eq(serviceRequests.reference, reference));
     if (!request) {
       return null;
     }
     const { id, ...details } = request;
     return { ...details, timeline: await this.timeline(id) };
+  }
+
+  /** One page of the Service Requests a User raised, newest first. */
+  async listRequestedBy(
+    requesterId: string,
+    filters: { status?: ServiceRequestStatus; page: number; pageSize: number },
+  ): Promise<Page<ServiceRequestSummary>> {
+    const { page, pageSize } = filters;
+    const matching = and(
+      eq(serviceRequests.requesterId, requesterId),
+      filters.status ? eq(serviceRequests.status, filters.status) : undefined,
+    );
+    const items = await this.selectSummaries()
+      .where(matching)
+      // The id breaks ties, so pages never overlap.
+      .orderBy(desc(serviceRequests.submittedAt), desc(serviceRequests.id))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    const total = await this.db.$count(serviceRequests, matching);
+    return { items, page, pageSize, total };
+  }
+
+  /** Service Requests with their Request Category and Requester, plus `extra` columns. */
+  private selectSummaries<Extra extends SelectedFields>(
+    extra: Extra = {} as Extra,
+  ) {
+    return this.db
+      .select({ ...summaryColumns, ...extra })
+      .from(serviceRequests)
+      .innerJoin(
+        requestCategories,
+        eq(requestCategories.id, serviceRequests.categoryId),
+      )
+      .innerJoin(requesters, eq(requesters.id, serviceRequests.requesterId));
   }
 
   /** Oldest first. */

@@ -1,10 +1,14 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '@nestjs/authentication';
 import { AuthorizationService, Can } from '@nestjs/authorization';
 import type { z } from 'zod';
 import type { User } from '../users/user.js';
 import { refuseIf } from './refusals.js';
-import { reference, submitBody } from './service-request.schemas.js';
+import {
+  listQuery,
+  reference,
+  submitBody,
+} from './service-request.schemas.js';
 import { ServiceRequestPolicy } from './service-request.policy.js';
 import { ServiceRequestsRepository } from './service-requests.repository.js';
 
@@ -28,6 +32,16 @@ export class ServiceRequestsController {
     });
     refuseIf(submitted);
     return { reference: submitted.reference };
+  }
+
+  /** A page of Service Requests: so far, those the User raised (`requested`). */
+  @Get()
+  list(
+    @CurrentUser() user: User,
+    @Query({ schema: listQuery }) query: z.infer<typeof listQuery>,
+  ) {
+    const { scope: _requested, ...filters } = query;
+    return this.serviceRequests.listRequestedBy(user.id, filters);
   }
 
   /** The tracking page: the details, and the timeline oldest first. */

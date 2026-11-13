@@ -54,18 +54,14 @@ describe('Submitting a Service Request', () => {
 
   describe('validation', () => {
     it.each([
-      { field: 'title', value: 'ab', why: 'under 3 characters' },
-      { field: 'title', value: 'a'.repeat(121), why: 'over 120 characters' },
-      { field: 'title', value: '  ab  ', why: 'under 3 characters once trimmed' },
-      { field: 'location', value: 'A', why: 'under 2 characters' },
-      { field: 'location', value: 'a'.repeat(201), why: 'over 200 characters' },
-      { field: 'description', value: 'Too short', why: 'under 10 characters' },
-      {
-        field: 'description',
-        value: 'a'.repeat(5001),
-        why: 'over 5,000 characters',
-      },
-    ])('refuses a $field $why', async ({ field, value }) => {
+      ['title', 'under 3 characters', 'ab'],
+      ['title', 'over 120 characters', 'a'.repeat(121)],
+      ['title', 'under 3 characters once trimmed', '  ab  '],
+      ['location', 'under 2 characters', 'A'],
+      ['location', 'over 200 characters', 'a'.repeat(201)],
+      ['description', 'under 10 characters', 'Too short'],
+      ['description', 'over 5,000 characters', 'a'.repeat(5001)],
+    ])('refuses a %s %s', async (field, _why, value) => {
       const student = await app.signUp('student@example.com');
 
       const refused = await student
@@ -79,17 +75,13 @@ describe('Submitting a Service Request', () => {
     });
 
     it.each([
-      { field: 'title', value: 'abc', limit: '3 characters' },
-      { field: 'title', value: 'a'.repeat(120), limit: '120 characters' },
-      { field: 'location', value: 'B2', limit: '2 characters' },
-      { field: 'location', value: 'a'.repeat(200), limit: '200 characters' },
-      { field: 'description', value: 'No power!!', limit: '10 characters' },
-      {
-        field: 'description',
-        value: 'a'.repeat(5000),
-        limit: '5,000 characters',
-      },
-    ])('accepts a $field of $limit', async ({ field, value }) => {
+      ['title', '3 characters', 'abc'],
+      ['title', '120 characters', 'a'.repeat(120)],
+      ['location', '2 characters', 'B2'],
+      ['location', '200 characters', 'a'.repeat(200)],
+      ['description', '10 characters', 'No power!!'],
+      ['description', '5,000 characters', 'a'.repeat(5000)],
+    ])('accepts a %s of %s', async (field, _limit, value) => {
       const student = await app.signUp('student@example.com');
 
       await student
