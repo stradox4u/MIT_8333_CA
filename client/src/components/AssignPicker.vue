@@ -136,34 +136,47 @@ function submit() {
 <template>
   <dialog
     ref="dialog"
-    class="sheet"
+    class="m-auto w-[min(520px,calc(100vw-32px))] max-h-[min(720px,calc(100vh-40px))] p-0 border border-campus-navy rounded-[14px] bg-campus-surface text-campus-navy backdrop:bg-campus-navy/45 phone:mb-2.5"
     aria-labelledby="assign-title"
     @close="closed"
   >
     <form novalidate @submit.prevent="submit">
-      <div class="sheet-head">
-        <div>
-          <h2 id="assign-title">{{ verb }} {{ request.reference }}</h2>
-          <p>{{ request.title }} · {{ request.location }}</p>
+      <div
+        class="flex items-start gap-3 pt-4.5 px-5 pb-3 border-b border-campus-panel"
+      >
+        <div class="flex-1 min-w-0">
+          <h2 id="assign-title" class="text-[17px]">
+            {{ verb }} {{ request.reference }}
+          </h2>
+          <p class="mt-0.75 mb-0 text-[12px] text-campus-muted wrap-anywhere">
+            {{ request.title }} · {{ request.location }}
+          </p>
         </div>
         <button
           type="button"
-          class="icon-button"
+          class="grid place-items-center w-10 h-10 flex-none border border-transparent rounded-lg bg-transparent hover:bg-campus-panel"
           aria-label="Close"
           @click="close"
         >
-          <Close class="icon" aria-hidden="true" />
+          <Close class="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
-      <div class="sheet-body">
-        <div class="field sr-field">
-          <label for="officer-search">Find a Maintenance Officer</label>
-          <div class="search-wrap">
-            <Search class="icon" aria-hidden="true" /><input
+      <div
+        class="py-3.5 px-5 overflow-auto max-h-[calc(min(720px,100vh-40px)-160px)]"
+      >
+        <div class="grid gap-1.75 min-w-0">
+          <label class="text-[12px] font-semibold" for="officer-search"
+            >Find a Maintenance Officer</label
+          >
+          <div class="relative">
+            <Search
+              class="absolute left-3 top-3.75 w-4 h-4 text-campus-muted pointer-events-none"
+              aria-hidden="true"
+            /><input
               id="officer-search"
               ref="searchInput"
               v-model="search"
-              class="input"
+              class="w-full min-w-0 h-11.5 py-2.5 pr-3 pl-9 border border-campus-control rounded-[7px] bg-campus-surface text-campus-navy text-[14px] placeholder:text-campus-muted phone:text-[16px]"
               type="search"
               autocomplete="off"
               placeholder="Name"
@@ -171,28 +184,28 @@ function submit() {
           </div>
         </div>
         <fieldset
-          class="officer-list"
+          class="grid gap-1.5 min-w-0 mt-2.5 p-0 border-0"
           aria-describedby="officer-hint"
           :aria-invalid="choiceError ? true : undefined"
         >
-          <legend class="visually-hidden">Maintenance Officer</legend>
-          <p id="officer-hint" class="field-hint">
+          <legend class="sr-only">Maintenance Officer</legend>
+          <p id="officer-hint" class="m-0 text-campus-muted text-[11px]">
             Active Maintenance Officers, fewest Open Assignments first.
           </p>
           <p
             v-if="officers.isPending.value"
-            class="field-hint"
+            class="m-0 text-campus-muted text-[11px]"
             role="status"
           >
             Loading Maintenance Officers…
           </p>
           <div v-else-if="isLoadFailure(officers.error.value)" role="alert">
-            <p class="field-error">
+            <p class="m-0 text-error text-[11px]">
               We couldn’t load the Maintenance Officers.
             </p>
             <button
               type="button"
-              class="row-action"
+              class="py-2 px-0.5 text-[12px] underline underline-offset-4"
               @click="officers.refetch()"
             >
               Try again
@@ -201,7 +214,7 @@ function submit() {
           <label
             v-for="officer in shown"
             :key="officer.id"
-            class="officer-option"
+            class="grid grid-cols-[auto_minmax(0,1fr)_132px] items-center gap-x-2.75 gap-y-1 py-2.5 px-3 border border-campus-control rounded-[9px] bg-campus-surface text-[12px] has-checked:bg-campus-green has-checked:border-campus-navy has-checked:shadow-[0_0_0_1px_var(--color-campus-navy)_inset] has-disabled:opacity-70 has-disabled:bg-campus-panel has-focus-visible:outline-3 has-focus-visible:outline-campus-navy has-focus-visible:outline-offset-2 phone:grid-cols-[auto_minmax(0,1fr)]"
             ><input
               v-model="chosen"
               type="radio"
@@ -209,18 +222,24 @@ function submit() {
               :value="officer.id"
               :disabled="officer.id === currentOfficerId"
               :aria-describedby="choiceError ? 'officer-error' : undefined"
+              class="m-0 w-4 h-4 accent-campus-navy focus-visible:outline-none"
               @change="choiceError = ''"
-            /><span class="officer-name"
+            /><span
+              class="officer-name flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold"
               >{{ officer.name
               }}<span
                 v-if="officer.id === currentOfficerId"
-                class="tag quiet"
+                class="py-0.5 px-1.75 rounded bg-campus-panel text-[10px] font-[550]"
                 >Current officer</span
               ></span
-            ><span class="officer-load"
+            ><span
+              class="officer-load grid justify-items-end gap-1 text-[11px] text-campus-muted tabular-nums phone:col-start-2 phone:justify-items-start"
               ><span>{{ load(officer.openAssignments) }}</span
-              ><span class="meter" aria-hidden="true"
+              ><span
+                class="w-24 h-1.5 rounded-[3px] bg-campus-panel shadow-[0_0_0_1px_var(--color-campus-gray)_inset] overflow-hidden"
+                aria-hidden="true"
                 ><span
+                  class="block h-full rounded-[3px] bg-campus-navy"
                   :style="{
                     width: `${Math.round((officer.openAssignments / most) * 100)}%`,
                   }"
@@ -228,7 +247,7 @@ function submit() {
           ></label>
           <p
             v-if="officers.data.value && !shown.length"
-            class="field-hint"
+            class="m-0 text-campus-muted text-[11px]"
           >
             {{
               ordered.length
@@ -240,23 +259,30 @@ function submit() {
         <p
           v-if="choiceError"
           id="officer-error"
-          class="field-error"
+          class="mt-1.5 mb-0 text-error text-[11px] leading-[1.6]"
           aria-live="polite"
         >
           {{ choiceError }}
         </p>
       </div>
-      <div class="sheet-foot">
-        <div class="actions-row">
-          <SubmitButton
-            class="compact-button has-request"
-            :pending="assign.isPending.value"
-            >{{ verb }}</SubmitButton
-          ><button type="button" class="row-action" @click="close">
+      <div class="grid gap-2 pt-3 px-5 pb-4.5 border-t border-campus-panel">
+        <div class="flex flex-wrap items-center gap-x-3.5 gap-y-2.5">
+          <SubmitButton compact class="pr-8" :pending="assign.isPending.value">{{
+            verb
+          }}</SubmitButton
+          ><button
+            type="button"
+            class="py-2 px-0.5 text-[12px] underline underline-offset-4"
+            @click="close"
+          >
             Cancel
           </button>
         </div>
-        <p v-if="formError" class="field-error form-error" role="alert">
+        <p
+          v-if="formError"
+          class="m-0 text-error text-[11px] leading-[1.6]"
+          role="alert"
+        >
           {{ formError }}
         </p>
       </div>

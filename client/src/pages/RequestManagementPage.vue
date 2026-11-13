@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { nextTick, ref } from "vue";
+import { ref } from "vue";
 import ListChecks from "~icons/lucide/list-checks";
 import UserRoundPlus from "~icons/lucide/user-round-plus";
-import CircleCheck from "~icons/lucide/circle-check";
 import WorkspaceLayout from "../layouts/WorkspaceLayout.vue";
+import ListHeading from "../components/ListHeading.vue";
+import PageNotice from "../components/PageNotice.vue";
 import ServiceRequestList from "../components/ServiceRequestList.vue";
 import AssignPicker from "../components/AssignPicker.vue";
 import type {
@@ -15,41 +16,25 @@ import type {
 /** The request the assign picker is open for. */
 const assigning = ref<ServiceRequestSummary | null>(null);
 const notice = ref("");
-const noticeElement = ref<HTMLElement | null>(null);
-async function assigned(
-  details: ServiceRequestDetails,
-  officer: MaintenanceOfficer,
-) {
+function assigned(details: ServiceRequestDetails, officer: MaintenanceOfficer) {
   notice.value = `${details.reference} assigned to ${officer.name}. It’s now Assigned.`;
-  await nextTick();
-  noticeElement.value?.focus();
 }
 </script>
 <template>
   <WorkspaceLayout width="wide">
-    <p
-      v-if="notice"
-      ref="noticeElement"
-      class="feedback success page-feedback"
-      role="status"
-      tabindex="-1"
-    >
-      <CircleCheck class="icon" aria-hidden="true" /><span>{{ notice }}</span>
-    </p>
-    <div class="page-heading">
-      <div>
-        <p class="eyebrow">Administrator</p>
-        <h1>Request management</h1>
-        <p class="intro">
-          Every Service Request on campus. Assign Submitted ones straight from
-          the list.
-        </p>
-      </div>
-    </div>
+    <PageNotice v-if="notice" :message="notice" />
+    <ListHeading
+      eyebrow="Administrator"
+      title="Request management"
+      intro="Every Service Request on campus. Assign Submitted ones straight from the list."
+    />
     <ServiceRequestList scope="all" label="Request management">
       <template #empty>
-        <span class="state-icon quiet"
-          ><ListChecks class="icon" aria-hidden="true"
+        <span
+          class="w-11.5 h-11.5 grid place-items-center bg-campus-panel border border-campus-navy rounded-[13px] mt-0 mx-auto mb-4"
+          ><ListChecks
+            class="inline-block flex-none w-5.5 h-5.5"
+            aria-hidden="true"
         /></span>
         <h2>No Service Requests yet</h2>
         <p>Requests appear here as soon as anyone reports a fault.</p>
@@ -58,19 +43,19 @@ async function assigned(
         <button
           v-if="item.status === 'submitted'"
           type="button"
-          class="button button-primary button-small"
+          class="inline-flex items-center gap-2 min-h-8.5 py-1.5 px-2.75 border border-campus-navy rounded-[7px] bg-campus-green text-campus-navy text-[11px] font-semibold whitespace-nowrap enabled:hover:brightness-97"
           :aria-label="`Assign ${item.reference}`"
           @click="
             notice = '';
             assigning = item;
           "
         >
-          <UserRoundPlus class="icon" aria-hidden="true" />Assign
+          <UserRoundPlus class="inline-block w-3.75 h-3.75" aria-hidden="true" />Assign
         </button>
         <template v-else-if="item.assignment">{{
           item.assignment.officer.name
         }}</template
-        ><span v-else class="muted">None</span>
+        ><span v-else class="text-campus-muted">None</span>
       </template>
     </ServiceRequestList>
     <AssignPicker
