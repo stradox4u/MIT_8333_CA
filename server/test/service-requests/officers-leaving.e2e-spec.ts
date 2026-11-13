@@ -77,7 +77,7 @@ describe('A Maintenance Officer leaving', () => {
         change: 'officer_left',
         officer: { id: work.officerId, name: officerName },
         previousOfficer: null,
-        statusChange: { fromStatus: from, toStatus: 'submitted' },
+        statusUpdate: { fromStatus: from, toStatus: 'submitted' },
       });
     }
     const completed = await show(admin, work.completed);
@@ -123,6 +123,37 @@ describe('A Maintenance Officer leaving', () => {
       .expect(200);
 
     await expectHandedBack(work.admin, work, work.adminId, 'Chinedu Eze');
+    await work.officer
+      .get(`/api/service-requests/${work.assigned}`)
+      .expect(404);
+    await work.officer.get('/api/service-requests?scope=assigned').expect(403);
+  });
+
+  it('hands back their Open requests when they become an Administrator', async () => {
+    const work = await anOfficerWithWork();
+
+    await work.admin
+      .patch(`/api/users/${work.officerId}/role`)
+      .send({ role: 'administrator' })
+      .expect(200);
+
+    await expectHandedBack(work.admin, work, work.adminId, 'Chinedu Eze');
+  });
+
+  it('keeps their work when their Maintenance Officer Role is unchanged', async () => {
+    const work = await anOfficerWithWork();
+    const before = await show(work.admin, work.inProgress);
+
+    await work.admin
+      .patch(`/api/users/${work.officerId}/role`)
+      .send({ role: 'maintenance_officer' })
+      .expect(200);
+
+    expect(await show(work.admin, work.inProgress)).toEqual(before);
+    const log = await work.admin.get('/api/activity-log').expect(200);
+    expect(
+      log.body.map((entry: { action: string }) => entry.action),
+    ).not.toContain('officer_left');
   });
 
   it('hands back their Open requests when they’re deactivated', async () => {

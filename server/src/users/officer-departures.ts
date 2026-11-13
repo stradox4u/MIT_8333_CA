@@ -1,18 +1,14 @@
 import type { Database } from '../database/database.js';
 
 /**
- * What becomes of a Maintenance Officer's work when they stop being one:
- * demoted, deactivated or erased. `UsersRepository` runs it inside the
- * transaction that changes the User, so the two can't come apart.
- *
- * The Service Requests module provides it. Declaring it here lets this
- * module ask for it without depending on that one, which depends on this.
+ * Runs officer departures inside the User change's transaction so their
+ * work is handed back atomically. The Users-owned contract keeps source
+ * dependencies directed from Service Requests to Users.
  */
 export abstract class OfficerDepartures {
   /**
-   * Ends the officer's Assignments on Assigned and In Progress requests,
-   * handing those back to Submitted. Completed ones keep their Assignment.
-   * `actorId` is whoever changed the User, the officer included.
+   * Hands back Assigned and In Progress work in the transaction changing
+   * the User, attributed to `actorId`, while preserving Completed Assignments.
    */
   abstract handBackAssignmentsOf(
     db: Database,

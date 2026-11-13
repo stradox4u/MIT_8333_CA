@@ -115,10 +115,9 @@ export class UsersRepository {
   }
 
   /**
-   * Deactivates a User, unless they're the last active Administrator. A
-   * Maintenance Officer's Open work goes back to Submitted in the same
-   * transaction. `already_deactivated` and `user_erased` change nothing.
-   * `actorId` is the Administrator deactivating them.
+   * Deactivates a User and hands back their Open work in one transaction,
+   * attributed to `actorId`. Last-Administrator and unchanged-state checks
+   * prevent invalid or repeated changes.
    */
   async deactivate(
     id: string,
@@ -164,12 +163,9 @@ export class UsersRepository {
   }
 
   /**
-   * Erases a User (ADR-0002): clears their name, email and password, and
-   * deletes Sign-in Links sent to them, keeping the row so their records stay
-   * linked. A Maintenance Officer's Open work goes back to Submitted in the
-   * same transaction. Refused for the last active Administrator.
-   * `already_erased` changes nothing. `actorId` is whoever erases them,
-   * themselves included.
+   * Anonymizes a User while preserving their linked records (ADR-0002),
+   * and hands back Open work in the same transaction, attributed to `actorId`.
+   * Refuses the last active Administrator and leaves already-erased Users unchanged.
    */
   async erase(
     id: string,
@@ -329,10 +325,9 @@ export class UsersRepository {
   }
 
   /**
-   * Changes a User's Role, unless that would leave no active Administrator.
-   * The check and the change are one statement. Any Role but Maintenance
-   * Officer hands an officer's Open work back to Submitted, in the same
-   * transaction. `actorId` is the Administrator changing it.
+   * Changes a Role without removing the last active Administrator, and
+   * hands back Open work when leaving the officer Role in the same transaction.
+   * `actorId` identifies the Administrator making the change.
    */
   async changeRole(
     id: string,

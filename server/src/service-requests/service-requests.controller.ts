@@ -127,9 +127,8 @@ export class ServiceRequestsController {
   }
 
   /**
-   * Gives the request to an active Maintenance Officer: assigns a Submitted
-   * one, or reassigns an Assigned or In Progress one. Either way it's then
-   * Assigned. Giving it to the officer who holds it changes nothing.
+   * Assigns Open work to an active officer so they can start it; assigning
+   * its current officer changes nothing.
    */
   @Put(':reference/assignment')
   @Can(ServiceRequestPolicy, 'manage')
@@ -221,11 +220,13 @@ export class ServiceRequestsController {
    * its Priority unless they may see that too.
    */
   private async show(user: User, reference: string) {
-    const access = await this.findVisible(user, reference);
+    await this.findVisible(user, reference);
     const request = await this.serviceRequests.findDetails(reference);
     refuseIf(request);
     return withPriorityIfVisible(
-      await this.priorityVisible(user, access),
+      await this.priorityVisible(user, {
+        currentOfficerId: request.assignment?.officer.id ?? null,
+      }),
       request,
     );
   }

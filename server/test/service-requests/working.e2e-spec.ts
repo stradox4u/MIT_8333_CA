@@ -242,7 +242,7 @@ describe('Working on a Service Request', () => {
         change: 'reassigned',
         officer: { id: ngoziId, name: 'Ngozi Okafor' },
         previousOfficer: { id: officerId, name: 'Chinedu Eze' },
-        statusChange: { fromStatus: 'in_progress', toStatus: 'assigned' },
+        statusUpdate: { fromStatus: 'in_progress', toStatus: 'assigned' },
       });
       await start(ngozi, reference).expect(200);
     });
@@ -258,6 +258,8 @@ describe('Working on a Service Request', () => {
 
       expect(shown.body).not.toHaveProperty('priority');
       await start(officer, reference).expect(403);
+      await start(ngozi, reference).expect(200);
+      await complete(officer, reference).expect(403);
     });
   });
 });
