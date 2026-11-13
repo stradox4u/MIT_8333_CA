@@ -4,6 +4,7 @@ import { http, HttpResponse } from "msw";
 import { server } from "./setup";
 import {
   api,
+  details,
   open,
   signedIn,
   summary,
@@ -344,3 +345,154 @@ test.each([
     runtime.queryClient.clear();
   },
 );
+
+const ada = { id: "ada", name: "Ada Okafor" };
+const funmi = { id: "funmi", name: "Funmi Adeyemi" };
+const at = (hour: number) =>
+  `2026-11-12T${String(hour).padStart(2, "0")}:00:00.000Z`;
+const statusUpdate = (
+  hour: number,
+  actor: { id: string; name: string } | null,
+  fromStatus: string | null,
+  toStatus: string,
+  extra: { reason?: string; note?: string } = {},
+) => ({
+  type: "status_update",
+  occurredAt: at(hour),
+  actor,
+  fromStatus,
+  toStatus,
+  reason: extra.reason ?? null,
+  note: extra.note ?? null,
+});
+const assignmentChange = (
+  hour: number,
+  change: string,
+  officer: { id: string; name: string },
+  extra: {
+    previousOfficer?: { id: string; name: string };
+    statusUpdate?: { fromStatus: string; toStatus: string };
+    actor?: { id: string; name: string } | null;
+  } = {},
+) => ({
+  type: "assignment",
+  occurredAt: at(hour),
+  actor: extra.actor === undefined ? funmi : extra.actor,
+  change,
+  officer,
+  previousOfficer: extra.previousOfficer ?? null,
+  statusUpdate: extra.statusUpdate ?? null,
+});
+
+/** A Service Request's details, as the API sends them, and a handler serving it. */
+function withRequest(overrides: Record<string, unknown> = {}) {
+  let current: Record<string, unknown> = {
+    ...summary("SR-PLUMB-1", "Leaking pipe under the sink"),
+    description: "Water drips from the pipe.",
+    timeline: [statusUpdate(9, ada, null, "submitted")],
+    ...overrides,
+  };
+  server.use(
+    http.get(`${api}/service-requests/SR-PLUMB-1`, () =>
+      HttpResponse.json(current),
+    ),
+  );
+  return {
+    get: () => current,
+    set(changes: Record<string, unknown>) {
+      current = { ...current, ...changes };
+      return current;
+    },
+  };
+}
+/** Each timeline entry as "title | detail | meta", with the time left out. */
+const timeline = () =>
+  within(screen.getByRole("region", { name: "Timeline" }))
+    .getAllByRole("listitem")
+    .map((entry) =>
+      [".tl-title", ".tl-detail", ".tl-meta"]
+        .map((part) =>
+          [...(entry.querySelector(part)?.childNodes ?? [])]
+            .filter((node) => node.nodeType !== Node.COMMENT_NODE)
+            .map((node) => node.textContent?.trim())
+            .filter(Boolean)
+            .join(" ")
+            .replace(/\s+/g, " ")
+            .replace(/ · \d+ \w+ \d{4}, \d\d:\d\d$/, ""),
+        )
+        .filter(Boolean)
+        .join(" | "),
+    );
+
+test("the tracking page names the Maintenance Officer, and the timeline shows each Assignment change as one entry", async () => {
+  signedIn("student");
+  withRequest({
+    status: "completed",
+    assignment: assignedTo(tunde),
+    timeline: [
+      statusUpdate(9, ada, null, "submitted"),
+      assignmentChange(10, "assigned", chinedu, {
+        statusUpdate: { fromStatus: "submitted", toStatus: "assigned" },
+      }),
+      statusUpdate(11, chinedu, "assigned", "in_progress"),
+      assignmentChange(12, "reassigned", tunde, {
+        previousOfficer: chinedu,
+        statusUpdate: { fromStatus: "in_progress", toStatus: "assigned" },
+      }),
+      assignmentChange(13, "reassigned", chinedu, { previousOfficer: tunde }),
+      assignmentChange(14, "unassigned", chinedu, {
+        statusUpdate: { fromStatus: "assigned", toStatus: "submitted" },
+      }),
+      assignmentChange(15, "assigned", tunde, {
+        statusUpdate: { fromStatus: "submitted", toStatus: "assigned" },
+      }),
+      statusUpdate(16, tunde, "assigned", "in_progress"),
+      statusUpdate(17, tunde, "in_progress", "completed", {
+        note: "Replaced the washer.",
+      }),
+    ],
+  });
+  const { runtime } = open("/requests/SR-PLUMB-1");
+  await screen.findByRole("heading", { name: "Leaking pipe under the sink" });
+  expect(details("Maintenance Officer")).toBe("Tunde Bakare");
+  expect(timeline()).toEqual([
+    "Submitted Fault reported | Status Update · You · Requester",
+    "Assigned to Chinedu Eze | Status Update: Submitted → Assigned | Assignment · Funmi Adeyemi",
+    "In Progress Work started | Status Update · Chinedu Eze",
+    "Reassigned from Chinedu Eze to Tunde Bakare | Status Update: In Progress → Assigned | Assignment · Funmi Adeyemi",
+    "Reassigned from Tunde Bakare to Chinedu Eze | Assignment · Funmi Adeyemi",
+    "Unassigned Chinedu Eze | Status Update: Assigned → Submitted | Assignment · Funmi Adeyemi",
+    "Assigned to Tunde Bakare | Status Update: Submitted → Assigned | Assignment · Funmi Adeyemi",
+    "In Progress Work started | Status Update · Tunde Bakare",
+    "Completed Work completed | Status Update · Tunde Bakare",
+  ]);
+  const completed = within(
+    screen.getByRole("region", { name: "Timeline" }),
+  ).getAllByRole("listitem")[8];
+  expect(completed.textContent).toContain("Completion noteReplaced the washer.");
+  runtime.queryClient.clear();
+});
+
+test("an officer who left reads as their Assignment ending, and a request with no officer says so", async () => {
+  signedIn("administrator", admin);
+  withRequest({
+    status: "submitted",
+    priority: "normal",
+    timeline: [
+      statusUpdate(9, ada, null, "submitted"),
+      assignmentChange(10, "assigned", chinedu, {
+        statusUpdate: { fromStatus: "submitted", toStatus: "assigned" },
+      }),
+      assignmentChange(11, "officer_left", chinedu, {
+        statusUpdate: { fromStatus: "assigned", toStatus: "submitted" },
+      }),
+    ],
+  });
+  const { runtime } = open("/requests/SR-PLUMB-1");
+  await screen.findByRole("heading", { name: "Leaking pipe under the sink" });
+  expect(details("Maintenance Officer")).toBe("Not assigned yet");
+  expect(timeline()[2]).toBe(
+    "Chinedu Eze is no longer a Maintenance Officer | Status Update: Assigned → Submitted | Assignment · You",
+  );
+  runtime.queryClient.clear();
+});

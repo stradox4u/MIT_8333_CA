@@ -203,6 +203,23 @@ const cancellation = computed(() => {
             <dt>Requester</dt>
             <dd>{{ requesterName }}</dd>
           </div>
+          <div>
+            <dt>Maintenance Officer</dt>
+            <dd>
+              <template v-if="request.data.value.assignment">{{
+                request.data.value.assignment.officer.id === me.data.value?.id
+                  ? "You"
+                  : request.data.value.assignment.officer.name
+              }}</template
+              ><span v-else class="text-campus-muted">{{
+                ["submitted", "assigned", "in_progress"].includes(
+                  request.data.value.status,
+                )
+                  ? "Not assigned yet"
+                  : "None"
+              }}</span>
+            </dd>
+          </div>
         </dl>
         <p
           v-if="request.data.value.status === 'cancelled'"
@@ -322,7 +339,7 @@ const cancellation = computed(() => {
               Timeline
             </h2>
             <p class="m-0 text-campus-muted text-[12px] leading-[1.65]">
-              Status Updates, oldest first.
+              Status Updates and Assignments, oldest first.
             </p>
           </div>
         </div>
