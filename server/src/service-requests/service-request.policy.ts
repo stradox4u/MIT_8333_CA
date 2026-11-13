@@ -21,8 +21,6 @@ export class ServiceRequestPolicy {
    * else is told it doesn't exist (404), so nobody learns that it does.
    */
   view(user: User, request: { requester: { id: string } }) {
-    return (
-      request.requester.id === user.id || user.roleId === 'administrator'
-    );
+    return request.requester.id === user.id || user.roleId === 'administrator';
   }
 }

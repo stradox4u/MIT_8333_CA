@@ -41,7 +41,9 @@ describe('Tracking a Service Request', () => {
     );
     const adaId = await idOf(ada);
 
-    const shown = await ada.get(`/api/service-requests/${reference}`).expect(200);
+    const shown = await ada
+      .get(`/api/service-requests/${reference}`)
+      .expect(200);
 
     expect(shown.body).toEqual({
       reference: 'SR-PLUMB-1',
@@ -77,7 +79,9 @@ describe('Tracking a Service Request', () => {
       }),
     );
 
-    const shown = await ada.get(`/api/service-requests/${reference}`).expect(200);
+    const shown = await ada
+      .get(`/api/service-requests/${reference}`)
+      .expect(200);
 
     expect(shown.body).toMatchObject({
       title: 'Broken chair',
