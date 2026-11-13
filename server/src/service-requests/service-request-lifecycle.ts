@@ -3,6 +3,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { Clock } from '../clock.js';
 import { InjectDatabase, type Database } from '../database/database.js';
 import {
+  type ActivityAction,
   type AssignmentEndReason,
   assignments,
   OPEN_STATUSES,
@@ -12,6 +13,7 @@ import {
   statusUpdates,
   users,
 } from '../database/schema.js';
+import { recordActivity } from '../users/activity-log.js';
 import { activeWithRole } from '../users/active-users.js';
 import {
   type NotAnActiveOfficer,
@@ -38,13 +40,17 @@ interface Locked {
   assignment: { id: number; officerId: string } | null;
 }
 
+/** The Status change an action made, as the Activity Log records it. */
+type Moved = { from: ServiceRequestStatus | null; to: ServiceRequestStatus };
+
 /** The Statuses in which an officer holds the work: an Assignment can end. */
 const HELD: ServiceRequestStatus[] = ['assigned', 'in_progress'];
 
 /**
  * Every change to a Service Request's Status or Assignment, following the
  * lifecycle in docs/service-requests.md. Each change is one transaction that
- * locks the request first, so the checks and the change can't be overtaken.
+ * locks the request first, so the checks and the change can't be overtaken,
+ * and writes its Activity Log entry in that same transaction.
  */
 @Injectable()
 export class ServiceRequestLifecycle {
@@ -96,6 +102,11 @@ export class ServiceRequestLifecycle {
         toStatus: 'submitted',
         occurredAt: now,
       });
+      await this.record(tx, submitted.id, now, {
+        actorId: request.requesterId,
+        action: 'status_changed',
+        details: { from: null, to: 'submitted' },
+      });
       return { reference };
     });
   }
@@ -134,18 +145,13 @@ export class ServiceRequestLifecycle {
       if (!officer) {
         return 'not_an_active_officer';
       }
-      if (request.assignment?.officerId === officerId) {
+      const previous = request.assignment;
+      if (previous?.officerId === officerId) {
         return 'unchanged';
       }
       const now = this.now();
-      if (request.assignment) {
-        await this.endAssignment(
-          tx,
-          request.assignment.id,
-          'reassigned',
-          actorId,
-          now,
-        );
+      if (previous) {
+        await this.endAssignment(tx, previous.id, 'reassigned', actorId, now);
       }
       const [assignment] = await tx
         .insert(assignments)
@@ -156,10 +162,19 @@ export class ServiceRequestLifecycle {
           assignedAt: now,
         })
         .returning({ id: assignments.id });
-      await this.moveTo(tx, request, 'assigned', {
+      const moved = await this.moveTo(tx, request, 'assigned', {
         actorId,
         at: now,
         assignmentId: assignment.id,
+      });
+      await this.record(tx, request.id, now, {
+        actorId,
+        action: previous ? 'reassigned' : 'assigned',
+        details: {
+          officerId,
+          ...(previous && { previousOfficerId: previous.officerId }),
+          ...moved,
+        },
       });
       return 'assigned';
     });
@@ -178,19 +193,13 @@ export class ServiceRequestLifecycle {
       if (!request.assignment || !HELD.includes(request.status)) {
         return wrongStatus(request.status);
       }
-      const now = this.now();
-      await this.endAssignment(
+      await this.handBack(
         tx,
-        request.assignment.id,
+        request,
+        request.assignment,
         'unassigned',
         actorId,
-        now,
       );
-      await this.moveTo(tx, request, 'submitted', {
-        actorId,
-        at: now,
-        assignmentId: request.assignment.id,
-      });
       return 'unassigned';
     });
   }
@@ -211,10 +220,7 @@ export class ServiceRequestLifecycle {
       if (request.status !== 'assigned') {
         return wrongStatus(request.status);
       }
-      await this.moveTo(tx, request, 'in_progress', {
-        actorId: officerId,
-        at: this.now(),
-      });
+      await this.changeStatus(tx, request, 'in_progress', officerId);
       return 'started';
     });
   }
@@ -240,11 +246,7 @@ export class ServiceRequestLifecycle {
       if (request.status !== 'in_progress') {
         return wrongStatus(request.status);
       }
-      await this.moveTo(tx, request, 'completed', {
-        actorId: officerId,
-        at: this.now(),
-        note,
-      });
+      await this.changeStatus(tx, request, 'completed', officerId, note);
       return 'completed';
     });
   }
@@ -271,6 +273,48 @@ export class ServiceRequestLifecycle {
     return { ...request, assignment: assignment ?? null };
   }
 
+  /** A Status change on its own, such as starting or completing the work. */
+  private async changeStatus(
+    db: Database,
+    request: Locked,
+    to: ServiceRequestStatus,
+    actorId: string,
+    note: string | null = null,
+  ) {
+    const at = this.now();
+    const moved = await this.moveTo(db, request, to, { actorId, at, note });
+    await this.record(db, request.id, at, {
+      actorId,
+      action: 'status_changed',
+      details: moved,
+    });
+  }
+
+  /**
+   * Ends a held request's current Assignment and hands it back to
+   * Submitted: an Administrator unassigning it, or its officer leaving.
+   */
+  private async handBack(
+    db: Database,
+    request: Locked,
+    assignment: NonNullable<Locked['assignment']>,
+    reason: Extract<AssignmentEndReason, 'unassigned' | 'officer_left'>,
+    actorId: string,
+  ) {
+    const at = this.now();
+    await this.endAssignment(db, assignment.id, reason, actorId, at);
+    const moved = await this.moveTo(db, request, 'submitted', {
+      actorId,
+      at,
+      assignmentId: assignment.id,
+    });
+    await this.record(db, request.id, at, {
+      actorId,
+      action: reason,
+      details: { officerId: assignment.officerId, ...moved },
+    });
+  }
+
   private async endAssignment(
     db: Database,
     assignmentId: number,
@@ -284,7 +328,10 @@ export class ServiceRequestLifecycle {
       .where(eq(assignments.id, assignmentId));
   }
 
-  /** Moves a request to a Status, recording the Status Update. */
+  /**
+   * Moves a request to a Status, recording the Status Update. Answers the
+   * change it made, or nothing when the request was already there.
+   */
   private async moveTo(
     db: Database,
     request: Locked,
@@ -295,9 +342,9 @@ export class ServiceRequestLifecycle {
       assignmentId?: number;
       note?: string | null;
     },
-  ) {
+  ): Promise<Moved | undefined> {
     if (request.status === to) {
-      return;
+      return undefined;
     }
     await db
       .update(serviceRequests)
@@ -315,6 +362,21 @@ export class ServiceRequestLifecycle {
       note: change.note,
       occurredAt: change.at,
     });
+    return { from: request.status, to };
+  }
+
+  /** The action's Activity Log entry, naming the request. */
+  private record(
+    db: Database,
+    serviceRequestId: string,
+    at: Date,
+    entry: {
+      actorId: string | null;
+      action: ActivityAction;
+      details?: Record<string, unknown>;
+    },
+  ) {
+    return recordActivity(db, { ...entry, serviceRequestId }, at);
   }
 
   private now() {

@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  check,
   index,
   integer,
   jsonb,
@@ -111,31 +112,48 @@ export const rateLimits = pgTable(
 );
 
 export const ACTIVITY_ACTIONS = [
+  // On Users:
   'invited',
   'role_changed',
   'deactivated',
   'reactivated',
   'erased',
+  // On Service Requests:
+  'status_changed',
+  'assigned',
+  'reassigned',
+  'unassigned',
+  'officer_left',
 ] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 
-/** The Activity Log: significant actions taken on Users (GLOSSARY.md). */
+/**
+ * The Activity Log: significant actions taken on Users and Service Requests
+ * (GLOSSARY.md). Each entry names exactly one of them.
+ */
 export const activityLog = pgTable(
   'activity_log',
   {
     /** Also the order entries happened in, when times tie. */
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     occurredAt: instant().notNull(),
-    actorId: uuid()
-      .notNull()
-      .references(() => users.id),
-    targetId: uuid()
-      .notNull()
-      .references(() => users.id),
+    /** Empty when nobody acted: an automatic change. */
+    actorId: uuid().references(() => users.id),
+    /** The User acted on, for an action on a User. */
+    targetId: uuid().references(() => users.id),
+    /** The Service Request acted on, for an action on one. */
+    serviceRequestId: uuid().references(() => serviceRequests.id),
     action: text().$type<ActivityAction>().notNull(),
     details: jsonb().$type<Record<string, unknown>>(),
   },
-  (table) => [index().on(table.occurredAt)],
+  (table) => [
+    index().on(table.occurredAt),
+    index().on(table.serviceRequestId),
+    check(
+      'activity_log_one_subject',
+      sql`num_nonnulls(${table.targetId}, ${table.serviceRequestId}) = 1`,
+    ),
+  ],
 );
 
 /**
