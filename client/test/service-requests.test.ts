@@ -237,6 +237,213 @@ test("submitting sends the trimmed report once, then shows the new request with 
   runtime.queryClient.clear();
 });
 
+function details(term: string) {
+  const label = screen.getByText(term, { selector: "dt" });
+  return label.nextElementSibling?.textContent?.trim();
+}
+
+test("the tracking page shows the Requester their request's header, description and timeline, without Priority", async () => {
+  signedIn("student");
+  server.use(
+    http.get(`${api}/service-requests/SR-PLUMB-1`, () =>
+      HttpResponse.json(submitted),
+    ),
+  );
+  const { runtime } = open("/requests/SR-PLUMB-1");
+  const heading = await screen.findByRole("heading", {
+    level: 1,
+    name: "Leaking pipe under the sink",
+  });
+  const header = heading.closest("section")!;
+  expect(within(header).getByText("SR-PLUMB-1")).toBeTruthy();
+  expect(within(header).getByText("Status:").parentElement?.textContent).toBe(
+    "Status: Submitted",
+  );
+  expect(within(header).queryByText(/Priority/)).toBeNull();
+  expect(details("Request Category")).toBe("Plumbing");
+  expect(details("Location")).toBe("Hostel B, room 214");
+  expect(details("Submitted")).toBe("12 Nov 2026");
+  expect(details("Requester")).toBe("You");
+  expect(
+    within(header)
+      .getByRole("list", { name: "Progress" })
+      .querySelector("[aria-current='step']")?.textContent,
+  ).toContain("Submitted");
+  expect(
+    screen.getByText("Water drips from the pipe and collects on the floor."),
+  ).toBeTruthy();
+  const timeline = within(
+    screen.getByRole("region", { name: "Timeline" }),
+  ).getAllByRole("listitem");
+  expect(timeline).toHaveLength(1);
+  expect(timeline[0].textContent).toContain("Fault reported");
+  expect(timeline[0].textContent).toMatch(
+    /Status Update · You · Requester · 12 Nov 2026, \d\d:\d\d/,
+  );
+  runtime.queryClient.clear();
+});
+
+test("an Administrator sees the Priority, and the timeline names automatic actions and Erased Users, oldest first", async () => {
+  signedIn("administrator");
+  const erased = { id: "gone", name: "Erased user" };
+  const officer = { id: "chinedu", name: "Chinedu Eze" };
+  server.use(
+    http.get(`${api}/service-requests/SR-PLUMB-7`, () =>
+      HttpResponse.json({
+        ...submitted,
+        reference: "SR-PLUMB-7",
+        status: "verified",
+        priority: "high",
+        requester: erased,
+        timeline: [
+          ["2026-11-01T09:00:00.000Z", erased, null, "submitted", null],
+          ["2026-11-02T09:00:00.000Z", officer, "assigned", "in_progress", null],
+          ["2026-11-03T09:00:00.000Z", officer, "in_progress", "completed", null],
+          [
+            "2026-11-04T09:00:00.000Z",
+            erased,
+            "completed",
+            "assigned",
+            "It still drips.",
+          ],
+          ["2026-11-05T09:00:00.000Z", officer, "assigned", "in_progress", null],
+          ["2026-11-06T09:00:00.000Z", officer, "in_progress", "completed", null],
+          ["2026-11-13T09:00:00.000Z", null, "completed", "verified", null],
+        ].map(([occurredAt, actor, fromStatus, toStatus, reason]) => ({
+          type: "status_update",
+          occurredAt,
+          actor,
+          fromStatus,
+          toStatus,
+          reason,
+        })),
+      }),
+    ),
+  );
+  const { runtime } = open("/requests/SR-PLUMB-7");
+  const heading = await screen.findByRole("heading", { level: 1 });
+  const header = heading.closest("section")!;
+  expect(within(header).getByText("Priority:").parentElement?.textContent).toBe(
+    "Priority: High",
+  );
+  expect(details("Requester")).toBe("Erased user");
+  const entries = within(
+    screen.getByRole("region", { name: "Timeline" }),
+  ).getAllByRole("listitem");
+  expect(
+    entries.map(
+      (entry) =>
+        `${[...entry.querySelector(".tl-title")!.children]
+          .map((part) => part.textContent?.trim())
+          .join(" ")} | ${entry
+          .querySelector(".tl-meta")
+          ?.textContent?.replace(/\s+/g, " ")
+          .replace(/ · \d.*$/, "")
+          .trim()}`,
+    ),
+  ).toEqual([
+    "Submitted Fault reported | Status Update · Erased user · Requester",
+    "In Progress Work started | Status Update · Chinedu Eze",
+    "Completed Work completed | Status Update · Chinedu Eze",
+    "Assigned Not fixed | Status Update · Erased user · Requester",
+    "In Progress Work started | Status Update · Chinedu Eze",
+    "Completed Work completed | Status Update · Chinedu Eze",
+    "Verified No answer within 7 days | Status Update · Automatically, after 7 days",
+  ]);
+  expect(entries[3].textContent).toContain("ReasonIt still drips.");
+  runtime.queryClient.clear();
+});
+
+test("a Cancelled request says who cancelled it and why, in place of the progress steps", async () => {
+  signedIn();
+  server.use(
+    http.get(`${api}/service-requests/SR-PLUMB-1`, () =>
+      HttpResponse.json({
+        ...submitted,
+        status: "cancelled",
+        timeline: [
+          ...submitted.timeline,
+          {
+            type: "status_update",
+            occurredAt: "2026-11-12T12:00:00.000Z",
+            actor: { id: "ada", name: "Ada Okafor" },
+            fromStatus: "submitted",
+            toStatus: "cancelled",
+            reason: "Reported twice.",
+          },
+        ],
+      }),
+    ),
+  );
+  const { runtime } = open("/requests/SR-PLUMB-1");
+  await screen.findByRole("heading", { level: 1 });
+  expect(
+    screen
+      .getByText("Cancelled", { selector: "strong" })
+      .parentElement?.textContent?.replace(/\s+/g, " ")
+      .trim(),
+  ).toBe("Cancelled on 12 Nov 2026 by you. Reason: Reported twice.");
+  expect(screen.queryByRole("list", { name: "Progress" })).toBeNull();
+  runtime.queryClient.clear();
+});
+
+test("the tracking page answers an unknown or malformed Reference with a not-found page", async () => {
+  signedIn();
+  server.use(
+    http.get(`${api}/service-requests/SR-PLUMB-999`, () =>
+      HttpResponse.json(
+        {
+          message: "No such Service Request",
+          error: "Not Found",
+          statusCode: 404,
+        },
+        { status: 404 },
+      ),
+    ),
+    http.get(`${api}/service-requests/not-a-reference`, () =>
+      HttpResponse.json(
+        {
+          statusCode: 400,
+          error: "Bad Request",
+          message: ["is not a Reference, such as SR-PLUMB-42"],
+          issues: [
+            { path: [], message: "is not a Reference, such as SR-PLUMB-42" },
+          ],
+        },
+        { status: 400 },
+      ),
+    ),
+  );
+  const { runtime } = open("/requests/SR-PLUMB-999");
+  await screen.findByRole("heading", { name: "We can’t find SR-PLUMB-999" });
+  expect(
+    screen.getByText(
+      "Check the Reference. If someone shared it with you, you may not have access to it.",
+    ),
+  ).toBeTruthy();
+  await runtime.router.push("/requests/not-a-reference");
+  await screen.findByRole("heading", {
+    name: "We can’t find not-a-reference",
+  });
+  runtime.queryClient.clear();
+});
+
+test("the tracking page offers another try when it couldn't load", async () => {
+  signedIn();
+  let fail = true;
+  server.use(
+    http.get(`${api}/service-requests/SR-PLUMB-1`, () =>
+      fail ? HttpResponse.error() : HttpResponse.json(submitted),
+    ),
+  );
+  const { runtime, user } = open("/requests/SR-PLUMB-1");
+  await screen.findByRole("heading", { name: "We couldn’t load SR-PLUMB-1" });
+  fail = false;
+  await user.click(screen.getByRole("button", { name: "Try again" }));
+  await screen.findByRole("heading", { name: "Leaking pipe under the sink" });
+  runtime.queryClient.clear();
+});
+
 test("the server's 400 issues show under the matching fields, and an unknown Request Category asks for another", async () => {
   signedIn();
   withCategories();
