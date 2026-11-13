@@ -15,6 +15,7 @@ import {
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
 } from '@nestjs/swagger';
@@ -29,6 +30,7 @@ import {
 } from './service-request.responses.js';
 import {
   assignBody,
+  completeBody,
   listQuery,
   type ListScopeName,
   referenceParam,
@@ -162,6 +164,56 @@ export class ServiceRequestsController {
   ) {
     refuseIf(await this.lifecycle.unassign(reference, admin.id), 'unassigned');
     return this.show(admin, reference);
+  }
+
+  /** The current officer starts the work: Assigned to In Progress. */
+  @Post(':reference/start')
+  @HttpCode(200)
+  @ApiOkResponse(ANSWERS_THE_REQUEST)
+  @ApiForbiddenResponse({ description: 'Only its current officer may' })
+  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiConflictResponse({ description: 'It isn’t Assigned' })
+  async start(
+    @CurrentUser() officer: User,
+    @Param('reference', { schema: referenceParam }) reference: string,
+  ) {
+    await this.authorizeWork(officer, reference);
+    refuseIf(await this.lifecycle.start(reference, officer.id), 'started');
+    return this.show(officer, reference);
+  }
+
+  /**
+   * The current officer finishes the work: In Progress to Completed, with
+   * an optional note kept on that Status Update.
+   */
+  @Post(':reference/complete')
+  @HttpCode(200)
+  @ApiOkResponse(ANSWERS_THE_REQUEST)
+  @ApiForbiddenResponse({ description: 'Only its current officer may' })
+  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiConflictResponse({ description: 'It isn’t In Progress' })
+  async complete(
+    @CurrentUser() officer: User,
+    @Param('reference', { schema: referenceParam }) reference: string,
+    @Body({ schema: completeBody }) body: z.infer<typeof completeBody>,
+  ) {
+    await this.authorizeWork(officer, reference);
+    refuseIf(
+      await this.lifecycle.complete(reference, officer.id, body?.note ?? null),
+      'completed',
+    );
+    return this.show(officer, reference);
+  }
+
+  /** 404 unless `user` may see the request; then 403 unless they're its current officer. */
+  private async authorizeWork(user: User, reference: string) {
+    const access = await this.findVisible(user, reference);
+    await this.authorization.authorize(
+      ServiceRequestPolicy,
+      'work',
+      user,
+      access,
+    );
   }
 
   /**

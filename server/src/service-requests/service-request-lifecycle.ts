@@ -15,6 +15,7 @@ import {
 import { activeWithRole } from '../users/active-users.js';
 import {
   type NotAnActiveOfficer,
+  type NotCurrentOfficer,
   type NotFound,
   type UnknownCategory,
   type WrongStatus,
@@ -194,6 +195,60 @@ export class ServiceRequestLifecycle {
     });
   }
 
+  /** The current officer starts the work: Assigned to In Progress. */
+  async start(
+    reference: string,
+    officerId: string,
+  ): Promise<'started' | NotFound | NotCurrentOfficer | WrongStatus> {
+    return this.db.transaction(async (tx) => {
+      const request = await this.lock(tx, reference);
+      if (!request) {
+        return 'not_found';
+      }
+      if (request.assignment?.officerId !== officerId) {
+        return 'not_current_officer';
+      }
+      if (request.status !== 'assigned') {
+        return wrongStatus(request.status);
+      }
+      await this.moveTo(tx, request, 'in_progress', {
+        actorId: officerId,
+        at: this.now(),
+      });
+      return 'started';
+    });
+  }
+
+  /**
+   * The current officer finishes the work: In Progress to Completed, with
+   * their optional note on that Status Update. They keep the Assignment,
+   * as the record of who did the work.
+   */
+  async complete(
+    reference: string,
+    officerId: string,
+    note: string | null,
+  ): Promise<'completed' | NotFound | NotCurrentOfficer | WrongStatus> {
+    return this.db.transaction(async (tx) => {
+      const request = await this.lock(tx, reference);
+      if (!request) {
+        return 'not_found';
+      }
+      if (request.assignment?.officerId !== officerId) {
+        return 'not_current_officer';
+      }
+      if (request.status !== 'in_progress') {
+        return wrongStatus(request.status);
+      }
+      await this.moveTo(tx, request, 'completed', {
+        actorId: officerId,
+        at: this.now(),
+        note,
+      });
+      return 'completed';
+    });
+  }
+
   /** Locks a request for a change, and reads its current Assignment. */
   private async lock(db: Database, reference: string): Promise<Locked | null> {
     const [request] = await db
@@ -234,14 +289,22 @@ export class ServiceRequestLifecycle {
     db: Database,
     request: Locked,
     to: ServiceRequestStatus,
-    change: { actorId: string; at: Date; assignmentId?: number },
+    change: {
+      actorId: string;
+      at: Date;
+      assignmentId?: number;
+      note?: string | null;
+    },
   ) {
     if (request.status === to) {
       return;
     }
     await db
       .update(serviceRequests)
-      .set({ status: to })
+      .set({
+        status: to,
+        ...(to === 'completed' && { completedAt: change.at }),
+      })
       .where(eq(serviceRequests.id, request.id));
     await db.insert(statusUpdates).values({
       serviceRequestId: request.id,
@@ -249,6 +312,7 @@ export class ServiceRequestLifecycle {
       fromStatus: request.status,
       toStatus: to,
       assignmentId: change.assignmentId,
+      note: change.note,
       occurredAt: change.at,
     });
   }

@@ -1,5 +1,7 @@
 import {
   aServiceRequest,
+  REQUESTER_ROLES,
+  signInWithRole,
   submitServiceRequest,
 } from '../support/service-requests.js';
 import {
@@ -79,10 +81,14 @@ describe('Listing the Service Requests a User raised', () => {
     });
   });
 
-  it.each(['student', 'staff'])(
+  it.each(REQUESTER_ROLES)(
     'leaves the Priority out for a Requester (%s)',
     async (role) => {
-      const requester = await app.signUp('requester@example.com', { role });
+      const requester = await signInWithRole(
+        app,
+        'requester@example.com',
+        role,
+      );
       await submitServiceRequest(requester);
 
       const listed = await list(requester).expect(200);

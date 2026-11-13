@@ -40,6 +40,13 @@ export const assignBody = z.object({
   officerId: userId,
 });
 
+export const completeBody = z
+  .object({
+    /** The officer's note on the finished work, kept on that Status Update. */
+    note: z.string().trim().min(1).max(2000).optional(),
+  })
+  .optional();
+
 /**
  * Which Service Requests a list shows: those the User raised (`requested`),
  * those they've held an Assignment for (`assigned`, Maintenance Officers),

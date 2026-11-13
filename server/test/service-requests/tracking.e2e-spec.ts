@@ -1,6 +1,8 @@
 import {
   aServiceRequest,
   idOf,
+  REQUESTER_ROLES,
+  signInWithRole,
   submitServiceRequest,
 } from '../support/service-requests.js';
 import { createTestApp, type TestApp } from '../support/test-app.js';
@@ -80,10 +82,14 @@ describe('Tracking a Service Request', () => {
     });
   });
 
-  it.each(['student', 'staff'])(
+  it.each(REQUESTER_ROLES)(
     'leaves the Priority out for its Requester (%s)',
     async (role) => {
-      const requester = await app.signUp('requester@example.com', { role });
+      const requester = await signInWithRole(
+        app,
+        'requester@example.com',
+        role,
+      );
       const reference = await submitServiceRequest(requester);
 
       const shown = await requester
