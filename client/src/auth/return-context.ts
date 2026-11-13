@@ -12,6 +12,10 @@ interface Context {
   section?: ResumeSection;
 }
 
+/** Pages every completed Role has: a Service Request's page may still answer 404. */
+const eligiblePaths =
+  /^\/(dashboard|account\/settings|requests(\/new|\/SR-[A-Z]+-[1-9][0-9]*)?)$/;
+
 /** Hints never grant access. Only routes implemented for every completed Role are eligible. */
 export function safeReturnPath(path: string): string | null {
   if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\"))
@@ -20,7 +24,7 @@ export function safeReturnPath(path: string): string | null {
     const url = new URL(path, window.location.origin);
     if (
       url.origin !== window.location.origin ||
-      !["/dashboard", "/account/settings"].includes(url.pathname)
+      !eligiblePaths.test(url.pathname)
     )
       return null;
     if (
