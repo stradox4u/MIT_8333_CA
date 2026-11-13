@@ -22,6 +22,7 @@ export function useRequestAction<Variables>(options: {
   done: (details: ServiceRequestDetails, variables: Variables) => string;
   report: Report;
   validationError?: (error: ApiError) => void;
+  requestError?: (error: Error) => void;
   forbidden?: string;
   onDone?: () => void;
 }) {
@@ -77,7 +78,9 @@ export function useRequestAction<Variables>(options: {
           "error",
         );
       else if (!(error instanceof ApiError && error.status === 404))
-        return options.report(errorMessage(error), "error");
+        return options.requestError
+          ? options.requestError(error)
+          : options.report(errorMessage(error), "error");
       // 404: the refreshed page says it can't be found.
       if (error instanceof ApiError && error.status === 403)
         await queryClient.invalidateQueries({ queryKey: meOptions.queryKey });

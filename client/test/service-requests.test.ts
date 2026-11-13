@@ -977,7 +977,7 @@ test("the tracking page safely ignores new timeline variants while retaining kno
         timeline: [
           ...submitted.timeline,
           {
-            type: "progress_note",
+            type: "future_entry",
             occurredAt: "2026-11-12T09:01:00.000Z",
             actor: { id: "ada", name: "Ada Okafor" },
             text: "The pipe is still leaking.",

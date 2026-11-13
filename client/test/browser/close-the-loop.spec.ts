@@ -238,3 +238,110 @@ test("an Administrator cancels In Progress work with a reason and verifies anoth
   await admin.getByRole("button", { name: "Verify", exact: true }).click();
   await expect(admin.getByText(`${refs[1]} is Verified.`)).toBeVisible();
 });
+
+test("Progress Notes remain readable through reassignment and closure against the real API", async ({
+  browser,
+  request,
+}) => {
+  const { student, admin, officer } = await accounts(browser, request);
+  await report(student);
+  const path = "/requests/SR-PLUMB-1";
+  const apiPath = "/api/service-requests/SR-PLUMB-1";
+  async function note(page: Page, text: string) {
+    const field = page.getByRole("textbox", { name: "Add a Progress Note" });
+    await field.fill(text);
+    await page
+      .getByRole("button", { name: "Add Progress Note", exact: true })
+      .click();
+    await expect(
+      page.getByText("Progress Note added.", { exact: true }),
+    ).toBeVisible();
+    await expect(field).toHaveValue("");
+    await expect(field).toBeFocused();
+  }
+  await note(student, "  Room open after noon.\nPlease knock.  ");
+  const read = await student.request.get(apiPath);
+  expect((await read.json()).status).toBe("submitted");
+  await admin.goto(path);
+  await note(admin, "The store has a replacement part.");
+  const officerId = (await (await officer.request.get("/api/auth/me")).json())
+    .id;
+  expect(
+    (
+      await admin.request.put(`${apiPath}/assignment`, { data: { officerId } })
+    ).status(),
+  ).toBe(200);
+  await officer.goto(path);
+  await note(officer, "Checked the joint.\nWaiting for a replacement part.");
+  await capture(officer, "progress-notes-desktop");
+  await officer.setViewportSize({ width: 390, height: 844 });
+  await capture(officer, "progress-notes-mobile");
+  await officer.setViewportSize({ width: 320, height: 844 });
+  await capture(officer, "progress-notes-small-phone");
+  await student.reload();
+  const timeline = student.getByRole("region", { name: "Timeline" });
+  await expect(timeline).toContainText("The store has a replacement part.");
+  await expect(timeline).toContainText("Checked the joint.");
+  await expect(timeline.locator("ol > li").first()).toContainText(
+    "Fault reported",
+  );
+  expect((await admin.request.delete(`${apiPath}/assignment`)).status()).toBe(
+    200,
+  );
+  await officer.reload();
+  await expect(
+    officer.getByRole("form", { name: "Add a Progress Note" }),
+  ).toHaveCount(0);
+  await expect(officer.getByRole("region", { name: "Timeline" })).toContainText(
+    "Checked the joint.",
+  );
+  expect(
+    (
+      await officer.request.post(`${apiPath}/progress-notes`, {
+        data: { text: "No longer allowed" },
+      })
+    ).status(),
+  ).toBe(403);
+  expect(
+    (
+      await admin.request.put(`${apiPath}/assignment`, { data: { officerId } })
+    ).status(),
+  ).toBe(200);
+  expect((await officer.request.post(`${apiPath}/start`)).status()).toBe(200);
+  expect((await officer.request.post(`${apiPath}/complete`)).status()).toBe(
+    200,
+  );
+  await student.reload();
+  await note(student, "Water is running clearly now.");
+  await student.getByRole("button", { name: "Fixed", exact: true }).click();
+  await expect(student.getByText("SR-PLUMB-1 is Verified.")).toBeVisible();
+  await expect(
+    student.getByRole("form", { name: "Add a Progress Note" }),
+  ).toHaveCount(0);
+  await expect(student.getByRole("region", { name: "Timeline" })).toContainText(
+    "Water is running clearly now.",
+  );
+  expect(
+    (
+      await student.request.post(`${apiPath}/progress-notes`, {
+        data: { text: "Too late" },
+      })
+    ).status(),
+  ).toBe(409);
+  await report(student, "Duplicate pipe report");
+  await note(student, "This duplicates the earlier report.");
+  expect(
+    (
+      await student.request.post("/api/service-requests/SR-PLUMB-2/cancel", {
+        data: { reason: "Duplicate report" },
+      })
+    ).status(),
+  ).toBe(200);
+  await student.reload();
+  await expect(
+    student.getByRole("form", { name: "Add a Progress Note" }),
+  ).toHaveCount(0);
+  await expect(student.getByRole("region", { name: "Timeline" })).toContainText(
+    "This duplicates the earlier report.",
+  );
+});

@@ -4,6 +4,7 @@ import ThumbsDown from "~icons/lucide/thumbs-down";
 import UserRoundCheck from "~icons/lucide/user-round-check";
 import UserRoundMinus from "~icons/lucide/user-round-minus";
 import Repeat from "~icons/lucide/repeat-2";
+import MessageSquareText from "~icons/lucide/message-square-text";
 import Flag from "~icons/lucide/flag";
 import StatusChip from "./StatusChip.vue";
 import type {
@@ -19,7 +20,7 @@ import {
   statusNames,
 } from "../service-requests/display";
 
-/** A Service Request's timeline, oldest first: Status Updates and Assignment changes. */
+/** A Service Request's timeline, oldest first: Status Updates, Assignment changes and Progress Notes. */
 const props = defineProps<{
   entries: TimelineEntry[];
   requester: Person;
@@ -30,7 +31,10 @@ const props = defineProps<{
 // Server slices may add timeline variants before their client renderer ships.
 const visibleEntries = computed(() =>
   props.entries.filter(
-    (entry) => entry.type === "status_update" || entry.type === "assignment",
+    (entry) =>
+      entry.type === "status_update" ||
+      entry.type === "assignment" ||
+      entry.type === "progress_note",
   ),
 );
 
@@ -124,11 +128,8 @@ const label =
           <p
             class="tl-meta mt-0.75 mb-0 text-campus-muted text-[11px] [&_strong]:text-campus-navy [&_strong]:font-semibold"
           >
-            Status Update · <strong>{{ actorName(entry) }}</strong><template
-              v-if="isRequester(entry.actor)"
-            >
-              · Requester</template
-            >
+            Status Update · <strong>{{ actorName(entry) }}</strong
+            ><template v-if="isRequester(entry.actor)"> · Requester</template>
             ·
             <time :datetime="entry.occurredAt">{{
               formatDateTime(entry.occurredAt)
@@ -148,7 +149,7 @@ const label =
           </p>
         </div>
       </template>
-      <template v-else>
+      <template v-else-if="entry.type === 'assignment'">
         <span :class="[node, 'border-campus-gray bg-campus-panel']"
           ><component :is="assignmentIcons[entry.change]" aria-hidden="true"
         /></span>
@@ -172,6 +173,28 @@ const label =
             <Flag class="w-3 h-3" aria-hidden="true" />Status Update:
             {{ statusNames[entry.statusUpdate.fromStatus] }} →
             {{ statusNames[entry.statusUpdate.toStatus] }}
+          </p>
+        </div>
+      </template>
+      <template v-else>
+        <span :class="[node, 'border-campus-gray bg-campus-surface']"
+          ><MessageSquareText aria-hidden="true"
+        /></span>
+        <div class="min-w-0 pt-1.25">
+          <p class="m-0 text-[13px] font-semibold">Progress Note</p>
+          <p
+            class="mt-0.75 mb-0 text-campus-muted text-[11px] [&_strong]:text-campus-navy [&_strong]:font-semibold"
+          >
+            Progress Note · <strong>{{ actorName(entry) }}</strong
+            ><template v-if="isRequester(entry.actor)"> · Requester</template> ·
+            <time :datetime="entry.occurredAt">{{
+              formatDateTime(entry.occurredAt)
+            }}</time>
+          </p>
+          <p
+            class="mt-2 mb-0 py-2.5 px-3 rounded-lg border border-campus-gray bg-white text-[12px] leading-[1.65] whitespace-pre-wrap wrap-anywhere"
+          >
+            {{ entry.text }}
           </p>
         </div>
       </template>
