@@ -10,8 +10,8 @@ import { server } from "./setup";
 const api = "http://localhost:5173/api";
 
 function signedIn(
-  role: "student" | "staff" | "maintenance_officer" | "administrator" =
-    "student",
+  role:
+    "student" | "staff" | "maintenance_officer" | "administrator" = "student",
 ) {
   server.use(
     http.get(`${api}/auth/me`, () =>
@@ -46,9 +46,9 @@ test("the workspace links to My requests and offers Report a fault as its primar
       .map((link) => link.textContent?.trim()),
   ).toEqual(["Dashboard", "My requests", "Account settings"]);
   expect(
-    within(nav).getByRole("link", { name: "Dashboard" }).getAttribute(
-      "aria-current",
-    ),
+    within(nav)
+      .getByRole("link", { name: "Dashboard" })
+      .getAttribute("aria-current"),
   ).toBe("page");
   await user.click(screen.getByRole("link", { name: "Report a fault" }));
   await screen.findByRole("heading", { name: "Report a fault" });
@@ -122,6 +122,94 @@ test("Report a fault asks for a title, a Request Category from the API, a locati
   expect(
     screen.getByLabelText("Description").getAttribute("aria-describedby"),
   ).toContain("privacy-hint");
+  runtime.queryClient.clear();
+});
+
+test("Report a fault says when the Request Categories couldn't load, and tries again", async () => {
+  signedIn();
+  let fail = true;
+  server.use(
+    http.get(`${api}/request-categories`, () =>
+      fail ? HttpResponse.error() : HttpResponse.json(categories),
+    ),
+  );
+  const { runtime, user } = open("/requests/new");
+  const group = await screen.findByRole("group", { name: "Request Category" });
+  const alert = await within(group).findByRole("alert");
+  expect(alert.textContent).toContain(
+    "We couldn’t load the Request Categories.",
+  );
+  fail = false;
+  await user.click(within(group).getByRole("button", { name: "Try again" }));
+  expect(await within(group).findAllByRole("radio")).toHaveLength(6);
+  expect(within(group).queryByRole("alert")).toBeNull();
+  runtime.queryClient.clear();
+});
+
+/**
+ * A session that is live when the page opens, ends at the page's first read
+ * of `path` (which answers 401), and is live again once the User signs in.
+ */
+function sessionEndingAt(path: string, body: unknown) {
+  let session: "live" | "ended" | "back" = "live";
+  server.use(
+    http.get(`${api}/auth/me`, () =>
+      session === "ended"
+        ? new HttpResponse(null, { status: 401 })
+        : HttpResponse.json({
+            id: "ada",
+            email: "ada@example.test",
+            firstName: "Ada",
+            lastName: "Okafor",
+            role: "student",
+            signUpComplete: true,
+            hasPassword: false,
+          }),
+    ),
+    http.get(`${api}${path}`, () => {
+      if (session === "back") return HttpResponse.json(body);
+      session = "ended";
+      return new HttpResponse(null, { status: 401 });
+    }),
+  );
+  return {
+    signBackIn() {
+      session = "back";
+    },
+  };
+}
+
+test("a 401 loading the Request Categories goes to Sign in and comes back to the form", async () => {
+  const session = sessionEndingAt("/request-categories", categories);
+  const { runtime } = open("/requests/new");
+  await screen.findByRole("heading", { name: "Welcome back." });
+  expect(runtime.router.currentRoute.value.path).toBe("/sign-in");
+  expect(
+    screen.getByText("Your session has ended. Please sign in again."),
+  ).toBeTruthy();
+  // Signing in again clears the cached identity, as completeAuthentication does.
+  session.signBackIn();
+  runtime.queryClient.clear();
+  await runtime.router.push("/auth/complete");
+  await screen.findByRole("heading", { name: "Report a fault" });
+  expect(runtime.router.currentRoute.value.path).toBe("/requests/new");
+  expect(await screen.findAllByRole("radio")).toHaveLength(6);
+  runtime.queryClient.clear();
+});
+
+test("the tracking page's 401 goes to Sign in and comes back to the same request", async () => {
+  const session = sessionEndingAt("/service-requests/SR-PLUMB-1", submitted);
+  const { runtime } = open("/requests/SR-PLUMB-1");
+  await screen.findByRole("heading", { name: "Welcome back." });
+  expect(runtime.router.currentRoute.value.path).toBe("/sign-in");
+  expect(
+    screen.getByText("Your session has ended. Please sign in again."),
+  ).toBeTruthy();
+  session.signBackIn();
+  runtime.queryClient.clear();
+  await runtime.router.push("/auth/complete");
+  await screen.findByRole("heading", { name: "Leaking pipe under the sink" });
+  expect(runtime.router.currentRoute.value.path).toBe("/requests/SR-PLUMB-1");
   runtime.queryClient.clear();
 });
 
@@ -241,9 +329,7 @@ test("submitting sends the trimmed report once, then shows the new request with 
   release();
   await screen.findByRole("heading", { name: "Leaking pipe under the sink" });
   await waitFor(() =>
-    expect(runtime.router.currentRoute.value.path).toBe(
-      "/requests/SR-PLUMB-1",
-    ),
+    expect(runtime.router.currentRoute.value.path).toBe("/requests/SR-PLUMB-1"),
   );
   expect(bodies).toEqual([
     {
@@ -264,10 +350,9 @@ test("submitting sends the trimmed report once, then shows the new request with 
   // The notice shows once: not after leaving and coming back.
   withRequests([summary("SR-PLUMB-1", "Leaking pipe under the sink")]);
   await user.click(
-    within(screen.getByRole("navigation", { name: "Main" })).getByRole(
-      "link",
-      { name: "My requests" },
-    ),
+    within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", {
+      name: "My requests",
+    }),
   );
   await user.click(
     await screen.findByText("Leaking pipe under the sink", {
@@ -339,8 +424,20 @@ test("an Administrator sees the Priority, and the timeline names automatic actio
         requester: erased,
         timeline: [
           ["2026-11-01T09:00:00.000Z", erased, null, "submitted", null],
-          ["2026-11-02T09:00:00.000Z", officer, "assigned", "in_progress", null],
-          ["2026-11-03T09:00:00.000Z", officer, "in_progress", "completed", null],
+          [
+            "2026-11-02T09:00:00.000Z",
+            officer,
+            "assigned",
+            "in_progress",
+            null,
+          ],
+          [
+            "2026-11-03T09:00:00.000Z",
+            officer,
+            "in_progress",
+            "completed",
+            null,
+          ],
           [
             "2026-11-04T09:00:00.000Z",
             erased,
@@ -348,8 +445,20 @@ test("an Administrator sees the Priority, and the timeline names automatic actio
             "assigned",
             "It still drips.",
           ],
-          ["2026-11-05T09:00:00.000Z", officer, "assigned", "in_progress", null],
-          ["2026-11-06T09:00:00.000Z", officer, "in_progress", "completed", null],
+          [
+            "2026-11-05T09:00:00.000Z",
+            officer,
+            "assigned",
+            "in_progress",
+            null,
+          ],
+          [
+            "2026-11-06T09:00:00.000Z",
+            officer,
+            "in_progress",
+            "completed",
+            null,
+          ],
           ["2026-11-13T09:00:00.000Z", null, "completed", "verified", null],
         ].map(([occurredAt, actor, fromStatus, toStatus, reason]) => ({
           type: "status_update",
@@ -657,7 +766,9 @@ test("My requests pages through the server's total, keeping the filter, and reco
   );
   const pagination = screen.getByRole("navigation", { name: "Pagination" });
   expect(within(pagination).getByText("Page 1 of 3")).toBeTruthy();
-  expect(within(pagination).queryByRole("link", { name: /Previous/ })).toBeNull();
+  expect(
+    within(pagination).queryByRole("link", { name: /Previous/ }),
+  ).toBeNull();
   expect(
     within(pagination)
       .getByRole("link", { name: "Page 1" })

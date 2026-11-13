@@ -1280,6 +1280,14 @@ h2 {
 .category-choice input:focus-visible {
   outline: none;
 }
+.category-failure {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+.category-failure .field-error {
+  margin: 0;
+}
 .category-field[aria-invalid="true"] .category-choice {
   border-color: var(--color-error);
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import ArrowLeft from "~icons/lucide/arrow-left";
@@ -11,6 +11,11 @@ import StatusChip from "../components/StatusChip.vue";
 import { ApiError } from "../lib/api";
 import { lengthRule, useFields } from "../lib/fields";
 import { useAuthNavigation } from "../auth/navigation";
+import {
+  isExpiredSession,
+  useExpiredSession,
+} from "../lib/expired-session";
+import RefreshCw from "~icons/lucide/refresh-cw";
 import { useScreenMutation } from "../lib/screen-mutation";
 import { useUiStore } from "../stores/ui";
 import {
@@ -25,6 +30,11 @@ const navigation = useAuthNavigation();
 const queryClient = useQueryClient();
 const ui = useUiStore();
 const categories = useQuery(requestCategoriesOptions);
+useExpiredSession(categories.error);
+/** A failure other than an ended session, which goes to Sign in instead. */
+const categoriesFailed = computed(
+  () => !!categories.error.value && !isExpiredSession(categories.error.value),
+);
 const form = useFields(
   { title: "", categoryId: "", location: "", description: "" },
   {
@@ -65,8 +75,7 @@ const send = useScreenMutation({
     await router.push(`/requests/${encodeURIComponent(reference)}`);
   },
   onError: async (error) => {
-    if (error instanceof ApiError && error.status === 401)
-      return navigation.expire();
+    if (isExpiredSession(error)) return navigation.expire();
     form.showError(error);
     if (form.errors.categoryId) {
       form.errors.categoryId =
@@ -146,6 +155,21 @@ function submit() {
           >
             Loading the Request Categories…
           </p>
+          <div v-else-if="categoriesFailed" class="category-failure">
+            <p class="field-error" role="alert">
+              We couldn’t load the Request Categories. Check your connection
+              and try again.
+            </p>
+            <SubmitButton
+              type="button"
+              variant="outline"
+              class="compact-button has-request"
+              :pending="categories.isFetching.value"
+              @click="categories.refetch()"
+              ><RefreshCw class="icon" aria-hidden="true" />Try
+              again</SubmitButton
+            >
+          </div>
           <div v-else class="category-grid">
             <label
               v-for="category in categories.data.value"
