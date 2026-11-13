@@ -8,6 +8,7 @@ export const browserTestEnvironment = {
   MAIL_TRANSPORT: 'smtp',
   MAIL_FROM: 'Browser fixture <fixture@example.test>',
   SMTP_URL: 'smtp://127.0.0.1:1025',
+  SMTP_STARTTLS: 'required',
   GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com',
   GOOGLE_CLIENT_SECRET: 'test-secret',
   TRUST_PROXY_HOPS: '0',

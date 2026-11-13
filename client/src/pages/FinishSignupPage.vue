@@ -45,10 +45,6 @@ const finish = useScreenMutation({
     else form.showError(error);
   },
 });
-const signOut = useScreenMutation({
-  mutationFn: () => navigation.signOut(),
-  onError: form.showError,
-});
 function submit() {
   if (!finish.isPending.value && form.validate()) finish.mutate();
 }
@@ -119,10 +115,7 @@ function submit() {
           {{ form.errors.role }}
         </p>
       </fieldset>
-      <SubmitButton
-        :pending="finish.isPending.value"
-        :disabled="signOut.isPending.value"
-        arrow
+      <SubmitButton :pending="finish.isPending.value" arrow
         >Finish sign-up</SubmitButton
       >
       <p v-if="form.formError.value" class="field-error" role="alert">
@@ -132,14 +125,5 @@ function submit() {
     <p class="signed-as">
       Signed in as <strong>{{ user.data.value?.email }}</strong>
     </p>
-    <SubmitButton
-      type="button"
-      variant="outline"
-      class="mt-3"
-      :pending="signOut.isPending.value"
-      :disabled="finish.isPending.value"
-      @click="signOut.mutate()"
-      >Use another email</SubmitButton
-    >
   </AuthLayout>
 </template>

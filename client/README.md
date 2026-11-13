@@ -5,6 +5,11 @@ Query, Tailwind CSS and unplugin-icons. Node 24.15 or newer is required.
 
 ## Local development
 
+To run the built client, API, Postgres and Mailpit together, use
+`docker compose up --build -d` from the repository root. See the
+[root README](../README.md) for URLs, optional Google credentials and demo data.
+The following commands run the Vite development server directly on the host.
+
 ```sh
 cd client
 npm ci

@@ -1,0 +1,13 @@
+# Allow only inputs used by the image build. Local .env files stay outside it.
+**
+!package.json
+!package-lock.json
+!nest-cli.json
+!tsconfig.json
+!tsconfig.build.json
+!drizzle.config.ts
+!src/
+!src/**
+!drizzle/
+!drizzle/**
+src/**/*.spec.ts

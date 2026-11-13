@@ -43,9 +43,19 @@ describe('the environment', () => {
     });
   });
 
+  it.each(['required', 'opportunistic'])(
+    'accepts the explicit SMTP STARTTLS policy %s',
+    (policy) => {
+      expect(
+        environment.parse({ ...REQUIRED, SMTP_STARTTLS: policy }).SMTP_STARTTLS,
+      ).toBe(policy);
+    },
+  );
+
   it.each([
     ['APP_URL', 'not a url'],
     ['MAIL_TRANSPORT', 'carrier-pigeon'],
+    ['SMTP_STARTTLS', 'never'],
     ['COOKIE_SECURE', 'maybe'],
     ['TRUST_PROXY_HOPS', '-1'],
   ])('refuses %s=%s', (name, value) => {

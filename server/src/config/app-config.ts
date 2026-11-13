@@ -42,6 +42,7 @@ export class AppConfig {
     return {
       transport: this.read('MAIL_TRANSPORT'),
       smtpUrl: this.read('SMTP_URL'),
+      startTls: this.read('SMTP_STARTTLS'),
       from: this.read('MAIL_FROM'),
     };
   }
