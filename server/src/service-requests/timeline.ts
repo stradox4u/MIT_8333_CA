@@ -36,11 +36,9 @@ interface Placed {
 }
 
 /**
- * A Service Request's timeline, oldest first, from its Status Updates and
- * its Assignments (in the order they were made). One action makes one
- * entry: an Assignment change carries the Status Update it caused, and a
- * reassignment is a single entry naming both officers. Entries at the same
- * instant keep the order their rows were written in.
+ * Combines Status Updates and Assignments into one entry per action,
+ * including both officers on reassignment. Entries sort oldest first, with
+ * shared sequence numbers preserving their order when timestamps tie.
  */
 export function buildTimeline(
   statusUpdates: StatusUpdateRow[],

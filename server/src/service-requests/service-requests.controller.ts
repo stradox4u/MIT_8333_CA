@@ -127,9 +127,8 @@ export class ServiceRequestsController {
   }
 
   /**
-   * Gives the request to an active Maintenance Officer: assigns a Submitted
-   * one, or reassigns an Assigned or In Progress one. Either way it's then
-   * Assigned. Giving it to the officer who holds it changes nothing.
+   * Assigns Open work to an active officer so they can start it; assigning
+   * its current officer changes nothing.
    */
   @Put(':reference/assignment')
   @Can(ServiceRequestPolicy, 'manage')

@@ -6,7 +6,7 @@ import {
 } from '../support/service-requests.js';
 import { createTestApp, type TestApp } from '../support/test-app.js';
 
-describe('An officer leaving during reassignment (Postgres)', () => {
+describe('Concurrent Service Request work (Postgres)', () => {
   let app: TestApp;
   let database: Awaited<ReturnType<typeof createPostgresTestDatabase>>;
 
@@ -24,10 +24,86 @@ describe('An officer leaving during reassignment (Postgres)', () => {
       end $$;
       create trigger pause_reassignment before insert on activity_log
         for each row execute function pause_reassignment();
+      create function pause_work() returns trigger language plpgsql as $$
+      begin
+        if new.to_status in ('in_progress', 'completed') then
+          perform pg_advisory_xact_lock(8333, 3);
+        end if;
+        return new;
+      end $$;
+      create trigger pause_work before insert on status_updates
+        for each row execute function pause_work();
     `);
   });
   beforeEach(() => app.reset());
   afterAll(() => app?.close());
+
+  it.each(['start', 'complete'] as const)(
+    'finishes concurrent %s and officer erasure without a deadlock',
+    async (action) => {
+      const requester = await app.signUp('requester@example.com');
+      const admin = await app.signInAsAdministrator();
+      const officer = await app.signInAsMaintenanceOfficer();
+      const officerId = await idOf(officer);
+      const reference = await submitServiceRequest(requester);
+      await assign(admin, reference, officerId);
+      if (action === 'complete') {
+        await officer
+          .post(`/api/service-requests/${reference}/start`)
+          .expect(200);
+      }
+
+      const barrier = await database.pool.connect();
+      const pending: Promise<unknown>[] = [];
+      try {
+        await barrier.query('select pg_advisory_lock(8333, 3)');
+        const worked = officer
+          .post(`/api/service-requests/${reference}/${action}`)
+          .then((response) => response);
+        pending.push(worked);
+        await database.waitForBlockedTransactions(1);
+        const erased = admin
+          .post(`/api/users/${officerId}/erase`)
+          .then((response) => response);
+        pending.push(erased);
+        await database.waitForBlockedTransactions(2);
+        await barrier.query('select pg_advisory_unlock(8333, 3)');
+        expect((await worked).status).toBe(200);
+        expect((await erased).status).toBe(200);
+      } finally {
+        await barrier.query('select pg_advisory_unlock_all()');
+        barrier.release();
+        await Promise.allSettled(pending);
+      }
+
+      const shown = await admin
+        .get(`/api/service-requests/${reference}`)
+        .expect(200);
+      expect(shown.body).toMatchObject(
+        action === 'start'
+          ? { status: 'submitted', assignment: null }
+          : {
+              status: 'completed',
+              assignment: { officer: { id: officerId, name: 'Erased user' } },
+            },
+      );
+      expect(shown.body.timeline).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'status_update',
+            toStatus: action === 'start' ? 'in_progress' : 'completed',
+            actor: { id: officerId, name: 'Erased user' },
+          }),
+        ]),
+      );
+      const users = await admin.get('/api/users').expect(200);
+      expect(users.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: officerId, status: 'erased' }),
+        ]),
+      );
+    },
+  );
 
   it('drops its temporary database when application compilation fails', async () => {
     const failed = await createPostgresTestDatabase();

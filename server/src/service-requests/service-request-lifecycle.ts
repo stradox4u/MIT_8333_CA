@@ -113,10 +113,8 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
   }
 
   /**
-   * Gives an Open request to an active Maintenance Officer: assigning a
-   * Submitted one, or reassigning one that's Assigned or In Progress. Either
-   * way it's then Assigned, because the officer hasn't started. Giving it
-   * to the officer who already holds it changes nothing.
+   * Assigns Open work to an active officer, returning it to Assigned so the
+   * new officer can start. Assigning its current officer changes nothing.
    */
   async assign(
     reference: string,
@@ -126,16 +124,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     'assigned' | 'unchanged' | NotFound | NotAnActiveOfficer | WrongStatus
   > {
     return this.db.transaction(async (tx) => {
-      // The officer before the request, the order removing an officer takes
-      // them in, so the two never deadlock. Sharing the officer's row keeps
-      // them from being removed until this Assignment is in place.
-      const [officer] = await tx
-        .select({ id: users.id })
-        .from(users)
-        .where(
-          and(eq(users.id, officerId), activeWithRole('maintenance_officer')),
-        )
-        .for('share');
+      const officer = await this.lockActiveOfficer(tx, officerId);
       const request = await this.lock(tx, reference);
       if (!request) {
         return 'not_found';
@@ -211,11 +200,12 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     officerId: string,
   ): Promise<'started' | NotFound | NotCurrentOfficer | WrongStatus> {
     return this.db.transaction(async (tx) => {
+      const officer = await this.lockActiveOfficer(tx, officerId);
       const request = await this.lock(tx, reference);
       if (!request) {
         return 'not_found';
       }
-      if (request.assignment?.officerId !== officerId) {
+      if (!officer || request.assignment?.officerId !== officerId) {
         return 'not_current_officer';
       }
       if (request.status !== 'assigned') {
@@ -237,11 +227,12 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     note: string | null,
   ): Promise<'completed' | NotFound | NotCurrentOfficer | WrongStatus> {
     return this.db.transaction(async (tx) => {
+      const officer = await this.lockActiveOfficer(tx, officerId);
       const request = await this.lock(tx, reference);
       if (!request) {
         return 'not_found';
       }
-      if (request.assignment?.officerId !== officerId) {
+      if (!officer || request.assignment?.officerId !== officerId) {
         return 'not_current_officer';
       }
       if (request.status !== 'in_progress') {
@@ -299,6 +290,21 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
         actorId,
       );
     }
+  }
+
+  /** Locks the officer first so actor foreign keys cannot reverse departure's lock order. */
+  private async lockActiveOfficer(
+    db: Database,
+    officerId: string,
+  ): Promise<boolean> {
+    const [officer] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(
+        and(eq(users.id, officerId), activeWithRole('maintenance_officer')),
+      )
+      .for('share');
+    return officer !== undefined;
   }
 
   /** Locks a request for a change, and reads its current Assignment. */
