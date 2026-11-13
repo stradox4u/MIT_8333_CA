@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { invalidInput } from '../validation.js';
 
 /**
@@ -5,8 +6,10 @@ import { invalidInput } from '../validation.js';
  * them through these types, and `refuseIf()` switches on them, so renaming
  * one breaks the build wherever it's stale.
  */
+/** No such Service Request, or one the User may not see: the same answer. */
+export type NotFound = 'not_found';
 export type UnknownCategory = 'unknown_category';
-type Refusal = UnknownCategory;
+type Refusal = NotFound | UnknownCategory;
 
 /**
  * Answers a refused action on a Service Request with its HTTP error; any
@@ -19,6 +22,8 @@ export function refuseIf<Outcome>(
   // error, and a new refusal without a case fails the `never` check below.
   const refusal = outcome as unknown as Refusal;
   switch (refusal) {
+    case 'not_found':
+      throw new NotFoundException('No such Service Request');
     case 'unknown_category':
       // Shaped like a validation failure, so the form shows it on the field.
       throw invalidInput([

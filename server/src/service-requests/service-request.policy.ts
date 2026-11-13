@@ -15,4 +15,14 @@ export class ServiceRequestPolicy {
   use(user: User | null) {
     return user !== null && user.roleId !== null;
   }
+
+  /**
+   * Seeing one Service Request: its Requester and Administrators. Anyone
+   * else is told it doesn't exist (404), so nobody learns that it does.
+   */
+  view(user: User, request: { requester: { id: string } }) {
+    return (
+      request.requester.id === user.id || user.roleId === 'administrator'
+    );
+  }
 }

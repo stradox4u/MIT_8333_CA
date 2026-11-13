@@ -210,3 +210,23 @@ export const serviceRequests = pgTable(
     index().on(table.submittedAt),
   ],
 );
+
+/** Status Updates: every change to a Service Request's Status (GLOSSARY.md). */
+export const statusUpdates = pgTable(
+  'status_updates',
+  {
+    /** Also the order they happened in, when times tie. */
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    serviceRequestId: uuid()
+      .notNull()
+      .references(() => serviceRequests.id),
+    /** Empty when nobody acted: the automatic verification after 7 days. */
+    actorId: uuid().references(() => users.id),
+    /** Empty for the move to Submitted when the request is first submitted. */
+    fromStatus: text().$type<ServiceRequestStatus>(),
+    toStatus: text().$type<ServiceRequestStatus>().notNull(),
+    reason: text(),
+    occurredAt: instant().notNull(),
+  },
+  (table) => [index().on(table.serviceRequestId)],
+);
