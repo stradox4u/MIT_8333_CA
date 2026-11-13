@@ -1698,7 +1698,8 @@ h2 {
     display: none;
   }
 }
-@media (max-width: 380px) {
+/* Leave room for both header actions with wider system fonts. */
+@media (max-width: 440px) {
   .workspace-header .brand > span:last-child {
     display: none;
   }
