@@ -1,6 +1,9 @@
 import { expect, test } from "vitest";
 import { screen, waitFor, within } from "@testing-library/vue";
+import { http, HttpResponse } from "msw";
+import { server } from "./setup";
 import {
+  api,
   open,
   signedIn,
   summary,
@@ -167,6 +170,137 @@ test("Request management lists every request with its Priority and Maintenance O
       name: "Assign SR-ELEC-1",
     }),
   ).toBeTruthy();
+  runtime.queryClient.clear();
+});
+
+const officers = [
+  { id: "blessing", name: "Blessing Okoro", openAssignments: 0 },
+  { id: "chinedu", name: "Chinedu Eze", openAssignments: 3 },
+  { id: "tunde", name: "Tunde Bakare", openAssignments: 1 },
+];
+function withOfficers(list = officers) {
+  let reads = 0;
+  server.use(
+    http.get(`${api}/maintenance-officers`, () => {
+      reads++;
+      return HttpResponse.json(list);
+    }),
+  );
+  return { reads: () => reads };
+}
+/** The Assign button on a Submitted row of the table. */
+const assignButton = async (reference: string) =>
+  within(await screen.findByRole("table")).getByRole("button", {
+    name: `Assign ${reference}`,
+  });
+/** The picker's choices, in order, as "name | load". */
+const choices = (dialog: HTMLElement) =>
+  within(dialog)
+    .getAllByRole("radio")
+    .map((radio) => {
+      const label = radio.closest("label")!;
+      return [".officer-name", ".officer-load"]
+        .map((part) => label.querySelector(part)?.textContent?.trim())
+        .join(" ");
+    });
+
+test("Assign opens a picker of officers, fewest Open Assignments first, and assigns the chosen one", async () => {
+  signedIn("administrator", admin);
+  const items: Item[] = [
+    { ...summary("SR-ELEC-1", "Sparking socket"), priority: "normal" },
+  ];
+  withRequests(items);
+  withOfficers();
+  const bodies: unknown[] = [];
+  server.use(
+    http.put(
+      `${api}/service-requests/SR-ELEC-1/assignment`,
+      async ({ request }) => {
+        bodies.push(await request.json());
+        items[0] = {
+          ...items[0],
+          status: "assigned",
+          assignment: assignedTo({ id: "tunde", name: "Tunde Bakare" }),
+        };
+        return HttpResponse.json({ ...items[0], description: "", timeline: [] });
+      },
+    ),
+  );
+  const { runtime, user } = open("/admin/requests");
+  await user.click(await assignButton("SR-ELEC-1"));
+  const dialog = await screen.findByRole("dialog", { name: "Assign SR-ELEC-1" });
+  await waitFor(() =>
+    expect(choices(dialog)).toEqual([
+      "Blessing Okoro 0 Open Assignments",
+      "Tunde Bakare 1 Open Assignment",
+      "Chinedu Eze 3 Open Assignments",
+    ]),
+  );
+  await user.click(within(dialog).getByRole("button", { name: "Assign" }));
+  expect(within(dialog).getByText("Choose a Maintenance Officer.")).toBeTruthy();
+  expect(bodies).toEqual([]);
+  await user.click(within(dialog).getByRole("radio", { name: /Tunde Bakare/ }));
+  await user.click(within(dialog).getByRole("button", { name: "Assign" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(bodies).toEqual([{ officerId: "tunde" }]);
+  expect(
+    (await screen.findByText(/assigned to Tunde Bakare/)).textContent?.trim(),
+  ).toBe("SR-ELEC-1 assigned to Tunde Bakare. It’s now Assigned.");
+  await screen.findByText("Tunde Bakare", { selector: "td" });
+  runtime.queryClient.clear();
+});
+
+test("the picker shows the server's officerId refusal and a conflict inside it, and Cancel closes it", async () => {
+  signedIn("administrator", admin);
+  withRequests([{ ...summary("SR-ELEC-1", "Sparking socket"), priority: "normal" }]);
+  const officerReads = withOfficers();
+  let answer: "invalid" | "conflict" = "invalid";
+  server.use(
+    http.put(`${api}/service-requests/SR-ELEC-1/assignment`, () =>
+      answer === "invalid"
+        ? HttpResponse.json(
+            {
+              statusCode: 400,
+              error: "Bad Request",
+              message: ["officerId: Not an active Maintenance Officer"],
+              issues: [
+                { path: ["officerId"], message: "Not an active Maintenance Officer" },
+              ],
+            },
+            { status: 400 },
+          )
+        : HttpResponse.json(
+            {
+              message: "A Service Request that’s Cancelled can’t be assigned",
+              error: "Conflict",
+              statusCode: 409,
+            },
+            { status: 409 },
+          ),
+    ),
+  );
+  const { runtime, user } = open("/admin/requests");
+  const opener = await assignButton("SR-ELEC-1");
+  await user.click(opener);
+  const dialog = await screen.findByRole("dialog", { name: "Assign SR-ELEC-1" });
+  await user.click(await within(dialog).findByRole("radio", { name: /Tunde Bakare/ }));
+  await user.click(within(dialog).getByRole("button", { name: "Assign" }));
+  const refusal = await within(dialog).findByText(
+    "Tunde Bakare is no longer an active Maintenance Officer. Choose someone else.",
+  );
+  expect(refusal.id).toBeTruthy();
+  await waitFor(() => expect(officerReads.reads()).toBe(2));
+  answer = "conflict";
+  await user.click(within(dialog).getByRole("radio", { name: /Blessing Okoro/ }));
+  await user.click(within(dialog).getByRole("button", { name: "Assign" }));
+  expect(
+    (await within(dialog).findByRole("alert")).textContent?.trim(),
+  ).toBe(
+    "SR-ELEC-1 changed while you were choosing. Close this to see its latest details, then try again.",
+  );
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(document.activeElement).toBe(opener);
   runtime.queryClient.clear();
 });
 

@@ -1,16 +1,41 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { nextTick, ref } from "vue";
 import ListChecks from "~icons/lucide/list-checks";
 import UserRoundPlus from "~icons/lucide/user-round-plus";
-import type { ServiceRequestSummary } from "../service-requests/api";
+import CircleCheck from "~icons/lucide/circle-check";
+import WorkspaceLayout from "../layouts/WorkspaceLayout.vue";
+import ServiceRequestList from "../components/ServiceRequestList.vue";
+import AssignPicker from "../components/AssignPicker.vue";
+import type {
+  MaintenanceOfficer,
+  ServiceRequestDetails,
+  ServiceRequestSummary,
+} from "../service-requests/api";
 
 /** The request the assign picker is open for. */
 const assigning = ref<ServiceRequestSummary | null>(null);
-import WorkspaceLayout from "../layouts/WorkspaceLayout.vue";
-import ServiceRequestList from "../components/ServiceRequestList.vue";
+const notice = ref("");
+const noticeElement = ref<HTMLElement | null>(null);
+async function assigned(
+  details: ServiceRequestDetails,
+  officer: MaintenanceOfficer,
+) {
+  notice.value = `${details.reference} assigned to ${officer.name}. It’s now Assigned.`;
+  await nextTick();
+  noticeElement.value?.focus();
+}
 </script>
 <template>
   <WorkspaceLayout width="wide">
+    <p
+      v-if="notice"
+      ref="noticeElement"
+      class="feedback success page-feedback"
+      role="status"
+      tabindex="-1"
+    >
+      <CircleCheck class="icon" aria-hidden="true" /><span>{{ notice }}</span>
+    </p>
     <div class="page-heading">
       <div>
         <p class="eyebrow">Administrator</p>
@@ -35,7 +60,10 @@ import ServiceRequestList from "../components/ServiceRequestList.vue";
           type="button"
           class="button button-primary button-small"
           :aria-label="`Assign ${item.reference}`"
-          @click="assigning = item"
+          @click="
+            notice = '';
+            assigning = item;
+          "
         >
           <UserRoundPlus class="icon" aria-hidden="true" />Assign
         </button>
@@ -45,5 +73,11 @@ import ServiceRequestList from "../components/ServiceRequestList.vue";
         ><span v-else class="muted">None</span>
       </template>
     </ServiceRequestList>
+    <AssignPicker
+      v-if="assigning"
+      :request="assigning"
+      @close="assigning = null"
+      @assigned="assigned"
+    />
   </WorkspaceLayout>
 </template>
