@@ -129,6 +129,12 @@ export const serviceRequestDetailsResponse = details.extend({
   priority: shownPriority,
 });
 
+export const maintenanceOfficerResponse = person.extend({
+  openAssignments: z.int().min(0).meta({
+    description: 'Requests they hold that are Assigned or In Progress',
+  }),
+});
+
 /** A Request Category as the API shows it. */
 export type RequestCategory = z.input<typeof requestCategoryResponse>;
 /** A User as Service Requests show them: "First Last", or "Erased user". */
@@ -143,3 +149,5 @@ export type ServiceRequestPage = z.input<
 >;
 /** A Service Request's page, before Priority is hidden from some. */
 export type ServiceRequestDetails = z.input<typeof details>;
+/** An active Maintenance Officer, with their count of Open Assignments. */
+export type MaintenanceOfficer = z.input<typeof maintenanceOfficerResponse>;

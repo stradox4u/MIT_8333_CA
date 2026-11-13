@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { MaintenanceOfficers } from './maintenance-officers.js';
+import { MaintenanceOfficersController } from './maintenance-officers.controller.js';
 import { RequestCategories } from './request-categories.js';
 import { RequestCategoriesController } from './request-categories.controller.js';
 import { ServiceRequestLifecycle } from './service-request-lifecycle.js';
@@ -12,11 +14,16 @@ import { ServiceRequestsRepository } from './service-requests.repository.js';
  * (docs/service-requests.md).
  */
 @Module({
-  controllers: [RequestCategoriesController, ServiceRequestsController],
+  controllers: [
+    RequestCategoriesController,
+    ServiceRequestsController,
+    MaintenanceOfficersController,
+  ],
   providers: [
     RequestCategories,
     ServiceRequestsRepository,
     ServiceRequestLifecycle,
+    MaintenanceOfficers,
     ServiceRequestPolicy,
   ],
 })
