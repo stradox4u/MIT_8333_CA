@@ -326,6 +326,131 @@ test("the picker shows the server's officerId refusal and a conflict inside it, 
 });
 
 test.each([
+  [404, "We can’t find SR-ELEC-1 any more. Close this to see what changed."],
+  [
+    403,
+    "You can’t assign Maintenance Officers any more. Close this to see what changed.",
+  ],
+])(
+  "a %s from the picker explains and refreshes the list",
+  async (status, message) => {
+    signedIn("administrator", admin);
+    const queries = withRequests([
+      { ...summary("SR-ELEC-1", "Sparking socket"), priority: "normal" },
+    ]);
+    withOfficers();
+    server.use(
+      http.put(`${api}/service-requests/SR-ELEC-1/assignment`, () =>
+        HttpResponse.json({ message: "Refused", statusCode: status }, { status }),
+      ),
+    );
+    const { runtime, user } = open("/admin/requests");
+    await user.click(await assignButton("SR-ELEC-1"));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Assign SR-ELEC-1",
+    });
+    await user.click(
+      await within(dialog).findByRole("radio", { name: /Tunde Bakare/ }),
+    );
+    const reads = queries.length;
+    await user.click(within(dialog).getByRole("button", { name: "Assign" }));
+    expect(
+      (await within(dialog).findByRole("alert")).textContent?.trim(),
+    ).toBe(message);
+    await waitFor(() => expect(queries.length).toBeGreaterThan(reads));
+    runtime.queryClient.clear();
+  },
+);
+
+test("while an assignment is sending the picker can't be closed, and the list shows the result", async () => {
+  signedIn("administrator", admin);
+  const items: Item[] = [
+    { ...summary("SR-ELEC-1", "Sparking socket"), priority: "normal" },
+  ];
+  withRequests(items);
+  withOfficers();
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  server.use(
+    http.put(`${api}/service-requests/SR-ELEC-1/assignment`, async () => {
+      await held;
+      items[0] = {
+        ...items[0],
+        status: "assigned",
+        assignment: assignedTo(tunde),
+      };
+      return HttpResponse.json({ ...items[0], description: "", timeline: [] });
+    }),
+  );
+  const { runtime, user } = open("/admin/requests");
+  await user.click(await assignButton("SR-ELEC-1"));
+  const dialog = await screen.findByRole("dialog", { name: "Assign SR-ELEC-1" });
+  await user.click(
+    await within(dialog).findByRole("radio", { name: /Tunde Bakare/ }),
+  );
+  await user.click(within(dialog).getByRole("button", { name: "Assign" }));
+  const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+  await waitFor(() => expect((cancel as HTMLButtonElement).disabled).toBe(true));
+  expect(
+    (within(dialog).getByRole("button", { name: "Close" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  // Escape asks the dialog to cancel; while sending, the picker refuses.
+  const escape = new Event("cancel", { cancelable: true });
+  (dialog as HTMLDialogElement).dispatchEvent(escape);
+  expect(escape.defaultPrevented).toBe(true);
+  expect((dialog as HTMLDialogElement).open).toBe(true);
+  release();
+  await screen.findByText("SR-ELEC-1 assigned to Tunde Bakare. It’s now Assigned.");
+  await screen.findByText("Tunde Bakare", { selector: "td" });
+  runtime.queryClient.clear();
+});
+
+test("an assignment that lands after leaving the page still updates the cached request", async () => {
+  signedIn("administrator", admin);
+  withOfficers();
+  withRequests([]);
+  const request = withRequest({ status: "submitted", priority: "normal" });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  server.use(
+    http.put(`${api}/service-requests/SR-PLUMB-1/assignment`, async () => {
+      await held;
+      return HttpResponse.json(
+        request.set({ status: "assigned", assignment: assignedTo(tunde) }),
+      );
+    }),
+  );
+  const { runtime, user } = open("/requests/SR-PLUMB-1");
+  await user.click(
+    within(await panel("Waiting for an Assignment")).getByRole("button", {
+      name: "Assign a Maintenance Officer",
+    }),
+  );
+  const dialog = await screen.findByRole("dialog", { name: "Assign SR-PLUMB-1" });
+  await user.click(
+    await within(dialog).findByRole("radio", { name: /Tunde Bakare/ }),
+  );
+  await user.click(within(dialog).getByRole("button", { name: "Assign" }));
+  await runtime.router.push("/requests");
+  await screen.findByRole("heading", { name: "My requests" });
+  release();
+  await waitFor(() =>
+    expect(
+      runtime.queryClient.getQueryData<{ assignment: unknown }>([
+        "service-request",
+        "SR-PLUMB-1",
+      ])?.assignment,
+    ).toEqual(assignedTo(tunde)),
+  );
+  runtime.queryClient.clear();
+});
+
+test.each([
   [
     "/assignments?status=open",
     "maintenance_officer" as const,
@@ -335,8 +460,6 @@ test.each([
 ])(
   "a session ending on %s comes back to it after Sign in",
   async (path, role, heading) => {
-    const { server } = await import("./setup");
-    const { http, HttpResponse } = await import("msw");
     let session: "live" | "ended" | "back" = "live";
     server.use(
       http.get("http://localhost:5173/api/auth/me", () =>
@@ -624,6 +747,83 @@ test("completing without a note sends no note", async () => {
   );
   await screen.findByText("SR-PLUMB-1 is Completed.");
   expect(completions).toEqual([{}]);
+  runtime.queryClient.clear();
+});
+
+test("an action that lands after leaving the page still updates the cached request", async () => {
+  signedIn("maintenance_officer", officer);
+  withRequests([]);
+  const request = withRequest({
+    status: "assigned",
+    assignment: assignedTo(chinedu),
+  });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  server.use(
+    http.post(`${api}/service-requests/SR-PLUMB-1/start`, async () => {
+      await held;
+      return HttpResponse.json(request.set({ status: "in_progress" }));
+    }),
+  );
+  const { runtime, user } = open("/requests/SR-PLUMB-1");
+  await user.click(
+    within(await panel("Ready to start?")).getByRole("button", {
+      name: "Start work",
+    }),
+  );
+  await runtime.router.push("/requests");
+  await screen.findByRole("heading", { name: "My requests" });
+  release();
+  await waitFor(() =>
+    expect(
+      runtime.queryClient.getQueryData<{ status: string }>([
+        "service-request",
+        "SR-PLUMB-1",
+      ])?.status,
+    ).toBe("in_progress"),
+  );
+  runtime.queryClient.clear();
+});
+
+test("a 401 on an action goes to Sign in, and signing in again comes back to the request", async () => {
+  let ended = false;
+  server.use(
+    http.get(`${api}/auth/me`, () =>
+      ended
+        ? new HttpResponse(null, { status: 401 })
+        : HttpResponse.json({
+            ...officer,
+            email: "chinedu@example.test",
+            role: "maintenance_officer",
+            signUpComplete: true,
+            hasPassword: false,
+          }),
+    ),
+  );
+  withRequest({ status: "assigned", assignment: assignedTo(chinedu) });
+  withAction("post", "/start", () => {
+    ended = true;
+    return new HttpResponse(null, { status: 401 });
+  });
+  const { runtime, user } = open("/requests/SR-PLUMB-1");
+  await user.click(
+    within(await panel("Ready to start?")).getByRole("button", {
+      name: "Start work",
+    }),
+  );
+  await screen.findByRole("heading", { name: "Welcome back." });
+  expect(runtime.router.currentRoute.value.path).toBe("/sign-in");
+  expect(
+    screen.getByText("Your session has ended. Please sign in again."),
+  ).toBeTruthy();
+  // Signing in again clears the cached identity, as completeAuthentication does.
+  ended = false;
+  runtime.queryClient.clear();
+  await runtime.router.push("/auth/complete");
+  await screen.findByRole("heading", { name: "Leaking pipe under the sink" });
+  expect(runtime.router.currentRoute.value.path).toBe("/requests/SR-PLUMB-1");
   runtime.queryClient.clear();
 });
 

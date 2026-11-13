@@ -48,9 +48,10 @@ function keep() {
 }
 const unassign = useRequestAction({
   reference: () => props.request.reference,
-  run: () => unassignOfficer(props.request.reference),
-  done: (details) =>
-    `${officer.value?.name ?? "The officer"} unassigned. ${details.reference} is Submitted again.`,
+  // Takes the officer's name at the start: the answer has no Assignment.
+  run: (_name: string) => unassignOfficer(props.request.reference),
+  done: (details, name) =>
+    `${name} unassigned. ${details.reference} is Submitted again.`,
   report: props.report,
 });
 watch(
@@ -138,7 +139,7 @@ watch(
             variant="danger"
             class="pr-8"
             :pending="unassign.isPending.value"
-            @click="unassign.mutate(undefined)"
+            @click="unassign.mutate(officer.name)"
             >Unassign</SubmitButton
           ><button
             type="button"

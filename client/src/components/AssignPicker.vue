@@ -5,6 +5,7 @@ import Close from "~icons/lucide/x";
 import Search from "~icons/lucide/search";
 import SubmitButton from "./SubmitButton.vue";
 import { useAuthNavigation } from "../auth/navigation";
+import { meOptions } from "../auth/identity";
 import { ApiError, errorMessage } from "../lib/api";
 import { isExpiredSession, isLoadFailure } from "../lib/expired-session";
 import { useScreenMutation } from "../lib/screen-mutation";
@@ -74,6 +75,10 @@ onMounted(async () => {
 function close() {
   dialog.value?.close();
 }
+/** Escape asks to cancel; while an assignment is sending, it stays open. */
+function keepWhileSending(event: Event) {
+  if (assign.isPending.value) event.preventDefault();
+}
 function closed() {
   if (opener && document.contains(opener)) opener.focus();
   emit("close");
@@ -82,13 +87,17 @@ onBeforeUnmount(() => {
   if (dialog.value?.open) dialog.value.close();
 });
 
+const refreshRequest = () =>
+  Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: serviceRequestOptions(props.request.reference).queryKey,
+    }),
+    queryClient.invalidateQueries({ queryKey: ["service-requests"] }),
+  ]);
 const assign = useScreenMutation({
-  mutationFn: (officerId: string) =>
-    assignOfficer(props.request.reference, officerId),
-  onMutate: () => {
-    formError.value = "";
-  },
-  onSuccess: async (details, officerId) => {
+  // The cache takes the answer even if the page has gone by then.
+  mutationFn: async (officerId: string) => {
+    const details = await assignOfficer(props.request.reference, officerId);
     queryClient.setQueryData(
       serviceRequestOptions(details.reference).queryKey,
       details,
@@ -97,6 +106,12 @@ const assign = useScreenMutation({
     void queryClient.invalidateQueries({
       queryKey: maintenanceOfficersOptions.queryKey,
     });
+    return details;
+  },
+  onMutate: () => {
+    formError.value = "";
+  },
+  onSuccess: async (details, officerId) => {
     const officer = ordered.value.find((each) => each.id === officerId)!;
     // Report before closing: closing tells the page the picker has gone.
     opener = null;
@@ -115,15 +130,21 @@ const assign = useScreenMutation({
       void officers.refetch();
       return;
     }
-    if (error instanceof ApiError && error.status === 409) {
-      formError.value = `${props.request.reference} changed while you were choosing. Close this to see its latest details, then try again.`;
-      void queryClient.invalidateQueries({
-        queryKey: serviceRequestOptions(props.request.reference).queryKey,
-      });
-      void queryClient.invalidateQueries({ queryKey: ["service-requests"] });
+    const reference = props.request.reference;
+    const refusals: Record<number, string> = {
+      409: `${reference} changed while you were choosing. Close this to see its latest details, then try again.`,
+      404: `We can’t find ${reference} any more. Close this to see what changed.`,
+      403: "You can’t assign Maintenance Officers any more. Close this to see what changed.",
+    };
+    const refusal = error instanceof ApiError && refusals[error.status];
+    if (!refusal) {
+      formError.value = errorMessage(error);
       return;
     }
-    formError.value = errorMessage(error);
+    formError.value = refusal;
+    void refreshRequest();
+    if (error instanceof ApiError && error.status === 403)
+      void queryClient.invalidateQueries({ queryKey: meOptions.queryKey });
   },
 });
 
@@ -140,6 +161,7 @@ function submit() {
     class="m-auto w-[min(520px,calc(100vw-32px))] max-h-[min(720px,calc(100vh-40px))] p-0 border border-campus-navy rounded-[14px] bg-campus-surface text-campus-navy backdrop:bg-campus-navy/45 phone:mb-2.5"
     aria-labelledby="assign-title"
     @close="closed"
+    @cancel="keepWhileSending"
   >
     <form novalidate @submit.prevent="submit">
       <div
@@ -155,8 +177,9 @@ function submit() {
         </div>
         <button
           type="button"
-          class="grid place-items-center w-10 h-10 flex-none border border-transparent rounded-lg bg-transparent hover:bg-campus-panel"
+          class="grid place-items-center w-10 h-10 flex-none border border-transparent rounded-lg bg-transparent enabled:hover:bg-campus-panel disabled:opacity-65"
           aria-label="Close"
+          :disabled="assign.isPending.value"
           @click="close"
         >
           <Close class="w-4 h-4" aria-hidden="true" />
@@ -273,7 +296,8 @@ function submit() {
             :pending="assign.isPending.value"
             >{{ verb }}</SubmitButton><button
             type="button"
-            class="py-2 px-0.5 text-[12px] underline underline-offset-4"
+            class="py-2 px-0.5 text-[12px] underline underline-offset-4 disabled:opacity-65"
+            :disabled="assign.isPending.value"
             @click="close"
           >
             Cancel

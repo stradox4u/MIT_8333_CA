@@ -34,8 +34,9 @@ export function useRequestAction<Variables>(options: {
       }),
     ]);
   return useScreenMutation({
-    mutationFn: (variables: Variables) => options.run(variables),
-    onSuccess: async (details, variables) => {
+    // The cache takes the answer even if the page has gone by then.
+    mutationFn: async (variables: Variables) => {
+      const details = await options.run(variables);
       queryClient.setQueryData(
         serviceRequestOptions(details.reference).queryKey,
         details,
@@ -44,6 +45,9 @@ export function useRequestAction<Variables>(options: {
       void queryClient.invalidateQueries({
         queryKey: maintenanceOfficersOptions.queryKey,
       });
+      return details;
+    },
+    onSuccess: async (details, variables) => {
       options.report(options.done(details, variables));
     },
     onError: async (error) => {
