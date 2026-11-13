@@ -150,3 +150,17 @@ export const googleIdentities = pgTable(
   },
   (table) => [index().on(table.userId)],
 );
+
+/**
+ * Reference data: the six Request Categories, inserted by a migration. Each
+ * numbers its own References: `last_number` is the latest one it issued.
+ */
+export const requestCategories = pgTable('request_categories', {
+  /** Such as `plumbing`. */
+  id: text().primaryKey(),
+  name: text().notNull(),
+  /** The middle of its References, such as `PLUMB` in SR-PLUMB-42. */
+  code: text().notNull().unique(),
+  lastNumber: integer().notNull().default(0),
+  sortOrder: integer().notNull(),
+});
