@@ -20,6 +20,8 @@ import { api, ApiError } from "./lib/api";
 import PasswordPage from "./pages/PasswordPage.vue";
 import SettingsPage from "./pages/SettingsPage.vue";
 import DashboardPage from "./pages/DashboardPage.vue";
+import ReportFaultPage from "./pages/ReportFaultPage.vue";
+import ServiceRequestPage from "./pages/ServiceRequestPage.vue";
 import { meKey } from "./auth/identity";
 
 export function createClientRuntime(
@@ -87,6 +89,18 @@ export function createClientRuntime(
         name: "dashboard",
         meta: { requiresUser: true },
         component: DashboardPage,
+      },
+      {
+        path: "/requests/new",
+        name: "report-fault",
+        meta: { requiresUser: true },
+        component: ReportFaultPage,
+      },
+      {
+        path: "/requests/:reference",
+        name: "service-request",
+        meta: { requiresUser: true },
+        component: ServiceRequestPage,
       },
       { path: "/connection", name: "connection", component: ConnectionPage },
     ],
