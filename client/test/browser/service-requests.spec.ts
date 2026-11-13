@@ -115,7 +115,7 @@ test("a Student reports a fault, lands on its tracking page, then finds it in My
 
   await page
     .getByRole("navigation", { name: "Main" })
-    .getByRole("link", { name: "My requests" })
+    .getByRole("link", { name: "My Requests" })
     .click();
   await expect(page).toHaveURL(/\/requests$/);
   const row = page.getByRole("row", { name: /SR-PLUMB-1/ });
@@ -161,7 +161,7 @@ test("on a phone, the request pages use the menu and fit the screen", async ({
   await expect(
     menu.getByRole("link", { name: "Dashboard", exact: true }),
   ).toHaveAttribute("aria-current", "page");
-  await menu.getByRole("link", { name: "My requests" }).click();
+  await menu.getByRole("link", { name: "My Requests" }).click();
   await expect(
     page.getByRole("heading", { name: "You haven’t reported any faults yet" }),
   ).toBeVisible();
