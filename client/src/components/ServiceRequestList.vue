@@ -192,7 +192,11 @@ const readOnlyTag =
     /></span>
     <h2 class="mb-1.5">No Service Requests match</h2>
     <p :class="boxText">Try a different Status, or clear the filter.</p>
-    <button type="button" :class="outlineButton" @click="router.push({ query: {} })">
+    <button
+      type="button"
+      :class="outlineButton"
+      @click="router.push({ query: {} })"
+    >
       Clear the filter
     </button>
   </div>
@@ -240,7 +244,16 @@ const readOnlyTag =
         class="w-full border-collapse text-[12px] [&_th]:py-2.75 [&_th]:px-3 [&_th]:border-b [&_th]:border-b-campus-gray [&_th]:bg-campus-surface [&_th]:text-campus-muted [&_th]:text-[10px] [&_th]:font-[650] [&_th]:tracking-[0.08em] [&_th]:text-left [&_th]:uppercase [&_th]:whitespace-nowrap [&_td]:p-3 [&_td]:border-b [&_td]:border-b-campus-panel [&_td]:align-middle [&_tbody_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-campus-hover"
       >
         <caption class="sr-only">
-          {{ label }}, page {{ list.data.value.page }} of {{ pages }}
+          {{
+            label
+          }}, page
+          {{
+            list.data.value.page
+          }}
+          of
+          {{
+            pages
+          }}
         </caption>
         <thead>
           <tr>
@@ -267,8 +280,7 @@ const readOnlyTag =
               <RouterLink
                 :to="href(item)"
                 class="text-campus-navy font-semibold no-underline wrap-anywhere hover:underline hover:underline-offset-[3px]"
-                >{{ item.title }}</RouterLink
-              ><span
+                >{{ item.title }}</RouterLink><span
                 class="block mt-0.75 text-campus-muted text-[11px] wrap-anywhere"
                 ><MapPin
                   class="inline-block flex-none w-3 h-3 align-[-2px]"
@@ -294,8 +306,10 @@ const readOnlyTag =
                 <StatusChip :status="item.status" /><span
                   v-if="readOnly(item)"
                   :class="readOnlyTag"
-                  ><Lock class="inline-block w-3 h-3" aria-hidden="true" />Reassigned
-                  · read only</span
+                  ><Lock
+                    class="inline-block w-3 h-3"
+                    aria-hidden="true"
+                  />Reassigned · read only</span
                 >
               </div>
             </td>
@@ -306,9 +320,11 @@ const readOnlyTag =
               <slot name="officer" :item="item" />
             </td>
             <td>
-              <time class="tabular-nums whitespace-nowrap" :datetime="item.submittedAt">{{
-                formatShortDate(item.submittedAt)
-              }}</time>
+              <time
+                class="tabular-nums whitespace-nowrap"
+                :datetime="item.submittedAt"
+                >{{ formatShortDate(item.submittedAt) }}</time
+              >
             </td>
           </tr>
         </tbody>
@@ -322,21 +338,22 @@ const readOnlyTag =
           <div
             class="flex flex-wrap items-center justify-between gap-2 mb-1.75"
           >
-            <span :class="reference">{{ item.reference }}</span
-            ><span class="flex flex-wrap gap-1.5"
+            <span :class="reference">{{ item.reference }}</span><span
+              class="flex flex-wrap gap-1.5"
               ><StatusChip :status="item.status" /><span
                 v-if="readOnly(item)"
                 :class="readOnlyTag"
-                ><Lock class="inline-block w-3 h-3" aria-hidden="true" />Reassigned
-                · read only</span
+                ><Lock
+                  class="inline-block w-3 h-3"
+                  aria-hidden="true"
+                />Reassigned · read only</span
               ></span
             >
           </div>
           <RouterLink
             :to="href(item)"
             class="text-campus-navy font-semibold no-underline wrap-anywhere hover:underline hover:underline-offset-[3px] after:absolute after:inset-0"
-            >{{ item.title }}</RouterLink
-          ><span
+            >{{ item.title }}</RouterLink><span
             class="block mt-0.75 text-campus-muted text-[11px] wrap-anywhere"
             ><MapPin
               class="inline-block flex-none w-3 h-3 align-[-2px]"

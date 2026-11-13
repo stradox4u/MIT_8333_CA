@@ -22,6 +22,7 @@ import CircleHelp from "~icons/lucide/circle-help";
 import NextStepPanel from "../components/NextStepPanel.vue";
 import PageNotice from "../components/PageNotice.vue";
 import AssignPicker from "../components/AssignPicker.vue";
+import ManageCard from "../components/ManageCard.vue";
 import Lock from "~icons/lucide/lock";
 import type { Report } from "../service-requests/actions";
 import {
@@ -83,10 +84,19 @@ const viewer = computed(() => {
 });
 const back = computed(() =>
   viewer.value === "admin"
-    ? { to: "/admin/requests", label: "Request management", section: "management" as const }
+    ? {
+        to: "/admin/requests",
+        label: "Request management",
+        section: "management" as const,
+      }
     : viewer.value === "former" ||
-        (viewer.value === "officer" && me.data.value?.role === "maintenance_officer")
-      ? { to: "/assignments", label: "My assignments", section: "assignments" as const }
+        (viewer.value === "officer" &&
+          me.data.value?.role === "maintenance_officer")
+      ? {
+          to: "/assignments",
+          label: "My assignments",
+          section: "assignments" as const,
+        }
       : { to: "/requests", label: "My requests", section: "requests" as const },
 );
 
@@ -101,10 +111,19 @@ const report: Report = (message, kind = "success") => {
 watch(reference, () => {
   actionNotice.value = null;
 });
-const assigning = ref(false);
+const assigning = ref<"assign" | "reassign" | null>(null);
 function assigned(_: unknown, officer: MaintenanceOfficer) {
-  report(`${reference.value} assigned to ${officer.name}. It’s now Assigned.`);
+  const verb = assigning.value === "reassign" ? "reassigned" : "assigned";
+  report(`${reference.value} ${verb} to ${officer.name}. It’s now Assigned.`);
 }
+/** Administrators manage an Open request's Assignment from the side card. */
+const manageable = computed(
+  () =>
+    viewer.value === "admin" &&
+    ["submitted", "assigned", "in_progress"].includes(
+      request.data.value?.status ?? "",
+    ),
+);
 
 const requesterName = computed(() => {
   const requester = request.data.value?.requester;
@@ -138,7 +157,10 @@ const cancellation = computed(() => {
 });
 </script>
 <template>
-  <WorkspaceLayout width="narrow" :section="back.section">
+  <WorkspaceLayout
+    :width="manageable ? 'wide' : 'narrow'"
+    :section="back.section"
+  >
     <RouterLink
       :to="back.to"
       class="inline-flex items-center gap-1.5 min-h-9 mb-2.5 text-campus-navy text-[12px] underline-offset-4"
@@ -212,8 +234,7 @@ const cancellation = computed(() => {
         <div class="flex flex-wrap items-center gap-y-2 gap-x-2.5 mb-2.5">
           <span
             class="font-[ui-monospace,SFMono-Regular,Menlo,Consolas,monospace] font-semibold leading-[1.3] tracking-[0.02em] whitespace-nowrap text-[13px]"
-            >{{ request.data.value.reference }}</span
-          ><StatusChip
+            >{{ request.data.value.reference }}</span><StatusChip
             :status="request.data.value.status"
             labelled
           /><PriorityTag
@@ -258,8 +279,7 @@ const cancellation = computed(() => {
                 request.data.value.assignment.officer.id === me.data.value?.id
                   ? "You"
                   : request.data.value.assignment.officer.name
-              }}</template
-              ><span v-else class="text-campus-muted">{{
+              }}</template><span v-else class="text-campus-muted">{{
                 ["submitted", "assigned", "in_progress"].includes(
                   request.data.value.status,
                 )
@@ -348,80 +368,101 @@ const cancellation = computed(() => {
           </button>
         </template>
       </section>
-      <p
-        v-if="viewer === 'former'"
-        class="flex items-start gap-2.5 mb-4.5 py-3.25 px-3.75 border border-dashed border-campus-control rounded-[10px] bg-campus-surface text-[12px] leading-[1.6]"
+      <div
+        :class="
+          manageable
+            ? 'grid grid-cols-[minmax(0,1fr)_320px] grid-rows-[auto_1fr] items-start gap-x-4.5 [grid-template-areas:\'next_side\'_\'main_side\'] laptop:grid-cols-[minmax(0,1fr)_290px] tablet:grid-cols-1 tablet:grid-rows-none tablet:[grid-template-areas:\'next\'_\'side\'_\'main\']'
+            : ''
+        "
       >
-        <Lock class="w-4 h-4 flex-none mt-0.5" aria-hidden="true" /><span
-          ><strong>You’re no longer assigned to this Service Request.</strong>
-          {{
-            request.data.value.assignment
-              ? `It was reassigned to ${request.data.value.assignment.officer.name}.`
-              : "It has no Maintenance Officer now."
-          }}
-          You can still read it, but you can’t act on it.</span
-        >
-      </p>
-      <NextStepPanel
-        v-else-if="viewer"
-        :request="request.data.value"
-        :viewer="viewer"
-        :report="report"
-        @assign="assigning = true"
-      />
-      <section
-        class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 phone:px-3.75"
-        aria-labelledby="desc-title"
-      >
-        <div
-          class="flex items-center gap-3 mb-5 [&_p]:m-0 [&_p]:text-campus-muted [&_p]:text-[12px] [&_p]:leading-[1.65] [&.tight]:mb-3 [&_>_div]:flex-1 [&_>_div]:min-w-0 tight"
-        >
-          <h2
-            class="mt-0 mx-0 mb-0.75 text-[16px] font-semibold"
-            id="desc-title"
+        <div class="min-w-0 [grid-area:next]">
+          <p
+            v-if="viewer === 'former'"
+            class="flex items-start gap-2.5 mb-4.5 py-3.25 px-3.75 border border-dashed border-campus-control rounded-[10px] bg-campus-surface text-[12px] leading-[1.6]"
           >
-            Description
-          </h2>
-        </div>
-        <p
-          class="description m-0 text-[13px] leading-[1.75] whitespace-pre-wrap wrap-anywhere"
-        >
-          {{ request.data.value.description }}
-        </p>
-      </section>
-      <section
-        class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 phone:px-3.75"
-        aria-labelledby="tl-title"
-      >
-        <div class="flex items-center gap-3 mb-5 [&.tight]:mb-3">
-          <span
-            class="grid place-items-center flex-none w-9 h-9 rounded-[10px] bg-campus-green [&.quiet]:bg-campus-panel quiet"
-            ><History
-              class="icon inline-block flex-none align-[-3px] w-4.5 h-4.5"
-              aria-hidden="true"
-          /></span>
-          <div class="flex-1 min-w-0">
-            <h2
-              class="mt-0 mx-0 mb-0.75 text-[16px] font-semibold"
-              id="tl-title"
+            <Lock class="w-4 h-4 flex-none mt-0.5" aria-hidden="true" /><span
+              ><strong
+                >You’re no longer assigned to this Service Request.</strong
+              >
+              {{
+                request.data.value.assignment
+                  ? `It was reassigned to ${request.data.value.assignment.officer.name}.`
+                  : "It has no Maintenance Officer now."
+              }}
+              You can still read it, but you can’t act on it.</span
             >
-              Timeline
-            </h2>
-            <p class="m-0 text-campus-muted text-[12px] leading-[1.65]">
-              Status Updates and Assignments, oldest first.
-            </p>
-          </div>
+          </p>
+          <NextStepPanel
+            v-else-if="viewer"
+            :request="request.data.value"
+            :viewer="viewer"
+            :report="report"
+            @assign="assigning = 'assign'"
+          />
         </div>
-        <StatusTimeline
-          :entries="request.data.value.timeline"
-          :requester="request.data.value.requester"
-          :viewer-id="me.data.value?.id"
-        />
-      </section>
+        <div v-if="manageable" class="min-w-0 [grid-area:side]">
+          <ManageCard
+            :request="request.data.value"
+            :report="report"
+            @reassign="assigning = 'reassign'"
+          />
+        </div>
+        <div class="min-w-0 [grid-area:main]">
+          <section
+            class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 phone:px-3.75"
+            aria-labelledby="desc-title"
+          >
+            <div
+              class="flex items-center gap-3 mb-5 [&_p]:m-0 [&_p]:text-campus-muted [&_p]:text-[12px] [&_p]:leading-[1.65] [&.tight]:mb-3 [&_>_div]:flex-1 [&_>_div]:min-w-0 tight"
+            >
+              <h2
+                class="mt-0 mx-0 mb-0.75 text-[16px] font-semibold"
+                id="desc-title"
+              >
+                Description
+              </h2>
+            </div>
+            <p
+              class="description m-0 text-[13px] leading-[1.75] whitespace-pre-wrap wrap-anywhere"
+            >
+              {{ request.data.value.description }}
+            </p>
+          </section>
+          <section
+            class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 phone:px-3.75"
+            aria-labelledby="tl-title"
+          >
+            <div class="flex items-center gap-3 mb-5 [&.tight]:mb-3">
+              <span
+                class="grid place-items-center flex-none w-9 h-9 rounded-[10px] bg-campus-green [&.quiet]:bg-campus-panel quiet"
+                ><History
+                  class="icon inline-block flex-none align-[-3px] w-4.5 h-4.5"
+                  aria-hidden="true"
+              /></span>
+              <div class="flex-1 min-w-0">
+                <h2
+                  class="mt-0 mx-0 mb-0.75 text-[16px] font-semibold"
+                  id="tl-title"
+                >
+                  Timeline
+                </h2>
+                <p class="m-0 text-campus-muted text-[12px] leading-[1.65]">
+                  Status Updates and Assignments, oldest first.
+                </p>
+              </div>
+            </div>
+            <StatusTimeline
+              :entries="request.data.value.timeline"
+              :requester="request.data.value.requester"
+              :viewer-id="me.data.value?.id"
+            />
+          </section>
+        </div>
+      </div>
       <AssignPicker
         v-if="assigning"
         :request="request.data.value"
-        @close="assigning = false"
+        @close="assigning = null"
         @assigned="assigned"
       />
     </template>

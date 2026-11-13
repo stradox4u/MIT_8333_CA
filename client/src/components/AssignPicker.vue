@@ -98,9 +98,10 @@ const assign = useScreenMutation({
       queryKey: maintenanceOfficersOptions.queryKey,
     });
     const officer = ordered.value.find((each) => each.id === officerId)!;
+    // Report before closing: closing tells the page the picker has gone.
     opener = null;
-    dialog.value?.close();
     emit("assigned", details, officer);
+    dialog.value?.close();
   },
   onError: async (error, officerId) => {
     if (isExpiredSession(error)) return navigation.expire();
@@ -223,8 +224,7 @@ function submit() {
               :disabled="officer.id === currentOfficerId"
               :aria-describedby="choiceError ? 'officer-error' : undefined"
               class="m-0 w-4 h-4 accent-campus-navy focus-visible:outline-none"
-              @change="choiceError = ''"
-            /><span
+              @change="choiceError = ''" /><span
               class="officer-name flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold"
               >{{ officer.name
               }}<span
@@ -267,10 +267,11 @@ function submit() {
       </div>
       <div class="grid gap-2 pt-3 px-5 pb-4.5 border-t border-campus-panel">
         <div class="flex flex-wrap items-center gap-x-3.5 gap-y-2.5">
-          <SubmitButton compact class="pr-8" :pending="assign.isPending.value">{{
-            verb
-          }}</SubmitButton
-          ><button
+          <SubmitButton
+            compact
+            class="pr-8"
+            :pending="assign.isPending.value"
+            >{{ verb }}</SubmitButton><button
             type="button"
             class="py-2 px-0.5 text-[12px] underline underline-offset-4"
             @click="close"

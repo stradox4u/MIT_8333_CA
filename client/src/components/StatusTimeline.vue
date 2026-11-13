@@ -115,8 +115,11 @@ const label =
           <p
             class="tl-meta mt-0.75 mb-0 text-campus-muted text-[11px] [&_strong]:text-campus-navy [&_strong]:font-semibold"
           >
-            Status Update · <strong>{{ actorName(entry) }}</strong
-            ><template v-if="isRequester(entry.actor)"> · Requester</template>
+            Status Update · <strong>{{ actorName(entry) }}</strong><template
+              v-if="isRequester(entry.actor)"
+            >
+              · Requester</template
+            >
             ·
             <time :datetime="entry.occurredAt">{{
               formatDateTime(entry.occurredAt)

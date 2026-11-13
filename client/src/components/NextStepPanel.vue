@@ -195,7 +195,10 @@ const busy = computed(() => start.isPending.value || complete.isPending.value);
         :aria-expanded="completing"
         aria-controls="complete-form"
         @click="openCompletion"
-        ><CircleCheck class="w-3.75 h-3.75" aria-hidden="true" />Complete</SubmitButton
+        ><CircleCheck
+          class="w-3.75 h-3.75"
+          aria-hidden="true"
+        />Complete</SubmitButton
       >
       <form
         v-if="completing"

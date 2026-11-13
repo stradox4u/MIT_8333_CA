@@ -46,7 +46,10 @@ test.each<[Role, string[]]>([
     "maintenance_officer",
     ["Dashboard", "My Assignments", "My Requests", "Account Settings"],
   ],
-  ["administrator", ["Dashboard", "Requests", "My Requests", "Account Settings"]],
+  [
+    "administrator",
+    ["Dashboard", "Requests", "My Requests", "Account Settings"],
+  ],
 ])("a %s sees the navigation for their Role", async (role, links) => {
   signedIn(role);
   const { runtime } = open("/dashboard");
@@ -223,13 +226,19 @@ test("Assign opens a picker of officers, fewest Open Assignments first, and assi
           status: "assigned",
           assignment: assignedTo({ id: "tunde", name: "Tunde Bakare" }),
         };
-        return HttpResponse.json({ ...items[0], description: "", timeline: [] });
+        return HttpResponse.json({
+          ...items[0],
+          description: "",
+          timeline: [],
+        });
       },
     ),
   );
   const { runtime, user } = open("/admin/requests");
   await user.click(await assignButton("SR-ELEC-1"));
-  const dialog = await screen.findByRole("dialog", { name: "Assign SR-ELEC-1" });
+  const dialog = await screen.findByRole("dialog", {
+    name: "Assign SR-ELEC-1",
+  });
   await waitFor(() =>
     expect(choices(dialog)).toEqual([
       "Blessing Okoro 0 Open Assignments",
@@ -238,7 +247,9 @@ test("Assign opens a picker of officers, fewest Open Assignments first, and assi
     ]),
   );
   await user.click(within(dialog).getByRole("button", { name: "Assign" }));
-  expect(within(dialog).getByText("Choose a Maintenance Officer.")).toBeTruthy();
+  expect(
+    within(dialog).getByText("Choose a Maintenance Officer."),
+  ).toBeTruthy();
   expect(bodies).toEqual([]);
   await user.click(within(dialog).getByRole("radio", { name: /Tunde Bakare/ }));
   await user.click(within(dialog).getByRole("button", { name: "Assign" }));
@@ -253,7 +264,9 @@ test("Assign opens a picker of officers, fewest Open Assignments first, and assi
 
 test("the picker shows the server's officerId refusal and a conflict inside it, and Cancel closes it", async () => {
   signedIn("administrator", admin);
-  withRequests([{ ...summary("SR-ELEC-1", "Sparking socket"), priority: "normal" }]);
+  withRequests([
+    { ...summary("SR-ELEC-1", "Sparking socket"), priority: "normal" },
+  ]);
   const officerReads = withOfficers();
   let answer: "invalid" | "conflict" = "invalid";
   server.use(
@@ -265,7 +278,10 @@ test("the picker shows the server's officerId refusal and a conflict inside it, 
               error: "Bad Request",
               message: ["officerId: Not an active Maintenance Officer"],
               issues: [
-                { path: ["officerId"], message: "Not an active Maintenance Officer" },
+                {
+                  path: ["officerId"],
+                  message: "Not an active Maintenance Officer",
+                },
               ],
             },
             { status: 400 },
@@ -283,8 +299,12 @@ test("the picker shows the server's officerId refusal and a conflict inside it, 
   const { runtime, user } = open("/admin/requests");
   const opener = await assignButton("SR-ELEC-1");
   await user.click(opener);
-  const dialog = await screen.findByRole("dialog", { name: "Assign SR-ELEC-1" });
-  await user.click(await within(dialog).findByRole("radio", { name: /Tunde Bakare/ }));
+  const dialog = await screen.findByRole("dialog", {
+    name: "Assign SR-ELEC-1",
+  });
+  await user.click(
+    await within(dialog).findByRole("radio", { name: /Tunde Bakare/ }),
+  );
   await user.click(within(dialog).getByRole("button", { name: "Assign" }));
   const refusal = await within(dialog).findByText(
     "Tunde Bakare is no longer an active Maintenance Officer. Choose someone else.",
@@ -292,11 +312,11 @@ test("the picker shows the server's officerId refusal and a conflict inside it, 
   expect(refusal.id).toBeTruthy();
   await waitFor(() => expect(officerReads.reads()).toBe(2));
   answer = "conflict";
-  await user.click(within(dialog).getByRole("radio", { name: /Blessing Okoro/ }));
+  await user.click(
+    within(dialog).getByRole("radio", { name: /Blessing Okoro/ }),
+  );
   await user.click(within(dialog).getByRole("button", { name: "Assign" }));
-  expect(
-    (await within(dialog).findByRole("alert")).textContent?.trim(),
-  ).toBe(
+  expect((await within(dialog).findByRole("alert")).textContent?.trim()).toBe(
     "SR-ELEC-1 changed while you were choosing. Close this to see its latest details, then try again.",
   );
   await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
@@ -306,7 +326,11 @@ test("the picker shows the server's officerId refusal and a conflict inside it, 
 });
 
 test.each([
-  ["/assignments?status=open", "maintenance_officer" as const, "My assignments"],
+  [
+    "/assignments?status=open",
+    "maintenance_officer" as const,
+    "My assignments",
+  ],
   ["/admin/requests?page=2", "administrator" as const, "Request management"],
 ])(
   "a session ending on %s comes back to it after Sign in",
@@ -330,7 +354,12 @@ test.each([
       ),
       http.get("http://localhost:5173/api/service-requests", () => {
         if (session === "back")
-          return HttpResponse.json({ items: [], page: 1, pageSize: 20, total: 0 });
+          return HttpResponse.json({
+            items: [],
+            page: 1,
+            pageSize: 20,
+            total: 0,
+          });
         session = "ended";
         return new HttpResponse(null, { status: 401 });
       }),
@@ -469,13 +498,14 @@ test("the tracking page names the Maintenance Officer, and the timeline shows ea
   const completed = within(
     screen.getByRole("region", { name: "Timeline" }),
   ).getAllByRole("listitem")[8];
-  expect(completed.textContent).toContain("Completion noteReplaced the washer.");
+  expect(completed.textContent).toContain(
+    "Completion noteReplaced the washer.",
+  );
   runtime.queryClient.clear();
 });
 
 /** The "what's next" panel, found by its heading. */
-const panel = (name: string | RegExp) =>
-  screen.findByRole("region", { name });
+const panel = (name: string | RegExp) => screen.findByRole("region", { name });
 /** Answers an action on SR-PLUMB-1 with the request's new details. */
 function withAction(
   method: "post" | "put" | "delete",
@@ -484,13 +514,16 @@ function withAction(
 ) {
   const bodies: unknown[] = [];
   server.use(
-    http[method](`${api}/service-requests/SR-PLUMB-1${path}`, async ({ request }) => {
-      const text = await request.text();
-      const body = text ? JSON.parse(text) : undefined;
-      bodies.push(body);
-      const result = answer(body);
-      return result instanceof Response ? result : HttpResponse.json(result);
-    }),
+    http[method](
+      `${api}/service-requests/SR-PLUMB-1${path}`,
+      async ({ request }) => {
+        const text = await request.text();
+        const body = text ? JSON.parse(text) : undefined;
+        bodies.push(body);
+        const result = answer(body);
+        return result instanceof Response ? result : HttpResponse.json(result);
+      },
+    ),
   );
   return bodies;
 }
@@ -534,7 +567,9 @@ test("the current officer starts the work, then completes it with an optional no
   );
   const { runtime, user } = open("/requests/SR-PLUMB-1");
   const ready = await panel("Ready to start?");
-  expect(within(ready).getByText(/Starting moves it to In Progress/)).toBeTruthy();
+  expect(
+    within(ready).getByText(/Starting moves it to In Progress/),
+  ).toBeTruthy();
   await user.click(within(ready).getByRole("button", { name: "Start work" }));
   expect(starts).toEqual([undefined]);
   expect(
@@ -544,17 +579,23 @@ test("the current officer starts the work, then completes it with an optional no
   ).toBeTruthy();
   const finish = await panel("Finished the work?");
   await user.click(within(finish).getByRole("button", { name: "Complete" }));
-  const form = within(finish).getByRole("form", { name: "Complete SR-PLUMB-1" });
+  const form = within(finish).getByRole("form", {
+    name: "Complete SR-PLUMB-1",
+  });
   const note = within(form).getByLabelText(/Note for the Requester/);
   expect(document.activeElement).toBe(note);
   await user.click(note);
   await user.paste("x".repeat(2001));
-  await user.click(within(form).getByRole("button", { name: "Mark as Completed" }));
+  await user.click(
+    within(form).getByRole("button", { name: "Mark as Completed" }),
+  );
   expect(within(form).getByText("Use 2,000 characters or fewer.")).toBeTruthy();
   expect(completions).toEqual([]);
   await user.clear(note);
   await user.type(note, "  Replaced the washer. ");
-  await user.click(within(form).getByRole("button", { name: "Mark as Completed" }));
+  await user.click(
+    within(form).getByRole("button", { name: "Mark as Completed" }),
+  );
   await screen.findByText("SR-PLUMB-1 is Completed.");
   expect(completions).toEqual([{ note: "Replaced the washer." }]);
   expect(await panel("Waiting for the Requester")).toBeTruthy();
@@ -578,7 +619,9 @@ test("completing without a note sends no note", async () => {
   const { runtime, user } = open("/requests/SR-PLUMB-1");
   const finish = await panel("Finished the work?");
   await user.click(within(finish).getByRole("button", { name: "Complete" }));
-  await user.click(within(finish).getByRole("button", { name: "Mark as Completed" }));
+  await user.click(
+    within(finish).getByRole("button", { name: "Mark as Completed" }),
+  );
   await screen.findByText("SR-PLUMB-1 is Completed.");
   expect(completions).toEqual([{}]);
   runtime.queryClient.clear();
@@ -630,7 +673,9 @@ test("a 409 refreshes the request and explains, and a 403 says the officer is no
     ),
   ).toBeTruthy();
   expect(
-    await screen.findByText(/You’re no longer assigned to this Service Request/),
+    await screen.findByText(
+      /You’re no longer assigned to this Service Request/,
+    ),
   ).toBeTruthy();
   runtime.queryClient.clear();
 });
@@ -654,9 +699,19 @@ test("an officer reassigned away reads the request with a read-only banner and n
 });
 
 test.each([
-  ["submitted", null, "Waiting for an Assignment", "An Administrator will assign a Maintenance Officer to it."],
+  [
+    "submitted",
+    null,
+    "Waiting for an Assignment",
+    "An Administrator will assign a Maintenance Officer to it.",
+  ],
   ["assigned", chinedu, "Assigned to Chinedu Eze", "They’ll start soon."],
-  ["in_progress", chinedu, "Chinedu Eze is working on it", "You’ll see here when it’s Completed."],
+  [
+    "in_progress",
+    chinedu,
+    "Chinedu Eze is working on it",
+    "You’ll see here when it’s Completed.",
+  ],
 ])(
   "the Requester sees what happens next while it's %s, and no actions",
   async (status, holder, heading, text) => {
@@ -669,6 +724,155 @@ test.each([
     runtime.queryClient.clear();
   },
 );
+
+test("an Administrator assigns a Submitted request from its page", async () => {
+  signedIn("administrator", admin);
+  withOfficers();
+  const request = withRequest({ status: "submitted", priority: "normal" });
+  const bodies = withAction("put", "/assignment", () =>
+    request.set({ status: "assigned", assignment: assignedTo(tunde) }),
+  );
+  const { runtime, user } = open("/requests/SR-PLUMB-1");
+  const next = await panel("Waiting for an Assignment");
+  await user.click(
+    within(next).getByRole("button", { name: "Assign a Maintenance Officer" }),
+  );
+  const dialog = await screen.findByRole("dialog", {
+    name: "Assign SR-PLUMB-1",
+  });
+  await user.click(
+    await within(dialog).findByRole("radio", { name: /Tunde Bakare/ }),
+  );
+  await user.click(within(dialog).getByRole("button", { name: "Assign" }));
+  await screen.findByText(
+    "SR-PLUMB-1 assigned to Tunde Bakare. It’s now Assigned.",
+  );
+  expect(bodies).toEqual([{ officerId: "tunde" }]);
+  expect(details("Maintenance Officer")).toBe("Tunde Bakare");
+  expect(
+    screen
+      .getByRole("link", { name: "Request management" })
+      .getAttribute("href"),
+  ).toBe("/admin/requests");
+  runtime.queryClient.clear();
+});
+
+test("the Manage card reassigns to another officer, with the current one unavailable", async () => {
+  signedIn("administrator", admin);
+  withOfficers();
+  const request = withRequest({
+    status: "in_progress",
+    priority: "high",
+    assignment: assignedTo(chinedu),
+  });
+  const bodies = withAction("put", "/assignment", () =>
+    request.set({ status: "assigned", assignment: assignedTo(tunde) }),
+  );
+  const { runtime, user } = open("/requests/SR-PLUMB-1");
+  const manage = await screen.findByRole("region", { name: "Manage" });
+  expect(await within(manage).findByText("3 Open Assignments")).toBeTruthy();
+  expect(within(manage).getByText("Chinedu Eze")).toBeTruthy();
+  await user.click(within(manage).getByRole("button", { name: "Reassign" }));
+  const dialog = await screen.findByRole("dialog", {
+    name: "Reassign SR-PLUMB-1",
+  });
+  const current = await within(dialog).findByRole("radio", {
+    name: /Chinedu Eze/,
+  });
+  expect((current as HTMLInputElement).disabled).toBe(true);
+  expect(current.closest("label")?.textContent).toContain("Current officer");
+  await user.click(within(dialog).getByRole("radio", { name: /Tunde Bakare/ }));
+  await user.click(within(dialog).getByRole("button", { name: "Reassign" }));
+  await screen.findByText(
+    "SR-PLUMB-1 reassigned to Tunde Bakare. It’s now Assigned.",
+  );
+  expect(bodies).toEqual([{ officerId: "tunde" }]);
+  runtime.queryClient.clear();
+});
+
+test("Unassign asks first, then takes the request back to Submitted", async () => {
+  signedIn("administrator", admin);
+  withOfficers();
+  const request = withRequest({
+    status: "assigned",
+    priority: "normal",
+    assignment: assignedTo(chinedu),
+  });
+  const bodies = withAction("delete", "/assignment", () =>
+    request.set({ status: "submitted", assignment: null }),
+  );
+  const { runtime, user } = open("/requests/SR-PLUMB-1");
+  const manage = await screen.findByRole("region", { name: "Manage" });
+  await user.click(within(manage).getByRole("button", { name: "Unassign" }));
+  const confirm = within(manage).getByRole("group", {
+    name: "Unassign Chinedu Eze?",
+  });
+  expect(confirm.textContent).toContain("SR-PLUMB-1 goes back to Submitted.");
+  await user.click(
+    within(confirm).getByRole("button", { name: "Keep Assignment" }),
+  );
+  expect(within(manage).queryByRole("group")).toBeNull();
+  expect(bodies).toEqual([]);
+  await user.click(within(manage).getByRole("button", { name: "Unassign" }));
+  await user.click(
+    within(
+      within(manage).getByRole("group", { name: "Unassign Chinedu Eze?" }),
+    ).getByRole("button", { name: "Unassign" }),
+  );
+  await screen.findByText(
+    "Chinedu Eze unassigned. SR-PLUMB-1 is Submitted again.",
+  );
+  expect(bodies).toEqual([undefined]);
+  expect(await panel("Waiting for an Assignment")).toBeTruthy();
+  runtime.queryClient.clear();
+});
+
+test("an action on a request that has gone answers 404, and the page says it can't be found", async () => {
+  signedIn("administrator", admin);
+  withOfficers();
+  let gone = false;
+  server.use(
+    http.get(`${api}/service-requests/SR-PLUMB-1`, () =>
+      gone
+        ? HttpResponse.json(
+            {
+              message: "No such Service Request",
+              error: "Not Found",
+              statusCode: 404,
+            },
+            { status: 404 },
+          )
+        : HttpResponse.json({
+            ...summary("SR-PLUMB-1", "Leaking pipe under the sink", "assigned"),
+            priority: "normal",
+            assignment: assignedTo(chinedu),
+            description: "",
+            timeline: [],
+          }),
+    ),
+    http.delete(`${api}/service-requests/SR-PLUMB-1/assignment`, () => {
+      gone = true;
+      return HttpResponse.json(
+        {
+          message: "No such Service Request",
+          error: "Not Found",
+          statusCode: 404,
+        },
+        { status: 404 },
+      );
+    }),
+  );
+  const { runtime, user } = open("/requests/SR-PLUMB-1");
+  const manage = await screen.findByRole("region", { name: "Manage" });
+  await user.click(within(manage).getByRole("button", { name: "Unassign" }));
+  await user.click(
+    within(within(manage).getByRole("group")).getByRole("button", {
+      name: "Unassign",
+    }),
+  );
+  await screen.findByRole("heading", { name: "We can’t find SR-PLUMB-1" });
+  runtime.queryClient.clear();
+});
 
 test("an officer who left reads as their Assignment ending, and a request with no officer says so", async () => {
   signedIn("administrator", admin);
