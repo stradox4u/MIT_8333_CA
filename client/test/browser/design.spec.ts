@@ -58,6 +58,7 @@ test("all Status and Priority variants retain the preview palette", async ({
     priority: "normal",
     requester: { id: "ada", name: "Ada Okafor" },
     submittedAt: "2026-11-12T10:00:00.000Z",
+    assignment: null,
     description: "Water drips from the pipe.",
     timeline: [],
   };

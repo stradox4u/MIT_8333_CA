@@ -1,40 +1,18 @@
 import { expect, test } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/vue";
+import { screen, waitFor, within } from "@testing-library/vue";
 import userEvent from "@testing-library/user-event";
-import { createMemoryHistory } from "vue-router";
 import { http, HttpResponse, type JsonBodyType } from "msw";
-import App from "../src/App.vue";
-import { createClientRuntime } from "../src/app";
 import { server } from "./setup";
-
-const api = "http://localhost:5173/api";
-
-function signedIn(
-  role:
-    "student" | "staff" | "maintenance_officer" | "administrator" = "student",
-) {
-  server.use(
-    http.get(`${api}/auth/me`, () =>
-      HttpResponse.json({
-        id: "ada",
-        email: "ada@example.test",
-        firstName: "Ada",
-        lastName: "Okafor",
-        role,
-        signUpComplete: true,
-        hasPassword: false,
-      }),
-    ),
-  );
-}
-
-function open(path: string) {
-  const history = createMemoryHistory();
-  history.push(path);
-  const runtime = createClientRuntime(history);
-  render(App, { global: { plugins: [runtime.plugin] } });
-  return { runtime, user: userEvent.setup() };
-}
+import {
+  api,
+  categories,
+  details,
+  open,
+  signedIn,
+  summary,
+  withCategories,
+  withRequests,
+} from "./support";
 
 test("the workspace links to My requests and offers Report a fault as its primary action", async () => {
   signedIn();
@@ -90,20 +68,6 @@ test("the Menu button opens the navigation for small screens, and Escape or a li
   expect(again.hidden).toBe(true);
   runtime.queryClient.clear();
 });
-
-const categories = [
-  { id: "electrical", name: "Electrical", code: "ELEC" },
-  { id: "plumbing", name: "Plumbing", code: "PLUMB" },
-  { id: "furniture", name: "Furniture", code: "FURN" },
-  { id: "network", name: "Internet and network", code: "NET" },
-  { id: "classroom_equipment", name: "Classroom equipment", code: "CLASS" },
-  { id: "other", name: "Other", code: "OTHER" },
-];
-function withCategories() {
-  server.use(
-    http.get(`${api}/request-categories`, () => HttpResponse.json(categories)),
-  );
-}
 
 test("Report a fault asks for a title, a Request Category from the API, a location and a description", async () => {
   signedIn();
@@ -364,11 +328,6 @@ test("submitting sends the trimmed report once, then shows the new request with 
   runtime.queryClient.clear();
 });
 
-function details(term: string) {
-  const label = screen.getByText(term, { selector: "dt" });
-  return label.nextElementSibling?.textContent?.trim();
-}
-
 test("the tracking page shows the Requester their request's header, description and timeline, without Priority", async () => {
   signedIn("student");
   server.use(
@@ -595,45 +554,6 @@ test("the tracking page offers another try when it couldn't load", async () => {
   runtime.queryClient.clear();
 });
 
-function summary(reference: string, title: string, status = "submitted") {
-  return {
-    reference,
-    title,
-    category: { id: "plumbing", name: "Plumbing", code: "PLUMB" },
-    location: "Hostel B, room 214",
-    status,
-    requester: { id: "ada", name: "Ada Okafor" },
-    submittedAt: "2026-11-12T09:00:00.000Z",
-  };
-}
-/** Answers the list from `items`, a page at a time, recording each query. */
-function withRequests(
-  items: (ReturnType<typeof summary> & { priority?: string })[],
-  queries: URLSearchParams[] = [],
-) {
-  server.use(
-    http.get(`${api}/service-requests`, ({ request }) => {
-      const query = new URL(request.url).searchParams;
-      queries.push(query);
-      const page = Number(query.get("page") ?? 1);
-      const pageSize = Number(query.get("pageSize") ?? 20);
-      const status = query.get("status");
-      const matching = items.filter((item) =>
-        status === "open"
-          ? ["submitted", "assigned", "in_progress"].includes(item.status)
-          : !status || item.status === status,
-      );
-      return HttpResponse.json({
-        items: matching.slice((page - 1) * pageSize, page * pageSize),
-        page,
-        pageSize,
-        total: matching.length,
-      });
-    }),
-  );
-  return queries;
-}
-
 test("My requests lists the requests the User raised, without Priority, even for an Administrator", async () => {
   signedIn("administrator");
   const year = new Date().getFullYear();
@@ -845,7 +765,12 @@ test("while a new filter loads, My requests doesn't choose an empty state from t
     http.get(`${api}/service-requests`, async ({ request }) => {
       const status = new URL(request.url).searchParams.get("status");
       if (status === "verified")
-        return HttpResponse.json({ items: [], page: 1, pageSize: 20, total: 0 });
+        return HttpResponse.json({
+          items: [],
+          page: 1,
+          pageSize: 20,
+          total: 0,
+        });
       if (hold)
         await new Promise<void>((resolve) => {
           release = resolve;

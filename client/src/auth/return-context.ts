@@ -12,9 +12,12 @@ interface Context {
   section?: ResumeSection;
 }
 
-/** Pages every completed Role has: a Service Request's page may still answer 404. */
+/**
+ * The workspace's pages. A Service Request's page may still answer 404, and
+ * the router sends anyone whose Role a page isn't for to the dashboard.
+ */
 const eligiblePaths =
-  /^\/(dashboard|account\/settings|requests(\/new|\/SR-[A-Z]+-[1-9][0-9]*)?)$/;
+  /^\/(dashboard|account\/settings|assignments|admin\/requests|requests(\/new|\/SR-[A-Z]+-[1-9][0-9]*)?)$/;
 
 /** Hints never grant access. Only routes implemented for every completed Role are eligible. */
 export function safeReturnPath(path: string): string | null {

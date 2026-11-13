@@ -21,6 +21,8 @@ import PasswordPage from "./pages/PasswordPage.vue";
 import SettingsPage from "./pages/SettingsPage.vue";
 import DashboardPage from "./pages/DashboardPage.vue";
 import MyRequestsPage from "./pages/MyRequestsPage.vue";
+import MyAssignmentsPage from "./pages/MyAssignmentsPage.vue";
+import RequestManagementPage from "./pages/RequestManagementPage.vue";
 import ReportFaultPage from "./pages/ReportFaultPage.vue";
 import ServiceRequestPage from "./pages/ServiceRequestPage.vue";
 import { meKey } from "./auth/identity";
@@ -96,6 +98,18 @@ export function createClientRuntime(
         name: "my-requests",
         meta: { requiresUser: true },
         component: MyRequestsPage,
+      },
+      {
+        path: "/assignments",
+        name: "my-assignments",
+        meta: { requiresUser: true, roles: ["maintenance_officer"] },
+        component: MyAssignmentsPage,
+      },
+      {
+        path: "/admin/requests",
+        name: "request-management",
+        meta: { requiresUser: true, roles: ["administrator"] },
+        component: RequestManagementPage,
       },
       {
         path: "/requests/new",
@@ -206,6 +220,9 @@ export function createClientRuntime(
       if (next.notice) ui.notice = next.notice;
       return next.path;
     }
+    // Pages for some Roles only: the API refuses the rest with 403 anyway.
+    if (user?.role && to.meta.roles && !to.meta.roles.includes(user.role))
+      return { name: "dashboard" };
     return true;
   });
   const plugin = {
