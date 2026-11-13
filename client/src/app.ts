@@ -24,6 +24,7 @@ import MyRequestsPage from "./pages/MyRequestsPage.vue";
 import MyAssignmentsPage from "./pages/MyAssignmentsPage.vue";
 import RequestManagementPage from "./pages/RequestManagementPage.vue";
 import ReportFaultPage from "./pages/ReportFaultPage.vue";
+import EditRequestPage from "./pages/EditRequestPage.vue";
 import ServiceRequestPage from "./pages/ServiceRequestPage.vue";
 import { meKey } from "./auth/identity";
 
@@ -116,6 +117,12 @@ export function createClientRuntime(
         name: "report-fault",
         meta: { requiresUser: true },
         component: ReportFaultPage,
+      },
+      {
+        path: "/requests/:reference/edit",
+        name: "edit-service-request",
+        meta: { requiresUser: true },
+        component: EditRequestPage,
       },
       {
         path: "/requests/:reference",

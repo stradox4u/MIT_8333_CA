@@ -188,6 +188,29 @@ export const completeWork = (reference: string, note: string) =>
     body: JSON.stringify(note ? { note } : {}),
   });
 
+export const verifyRequest = (reference: string) =>
+  action(reference, "/verify", { method: "POST" });
+
+export const answerNotFixed = (reference: string, reason: string) =>
+  action(reference, "/not-fixed", {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+export const cancelRequest = (reference: string, reason: string) =>
+  action(reference, "/cancel", {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+export const editRequest = (
+  reference: string,
+  fields: Partial<NewServiceRequest>,
+) => action(reference, "", { method: "PATCH", body: JSON.stringify(fields) });
+export const setRequestPriority = (reference: string, priority: Priority) =>
+  action(reference, "/priority", {
+    method: "PUT",
+    body: JSON.stringify({ priority }),
+  });
+
 export function submitServiceRequest(body: NewServiceRequest) {
   return api<{ reference: string }>("/service-requests", {
     method: "POST",

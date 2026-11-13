@@ -16,14 +16,20 @@ import {
 } from "../service-requests/api";
 import { useRequestAction, type Report } from "../service-requests/actions";
 import { formatDate } from "../service-requests/display";
+import ClosingActions from "./ClosingActions.vue";
+import RequestReasonForm from "./RequestReasonForm.vue";
 
 /** What happens next for this viewer, with the actions they may take now. */
 const props = defineProps<{
   request: ServiceRequestDetails;
   viewer: "officer" | "admin" | "requester";
   report: Report;
+  isRequester?: boolean;
 }>();
 const emit = defineEmits<{ assign: [] }>();
+const requester = computed(
+  () => props.isRequester ?? props.viewer === "requester",
+);
 
 const officer = computed(
   () => props.request.assignment?.officer.name ?? "The officer",
@@ -36,6 +42,20 @@ const completedOn = computed(() => {
     );
   return entry ? formatDate(entry.occurredAt) : "";
 });
+const answerBy = computed(() => {
+  const entry = [...props.request.timeline]
+    .reverse()
+    .find(
+      (each) => each.type === "status_update" && each.toStatus === "completed",
+    );
+  return entry
+    ? formatDate(
+        new Date(
+          Date.parse(entry.occurredAt) + 7 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      )
+    : "";
+});
 
 interface Panel {
   title: string;
@@ -46,6 +66,20 @@ interface Panel {
 }
 const panel = computed<Panel | null>(() => {
   const status = props.request.status;
+  if (status === "completed" && requester.value)
+    return {
+      title: "Is the fault fixed?",
+      text: `${officer.value} marked it Completed${completedOn.value ? ` on ${completedOn.value}` : ""}. If you don’t answer ${answerBy.value ? `by ${answerBy.value}` : "within seven days"}, it becomes Verified automatically.`,
+      icon: CircleCheck,
+      next: true,
+    };
+  if (status === "completed" && props.viewer === "admin")
+    return {
+      title: "Verify completed work",
+      text: "Confirm the fault is fixed on behalf of the Requester.",
+      icon: CircleCheck,
+      next: true,
+    };
   if (props.viewer === "officer") {
     if (status === "assigned")
       return {
@@ -168,6 +202,28 @@ const busy = computed(() => start.isPending.value || complete.isPending.value);
           {{ panel.text }}
         </p>
       </div>
+    </div>
+    <ClosingActions
+      v-if="request.status === 'completed' && (requester || viewer === 'admin')"
+      :request="request"
+      :is-requester="requester"
+      :report="report"
+    />
+    <div
+      v-if="requester && request.status === 'submitted'"
+      class="flex flex-wrap items-start gap-3 mt-4"
+    >
+      <RouterLink
+        :to="`/requests/${encodeURIComponent(request.reference)}/edit`"
+        class="inline-flex items-center justify-center min-h-10.5 py-2.75 px-8.25 border border-campus-navy rounded-[7px] text-[12px] font-semibold text-campus-navy no-underline hover:bg-campus-panel phone:w-full"
+        >Edit details</RouterLink
+      >
+      <RequestReasonForm
+        v-if="viewer !== 'admin'"
+        :request="request"
+        action="cancel"
+        :report="report"
+      />
     </div>
     <div
       v-if="viewer === 'officer' && request.status === 'assigned'"

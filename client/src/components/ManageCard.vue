@@ -5,6 +5,7 @@ import SlidersHorizontal from "~icons/lucide/sliders-horizontal";
 import UserRoundCheck from "~icons/lucide/user-round-check";
 import Repeat from "~icons/lucide/repeat-2";
 import SubmitButton from "./SubmitButton.vue";
+import AdminRequestControls from "./AdminRequestControls.vue";
 import {
   maintenanceOfficersOptions,
   unassignOfficer,
@@ -155,5 +156,10 @@ watch(
     <p v-else class="m-0 text-campus-muted text-[11px] leading-[1.6]">
       Not assigned yet. Use <strong>Assign a Maintenance Officer</strong> above.
     </p>
+    <AdminRequestControls
+      :key="request.reference"
+      :request="request"
+      :report="report"
+    />
   </section>
 </template>

@@ -9,12 +9,14 @@ export const useUiStore = defineStore("ui", () => {
   const retryTarget = ref("/");
   /** The Reference just submitted, so its tracking page says so once. */
   const submittedReference = ref("");
+  const editedReference = ref("");
   function reset() {
     email.value = "";
     keepSignedIn.value = false;
     notice.value = "";
     retryTarget.value = "/";
     submittedReference.value = "";
+    editedReference.value = "";
   }
   return {
     email,
@@ -22,6 +24,7 @@ export const useUiStore = defineStore("ui", () => {
     notice,
     retryTarget,
     submittedReference,
+    editedReference,
     reset,
   };
 });

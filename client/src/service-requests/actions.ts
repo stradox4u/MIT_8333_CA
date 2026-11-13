@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/vue-query";
 import { useAuthNavigation } from "../auth/navigation";
+import { meOptions } from "../auth/identity";
 import { ApiError, errorMessage } from "../lib/api";
 import { isExpiredSession } from "../lib/expired-session";
 import { useScreenMutation } from "../lib/screen-mutation";
@@ -20,6 +21,9 @@ export function useRequestAction<Variables>(options: {
   run: (variables: Variables) => Promise<ServiceRequestDetails>;
   done: (details: ServiceRequestDetails, variables: Variables) => string;
   report: Report;
+  validationError?: (error: ApiError) => void;
+  forbidden?: string;
+  onDone?: () => void;
 }) {
   const queryClient = useQueryClient();
   const navigation = useAuthNavigation();
@@ -35,8 +39,13 @@ export function useRequestAction<Variables>(options: {
     ]);
   return useScreenMutation({
     // The cache takes the answer even if the page has gone by then.
-    mutationFn: async (variables: Variables) => {
+    mutationFn: async (variables: Variables, activity) => {
       const details = await options.run(variables);
+      // Cache changes can remove the action component before onSuccess runs.
+      if (activity.isCurrent()) {
+        options.report(options.done(details, variables));
+        options.onDone?.();
+      }
       queryClient.setQueryData(
         serviceRequestOptions(details.reference).queryKey,
         details,
@@ -47,11 +56,14 @@ export function useRequestAction<Variables>(options: {
       });
       return details;
     },
-    onSuccess: async (details, variables) => {
-      options.report(options.done(details, variables));
-    },
     onError: async (error) => {
       if (isExpiredSession(error)) return navigation.expire();
+      if (
+        error instanceof ApiError &&
+        error.status === 400 &&
+        options.validationError
+      )
+        return options.validationError(error);
       const reference = options.reference();
       if (error instanceof ApiError && error.status === 409)
         options.report(
@@ -60,12 +72,15 @@ export function useRequestAction<Variables>(options: {
         );
       else if (error instanceof ApiError && error.status === 403)
         options.report(
-          `You’re no longer assigned to ${reference}, so you can’t do that.`,
+          options.forbidden ??
+            `You’re no longer assigned to ${reference}, so you can’t do that.`,
           "error",
         );
       else if (!(error instanceof ApiError && error.status === 404))
         return options.report(errorMessage(error), "error");
       // 404: the refreshed page says it can't be found.
+      if (error instanceof ApiError && error.status === 403)
+        await queryClient.invalidateQueries({ queryKey: meOptions.queryKey });
       await refresh();
     },
   });
