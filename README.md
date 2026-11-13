@@ -5,10 +5,11 @@ Shared terminology for the client and server is defined in the
 
 ## Run the whole application locally
 
-With Docker Desktop running, run this command from the repository root:
+With Docker Desktop running, run these commands from the repository root:
 
 ```sh
-docker compose up --build -d
+docker compose --env-file server/.env build
+docker compose --env-file server/.env up
 ```
 
 Compose builds the Vue client and Nest API, starts Postgres and Mailpit, and
