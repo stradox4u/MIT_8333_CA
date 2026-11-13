@@ -57,8 +57,8 @@ const current = (section: Section) =>
   active.value === section ? "page" : undefined;
 const links = [
   { section: "dashboard", to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { section: "requests", to: "/requests", label: "My requests", icon: Inbox },
-  { section: "settings", to: "/account/settings", label: "Account settings", icon: UserCog },
+  { section: "requests", to: "/requests", label: "My Requests", icon: Inbox },
+  { section: "settings", to: "/account/settings", label: "Account Settings", icon: UserCog },
 ] as const;
 
 watch(
@@ -113,7 +113,7 @@ onBeforeUnmount(() =>
           ><Plus class="icon" aria-hidden="true" />Report a fault</RouterLink
         ><SubmitButton
           type="button"
-          class="compact-button has-request sign-out"
+          class="compact-button sign-out"
           variant="outline"
           :pending="logout.isPending.value"
           :disabled="inFlight > 0"

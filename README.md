@@ -12,9 +12,9 @@ docker compose --env-file server/.env build
 docker compose --env-file server/.env up
 ```
 
-Compose builds the Vue client and Nest API, starts Postgres and Mailpit, and
-applies database migrations before starting the API. The client serves a built
-bundle through Nginx, including a same-origin `/api` proxy and SPA route fallback.
+Compose starts the Vue client with Vite, builds the Nest API, starts Postgres and
+Mailpit, and applies database migrations before starting the API. Vite provides
+hot reload, a same-origin `/api` proxy and SPA route fallback.
 No host Node.js installation or external mail/database account is needed.
 
 | Service                                    | Local address                                                                  |
@@ -40,8 +40,24 @@ docker compose down
 Postgres data survives normal shutdowns in the `mit8333_postgres-data` volume.
 `docker compose down --volumes` also deletes that local database. Existing
 volumes from the former `server/docker-compose.yml` are not moved or removed.
-The build uses source files on disk; after changing code, rerun
-`docker compose up --build -d`. This setup does not enable hot reload.
+Client source files are mounted into the Vite container. Save a Vue, TypeScript
+or CSS file and the browser updates automatically; no rebuild or restart is
+needed. File watching uses polling for Docker Desktop compatibility.
+
+After changing client dependencies, rebuild just the client and refresh its
+isolated dependency volume:
+
+```sh
+docker compose --env-file server/.env up --build --no-deps --renew-anon-volumes -d client
+```
+
+The API still runs compiled code. After changing server code, rebuild just that
+service with `docker compose --env-file server/.env up --build --no-deps -d server`.
+Run migrations when making database schema changes.
+
+The client Dockerfile is for local development. In production, Netlify builds
+and serves `client/dist`; its generated `_redirects` rules proxy `/api/*` to the
+server and provide the SPA fallback. See the [client deployment notes](client/README.md#netlify-and-railway).
 
 ## Optional Google sign-in and demo accounts
 
@@ -56,7 +72,7 @@ Compose uses `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
 `DEMO_ACCOUNTS_DOMAIN` and `DEMO_ACCOUNTS_PASSWORD` from that file. It keeps the
 database and SMTP connections pointing at the local containers and sets
 `APP_URL=http://localhost:5173`, `COOKIE_SECURE=false`, and one trusted proxy
-for local Nginx. `SMTP_STARTTLS=opportunistic` permits Mailpit's local SMTP
+for the local client proxy. `SMTP_STARTTLS=opportunistic` permits Mailpit's local SMTP
 connection; the default SMTP security policy remains unchanged outside Compose.
 It disables Observe telemetry for this stack. Existing `.env` files are neither
 changed nor copied into images.

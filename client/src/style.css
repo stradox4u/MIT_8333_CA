@@ -508,7 +508,7 @@ h1 {
   left: 0;
   right: 0;
   bottom: 2px;
-  height: 3px;
+  height: 6px;
   border-radius: 2px;
   background: var(--color-campus-green);
   box-shadow: 0 0 0 1px var(--color-campus-navy) inset;
@@ -525,8 +525,8 @@ h1 {
   gap: 8px;
   white-space: nowrap;
 }
-.workspace-header .compact-button.has-request {
-  padding-right: 32px;
+.workspace-header .sign-out {
+  padding-inline: 32px;
 }
 .header-actions .menu-button,
 .mobile-menu {
