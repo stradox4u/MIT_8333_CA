@@ -20,9 +20,13 @@ const emit = defineEmits<{
 }>();
 </script>
 <template>
-  <div class="confirm-panel space-y-3">
+  <div
+    class="mt-3.75 p-4.5 border border-campus-navy rounded-[9px] bg-campus-panel [&_h3]:mt-0 [&_h3]:mx-0 [&_h3]:mb-1.5 [&_h3]:text-[14px] [&_h3]:font-semibold space-y-3"
+  >
     <h3>Confirm it’s you</h3>
-    <p>Please confirm your identity before continuing.</p>
+    <p class="mt-0 mx-0 mb-3.75 text-[12px] leading-[1.65]">
+      Please confirm your identity before continuing.
+    </p>
     <FormField
       v-if="hasPassword"
       :model-value="modelValue"
@@ -36,7 +40,10 @@ const emit = defineEmits<{
       "
       @blur="emit('blur')"
     />
-    <p v-else class="field-hint">
+    <p
+      v-else
+      class="text-campus-muted mt-0 mx-0 mb-3.75 text-[12px] leading-[1.65]"
+    >
       Sign in again with a Sign-in Link or Google, then return here to continue.
     </p>
     <SubmitButton
@@ -47,7 +54,13 @@ const emit = defineEmits<{
       @click="emit('requestLink')"
       >Email me a Sign-in Link</SubmitButton
     >
-    <p v-if="linkError" class="field-error" role="alert">{{ linkError }}</p>
+    <p
+      v-if="linkError"
+      class="field-error text-error mt-0 mx-0 mb-3.75 text-[12px] leading-[1.65]"
+      role="alert"
+    >
+      {{ linkError }}
+    </p>
     <GoogleButton
       :keep-signed-in="keepSignedIn"
       :disabled="disabled"

@@ -39,12 +39,14 @@ function input(event: Event) {
 }
 </script>
 <template>
-  <div class="field sr-field">
-    <div class="field-row">
-      <label :for="id">{{ label }}</label
+  <div
+    class="min-w-0 [&_>_label]:block grid gap-1.75 [&_>_label]:m-0 [&_>_label]:text-[12px] [&_>_label]:font-semibold"
+  >
+    <div class="flex items-baseline justify-between gap-3">
+      <label class="m-0 text-[12px] font-semibold" :for="id">{{ label }}</label
       ><span
         v-if="max"
-        class="char-count"
+        class="text-campus-muted text-[11px] tabular-nums whitespace-nowrap [&.over]:text-error [&.over]:font-semibold"
         :class="{ over: count > max }"
         aria-hidden="true"
         >{{ count.toLocaleString("en-GB") }} /
@@ -54,7 +56,7 @@ function input(event: Event) {
     <textarea
       v-if="multiline"
       :id="id"
-      class="textarea"
+      class="w-full min-w-0 py-2.5 px-3 border border-campus-control rounded-[7px] bg-campus-surface text-campus-navy text-[14px] h-auto min-h-33 resize-y leading-[1.6] placeholder:text-campus-muted placeholder:opacity-90 aria-invalid:border-error aria-invalid:shadow-[0_0_0_1px_var(--color-error)_inset] phone:text-[16px]"
       :name="name"
       :value="modelValue"
       :placeholder="placeholder"
@@ -66,7 +68,7 @@ function input(event: Event) {
     <input
       v-else
       :id="id"
-      class="input"
+      class="placeholder:text-campus-muted placeholder:opacity-90 aria-invalid:border-error aria-invalid:shadow-[0_0_0_1px_var(--color-error)_inset] w-full min-w-0 h-11.75 border border-campus-control rounded-[7px] py-2.5 px-3 bg-campus-surface text-campus-navy text-[14px] phone:text-[16px]"
       :name="name"
       :value="modelValue"
       :placeholder="placeholder"
@@ -76,9 +78,20 @@ function input(event: Event) {
       @input="input"
       @blur="emit('blur')"
     />
-    <p v-if="error" :id="`${id}-error`" class="field-error" aria-live="polite">
+    <p
+      v-if="error"
+      :id="`${id}-error`"
+      class="field-error text-error text-[11px] leading-[1.65] m-0"
+      aria-live="polite"
+    >
       {{ error }}
     </p>
-    <p v-if="hint" :id="`${id}-hint`" class="field-hint">{{ hint }}</p>
+    <p
+      v-if="hint"
+      :id="`${id}-hint`"
+      class="m-0 text-campus-muted text-[11px] leading-[1.65]"
+    >
+      {{ hint }}
+    </p>
   </div>
 </template>

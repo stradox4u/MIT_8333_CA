@@ -58,7 +58,7 @@ describe('Assigning a Service Request', () => {
         change: 'assigned',
         officer: { id: officerId, name: 'Chinedu Eze' },
         previousOfficer: null,
-        statusChange: { fromStatus: 'submitted', toStatus: 'assigned' },
+        statusUpdate: { fromStatus: 'submitted', toStatus: 'assigned' },
       },
     ]);
   });
@@ -184,7 +184,7 @@ describe('Assigning a Service Request', () => {
         change: 'reassigned',
         officer: { id: ngoziId, name: 'Ngozi Okafor' },
         previousOfficer: { id: officerId, name: 'Chinedu Eze' },
-        statusChange: null,
+        statusUpdate: null,
       });
     });
 
@@ -200,30 +200,50 @@ describe('Assigning a Service Request', () => {
   });
 
   describe('unassigning', () => {
-    it('ends the Assignment and moves the request back to Submitted', async () => {
-      const { reference, admin, adminId, officerId } =
-        await aSubmittedRequest();
-      await assign(admin, reference, officerId);
-      app.clock.advance(MINUTE);
+    it.each(['assigned', 'in_progress'] as const)(
+      'ends an %s Assignment and moves the request back to Submitted',
+      async (status) => {
+        const { reference, admin, adminId, officer, officerId } =
+          await aSubmittedRequest();
+        await assign(admin, reference, officerId);
+        if (status === 'in_progress') {
+          await officer
+            .post(`/api/service-requests/${reference}/start`)
+            .expect(200);
+        }
+        app.clock.advance(MINUTE);
 
-      const unassigned = await admin
-        .delete(`/api/service-requests/${reference}/assignment`)
-        .expect(200);
+        const unassigned = await admin
+          .delete(`/api/service-requests/${reference}/assignment`)
+          .expect(200);
 
-      expect(unassigned.body).toMatchObject({
-        status: 'submitted',
-        assignment: null,
-      });
-      expect(unassigned.body.timeline.at(-1)).toEqual({
-        type: 'assignment',
-        occurredAt: '2026-11-12T09:01:00.000Z',
-        actor: { id: adminId, name: 'Grace Hopper' },
-        change: 'unassigned',
-        officer: { id: officerId, name: 'Chinedu Eze' },
-        previousOfficer: null,
-        statusChange: { fromStatus: 'assigned', toStatus: 'submitted' },
-      });
-    });
+        expect(unassigned.body).toMatchObject({
+          status: 'submitted',
+          assignment: null,
+        });
+        expect(unassigned.body.timeline.at(-1)).toEqual({
+          type: 'assignment',
+          occurredAt: '2026-11-12T09:01:00.000Z',
+          actor: { id: adminId, name: 'Grace Hopper' },
+          change: 'unassigned',
+          officer: { id: officerId, name: 'Chinedu Eze' },
+          previousOfficer: null,
+          statusUpdate: { fromStatus: status, toStatus: 'submitted' },
+        });
+        const log = await admin.get('/api/activity-log').expect(200);
+        expect(
+          log.body.filter(
+            (entry: { action: string }) => entry.action === 'unassigned',
+          ),
+        ).toEqual([
+          expect.objectContaining({
+            actor: { id: adminId, name: 'Grace Hopper' },
+            serviceRequest: { reference },
+            details: { officerId, from: status, to: 'submitted' },
+          }),
+        ]);
+      },
+    );
 
     it('answers 409 when the request has no Assignment', async () => {
       const { reference, admin } = await aSubmittedRequest();

@@ -39,13 +39,13 @@ const navLinks = () =>
     .map((link) => link.textContent?.trim());
 
 test.each<[Role, string[]]>([
-  ["student", ["Dashboard", "My requests", "Account settings"]],
-  ["staff", ["Dashboard", "My requests", "Account settings"]],
+  ["student", ["Dashboard", "My Requests", "Account Settings"]],
+  ["staff", ["Dashboard", "My Requests", "Account Settings"]],
   [
     "maintenance_officer",
-    ["Dashboard", "My assignments", "My requests", "Account settings"],
+    ["Dashboard", "My Assignments", "My Requests", "Account Settings"],
   ],
-  ["administrator", ["Dashboard", "Requests", "My requests", "Account settings"]],
+  ["administrator", ["Dashboard", "Requests", "My Requests", "Account Settings"]],
 ])("a %s sees the navigation for their Role", async (role, links) => {
   signedIn(role);
   const { runtime } = open("/dashboard");

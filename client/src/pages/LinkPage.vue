@@ -80,7 +80,9 @@ function replaceLink() {
   <AuthLayout>
     <template v-if="unusable"
       ><h1>This link can’t be used.</h1>
-      <p class="intro">
+      <p
+        class="intro mt-0 mx-0 mb-6.5 text-[13px] leading-[1.7] text-campus-muted wrap-anywhere"
+      >
         It may have expired or already been used. Request a new Sign-in Link to
         continue.
       </p>
@@ -96,18 +98,29 @@ function replaceLink() {
         /><SubmitButton :pending="sendReplacement.isPending.value" arrow
           >Send a new link</SubmitButton
         >
-        <p v-if="replacement.formError.value" class="field-error" role="alert">
+        <p
+          v-if="replacement.formError.value"
+          class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
+          role="alert"
+        >
           {{ replacement.formError.value }}
         </p>
       </form>
-      <RouterLink to="/sign-in" class="text-link centered"
+      <RouterLink
+        to="/sign-in"
+        class="inline-block border-0 py-2 px-0.5 text-campus-navy bg-transparent text-[12px] underline underline-offset-4 [&.centered]:block [&.centered]:w-fit [&.centered]:mt-1.75 [&.centered]:mx-auto [&.centered]:mb-0 [&.centered]:text-center phone:min-h-11 centered"
         >Back to sign in</RouterLink
       ></template
     >
     <template v-else
-      ><span class="state-icon"><ShieldCheck aria-hidden="true" /></span>
+      ><span
+        class="state-icon w-11.5 h-11.5 grid place-items-center bg-campus-green border border-campus-navy rounded-[13px] mb-6 [&.quiet]:bg-campus-panel [&_.icon]:w-5.5 [&_.icon]:h-5.5"
+        ><ShieldCheck class="w-5.5 h-5.5" aria-hidden="true"
+      /></span>
       <h1>You’re one step away.</h1>
-      <p class="intro">
+      <p
+        class="intro mt-0 mx-0 mb-6.5 text-[13px] leading-[1.7] text-campus-muted wrap-anywhere"
+      >
         Continue to sign in to the MIT 8333 University Service Request portal.
       </p>
       <SubmitButton
@@ -118,8 +131,16 @@ function replaceLink() {
         @click="consume.mutate()"
         >Continue signing in</SubmitButton
       >
-      <p v-if="error" class="field-error" role="alert">{{ error }}</p>
-      <RouterLink to="/sign-in" class="text-link centered"
+      <p
+        v-if="error"
+        class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
+        role="alert"
+      >
+        {{ error }}
+      </p>
+      <RouterLink
+        to="/sign-in"
+        class="inline-block border-0 py-2 px-0.5 text-campus-navy bg-transparent text-[12px] underline underline-offset-4 [&.centered]:block [&.centered]:w-fit [&.centered]:mt-1.75 [&.centered]:mx-auto [&.centered]:mb-0 [&.centered]:text-center phone:min-h-11 centered"
         >Back to sign in</RouterLink
       ></template
     >

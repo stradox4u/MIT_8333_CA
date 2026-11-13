@@ -14,8 +14,8 @@ import { ServiceRequestsRepository } from './service-requests.repository.js';
  * working on them, and Administrators overseeing them
  * (docs/service-requests.md).
  *
- * Global only to provide `OfficerDepartures`, which the users module
- * declares and needs: it can't import this module, which depends on it.
+ * Global only to provide the Users module's `OfficerDepartures` contract
+ * while keeping source dependencies directed from Service Requests to Users.
  */
 @Global()
 @Module({

@@ -22,7 +22,7 @@ test("the workspace links to My requests and offers Report a fault as its primar
     within(nav)
       .getAllByRole("link")
       .map((link) => link.textContent?.trim()),
-  ).toEqual(["Dashboard", "My requests", "Account settings"]);
+  ).toEqual(["Dashboard", "My Requests", "Account Settings"]);
   expect(
     within(nav)
       .getByRole("link", { name: "Dashboard" })
@@ -62,7 +62,7 @@ test("the Menu button opens the navigation for small screens, and Escape or a li
   expect(panel.hidden).toBe(true);
   expect(document.activeElement).toBe(menu);
   await user.click(menu);
-  await user.click(within(panel).getByRole("link", { name: "My requests" }));
+  await user.click(within(panel).getByRole("link", { name: "My Requests" }));
   await screen.findByRole("heading", { name: "My requests" });
   const again = document.getElementById("mobile-menu")!;
   expect(again.hidden).toBe(true);
@@ -316,7 +316,7 @@ test("submitting sends the trimmed report once, then shows the new request with 
   withRequests([summary("SR-PLUMB-1", "Leaking pipe under the sink")]);
   await user.click(
     within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", {
-      name: "My requests",
+      name: "My Requests",
     }),
   );
   await user.click(

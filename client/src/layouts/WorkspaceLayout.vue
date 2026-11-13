@@ -75,17 +75,46 @@ const active = computed(
 const current = (section: Section) =>
   active.value === section ? "page" : undefined;
 const me = useQuery(meOptions);
-/** Everyone sees Dashboard, My requests and Account settings; officers and Administrators see their own lists. */
+/** Officers and Administrators also see their own lists. */
 const links = computed(() => [
-  { section: "dashboard" as const, to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  {
+    section: "dashboard" as const,
+    to: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+  },
   ...(me.data.value?.role === "maintenance_officer"
-    ? [{ section: "assignments" as const, to: "/assignments", label: "My assignments", icon: ClipboardList }]
+    ? [
+        {
+          section: "assignments" as const,
+          to: "/assignments",
+          label: "My Assignments",
+          icon: ClipboardList,
+        },
+      ]
     : []),
   ...(me.data.value?.role === "administrator"
-    ? [{ section: "management" as const, to: "/admin/requests", label: "Requests", icon: ListChecks }]
+    ? [
+        {
+          section: "management" as const,
+          to: "/admin/requests",
+          label: "Requests",
+          icon: ListChecks,
+        },
+      ]
     : []),
-  { section: "requests" as const, to: "/requests", label: "My requests", icon: Inbox },
-  { section: "settings" as const, to: "/account/settings", label: "Account settings", icon: UserCog },
+  {
+    section: "requests" as const,
+    to: "/requests",
+    label: "My Requests",
+    icon: Inbox,
+  },
+  {
+    section: "settings" as const,
+    to: "/account/settings",
+    label: "Account Settings",
+    icon: UserCog,
+  },
 ]);
 
 watch(
@@ -107,24 +136,42 @@ function closeOnEscape(event: KeyboardEvent) {
   menuButton.value?.focus();
 }
 onMounted(() => document.addEventListener("keydown", closeOnEscape));
-onBeforeUnmount(() =>
-  document.removeEventListener("keydown", closeOnEscape),
-);
+onBeforeUnmount(() => document.removeEventListener("keydown", closeOnEscape));
 </script>
 <template>
-  <div class="workspace">
-    <a class="skip-link" href="#main">Skip to main content</a>
-    <header class="workspace-header">
+  <div class="min-h-svh py-7 px-8.5 phone:py-6 phone:px-4.25">
+    <a
+      class="absolute left-[-9999px] top-11 z-5 py-2 px-3 border border-campus-navy rounded-[7px] bg-campus-green text-campus-navy text-[12px] focus:left-3"
+      href="#main"
+      >Skip to main content</a
+    >
+    <header
+      class="max-w-290 m-auto pb-5 border-b border-b-campus-gray flex items-center gap-5.5 [&_.compact-button]:min-h-10 [&_.compact-button]:py-2 [&_.compact-button]:px-3.5 [&_.compact-button]:gap-2 [&_.compact-button]:whitespace-nowrap [&_.sign-out]:px-8 tablet:gap-2.5 tablet:pb-3.5"
+    >
       <RouterLink
         to="/dashboard"
-        class="brand"
+        class="flex items-center gap-2.5 flex-none text-campus-navy no-underline"
         aria-label="MIT 8333 University: Dashboard"
         :aria-current="undefined"
-        ><span class="brand-mark" aria-hidden="true">M</span
-        ><span><strong>MIT 8333</strong><small>UNIVERSITY</small></span>
+        ><span
+          class="grid place-items-center w-9 h-10 border-[1.5px] border-campus-navy rounded-[3px_3px_15px_15px] bg-campus-green [font:700_25px_Georgia,serif]"
+          aria-hidden="true"
+          >M</span
+        ><span class="small-phone:hidden"
+          ><strong
+            class="block text-[16px] font-[650] leading-[1.2] tracking-[0.02em]"
+            >MIT 8333</strong
+          ><small class="block mt-1 text-[9px] tracking-[0.25em]"
+            >UNIVERSITY</small
+          ></span
+        >
       </RouterLink>
-      <nav class="main-nav" aria-label="Main">
+      <nav
+        class="flex items-center flex-wrap gap-y-1 gap-x-4.5 ml-2 [&_a:hover]:underline [&_a:hover]:underline-offset-4 [&_a[aria-current='page']]:font-[650] [&_a[aria-current='page']::after]:content-[''] [&_a[aria-current='page']::after]:absolute [&_a[aria-current='page']::after]:left-0 [&_a[aria-current='page']::after]:right-0 [&_a[aria-current='page']::after]:bottom-0.5 [&_a[aria-current='page']::after]:h-1.5 [&_a[aria-current='page']::after]:rounded-xs [&_a[aria-current='page']::after]:bg-campus-green [&_a[aria-current='page']::after]:shadow-[0_0_0_1px_var(--color-campus-navy)_inset] laptop:gap-y-1 laptop:gap-x-3.5 laptop:ml-0 tablet:hidden"
+        aria-label="Main"
+      >
         <RouterLink
+          class="relative inline-flex items-center min-h-10 py-1 px-0.5 text-campus-navy text-[12px] no-underline"
           v-for="link in links"
           :key="link.to"
           :to="link.to"
@@ -132,15 +179,21 @@ onBeforeUnmount(() =>
           >{{ link.label }}</RouterLink
         >
       </nav>
-      <div class="header-actions">
+      <div
+        class="ml-auto flex items-center gap-2.5 tablet:[&_.sign-out]:hidden"
+      >
         <RouterLink
           to="/requests/new"
-          class="button button-primary compact-button"
+          class="button inline-flex relative items-center justify-center gap-2.5 py-2.75 px-8.25 border border-campus-navy rounded-[7px] text-campus-navy text-[12px] font-semibold leading-normal text-center no-underline disabled:opacity-65 bg-campus-green enabled:hover:brightness-97 compact-button w-auto max-w-full min-h-10.5"
           :aria-current="current('report')"
-          ><Plus class="icon" aria-hidden="true" />Report a fault</RouterLink
+          ><Plus
+            class="icon inline-block flex-none align-[-3px] w-3.75 h-3.75"
+            aria-hidden="true"
+          />Report a fault</RouterLink
         ><SubmitButton
+          compact
           type="button"
-          class="compact-button has-request sign-out"
+          class="compact-button sign-out"
           variant="outline"
           :pending="logout.isPending.value"
           :disabled="inFlight > 0"
@@ -149,14 +202,18 @@ onBeforeUnmount(() =>
         ><button
           ref="menuButton"
           type="button"
-          class="button button-outline compact-button menu-button"
+          class="button relative items-center justify-center gap-2.5 py-2.75 px-8.25 border border-campus-navy rounded-[7px] text-campus-navy text-[12px] font-semibold leading-normal text-center no-underline disabled:opacity-65 bg-transparent enabled:hover:bg-campus-panel compact-button w-auto max-w-full min-h-10.5 menu-button hidden tablet:inline-flex"
           :aria-expanded="menuOpen"
           aria-controls="mobile-menu"
           @click="toggleMenu"
         >
-          <Close v-if="menuOpen" class="icon" aria-hidden="true" /><Menu
+          <Close
+            v-if="menuOpen"
+            class="icon inline-block flex-none align-[-3px] w-3.75 h-3.75"
+            aria-hidden="true"
+          /><Menu
             v-else
-            class="icon"
+            class="icon inline-block flex-none align-[-3px] w-3.75 h-3.75"
             aria-hidden="true"
           />Menu
         </button>
@@ -165,16 +222,27 @@ onBeforeUnmount(() =>
     <div
       id="mobile-menu"
       ref="menuPanel"
-      class="mobile-menu"
+      class="hidden tablet:block tablet:my-0 tablet:-mx-4.25 tablet:pt-2 tablet:px-4.25 tablet:pb-3.5 tablet:border-b tablet:border-b-campus-gray tablet:bg-campus-surface tablet:[&_ul]:m-0 tablet:[&_ul]:p-0 tablet:[&_ul]:list-none tablet:[&_a[aria-current='page']]:font-[650] tablet:[&_.button]:mt-3"
       :hidden="!menuOpen"
     >
       <nav aria-label="Main">
         <ul>
           <li v-for="link in links" :key="link.to">
-            <RouterLink :to="link.to" :aria-current="current(link.section)"
-              ><component :is="link.icon" class="icon" aria-hidden="true" />{{
-                link.label
-              }}</RouterLink
+            <RouterLink
+              class="tablet:flex tablet:items-center tablet:gap-2.5 tablet:min-h-11.5 tablet:border-b tablet:border-b-campus-panel tablet:text-campus-navy tablet:text-[14px] tablet:no-underline"
+              :to="link.to"
+              :aria-current="current(link.section)"
+              ><component
+                :is="link.icon"
+                class="icon inline-block w-4 h-4 flex-none align-[-3px]"
+                aria-hidden="true"
+              />{{ link.label
+              }}<span
+                v-if="current(link.section)"
+                aria-hidden="true"
+                class="ml-auto rounded px-1.75 py-0.5 bg-campus-green text-[10px] font-semibold"
+                >Current page</span
+              ></RouterLink
             >
           </li>
         </ul>
@@ -185,22 +253,35 @@ onBeforeUnmount(() =>
         :pending="logout.isPending.value"
         :disabled="inFlight > 0"
         @click="logout.mutate()"
-        ><LogOut class="icon" aria-hidden="true" />Sign out</SubmitButton
+        ><LogOut
+          class="icon inline-block w-4 h-4 flex-none align-[-3px]"
+          aria-hidden="true"
+        />Sign out</SubmitButton
       >
     </div>
     <main
       id="main"
-      class="workspace-body"
+      class="max-w-190 my-8.5 mx-auto [&.wide]:max-w-290 [&.wide]:mt-7 [&.narrow]:mt-7 [&.narrow]:max-w-225 focus:outline-none phone:[&.wide]:mt-5 phone:[&.narrow]:mt-5"
       :class="{ wide: width === 'wide', narrow: width === 'narrow' }"
       tabindex="-1"
     >
-      <p v-if="ui.notice" class="field-error mb-5" role="alert">
+      <p
+        v-if="ui.notice"
+        class="field-error mt-1.25 mx-0 text-error text-[11px] leading-[1.65] mb-5"
+        role="alert"
+      >
         {{ ui.notice }}
       </p>
-      <p v-if="error" class="field-error mb-5" role="alert">{{ error }}</p>
+      <p
+        v-if="error"
+        class="field-error mt-1.25 mx-0 text-error text-[11px] leading-[1.65] mb-5"
+        role="alert"
+      >
+        {{ error }}
+      </p>
       <slot />
     </main>
-    <footer class="page-footer">
+    <footer class="text-center mt-6.25 text-[10px] text-campus-muted">
       MIT 8333 University · Service Request portal
     </footer>
   </div>

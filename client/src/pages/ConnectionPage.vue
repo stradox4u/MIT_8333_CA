@@ -20,7 +20,9 @@ const retry = useScreenMutation({
 <template>
   <AuthLayout
     ><h1>We couldn’t check your sign-in.</h1>
-    <p class="intro">
+    <p
+      class="intro mt-0 mx-0 mb-6.5 text-[13px] leading-[1.7] text-campus-muted wrap-anywhere"
+    >
       Please try again to continue. Your sign-in won’t be submitted again.
     </p>
     <SubmitButton
@@ -29,6 +31,12 @@ const retry = useScreenMutation({
       @click="retry.mutate()"
       >Try again</SubmitButton
     >
-    <p v-if="error" class="field-error" role="alert">{{ error }}</p></AuthLayout
+    <p
+      v-if="error"
+      class="field-error mt-1.25 mx-0 mb-0 text-error text-[11px] leading-[1.65]"
+      role="alert"
+    >
+      {{ error }}
+    </p></AuthLayout
   >
 </template>

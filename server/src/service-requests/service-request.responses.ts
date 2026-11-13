@@ -90,10 +90,10 @@ const assignmentEntry = z.object({
   previousOfficer: person
     .nullable()
     .meta({ description: 'Whom it was taken from, when reassigned' }),
-  statusChange: z
+  statusUpdate: z
     .object({ fromStatus: status, toStatus: status })
     .nullable()
-    .meta({ description: 'The Status change the same action made, if any' }),
+    .meta({ description: 'The Status Update the same action made, if any' }),
 });
 
 const timelineEntry = z.discriminatedUnion('type', [

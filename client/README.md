@@ -5,9 +5,12 @@ Query, Tailwind CSS and unplugin-icons. Node 24.15 or newer is required.
 
 ## Local development
 
-To run the built client, API, Postgres and Mailpit together, use
+To run the client with hot reload alongside the API, Postgres and Mailpit, use
 `docker compose up --build -d` from the repository root. See the
 [root README](../README.md) for URLs, optional Google credentials and demo data.
+Compose mounts the client source into Vite, so saved edits appear immediately
+without rebuilding the stack. After changing dependencies, rebuild only the
+client with `docker compose up --build --no-deps --renew-anon-volumes -d client`.
 The following commands run the Vite development server directly on the host.
 
 ```sh
@@ -52,7 +55,8 @@ are also saved there by the browser suite.
 
 ## Netlify and Railway
 
-The root `netlify.toml` builds this directory and publishes `client/dist`.
+The client Dockerfile runs Vite for local development. In production, the root
+`netlify.toml` builds this directory and Netlify serves `client/dist`.
 Set Netlify build environment variable `API_ORIGIN` to the HTTPS Railway API
 origin, for example `https://your-api.up.railway.app`, with no path or credentials.
 The build generates `dist/_redirects` with the `/api/*` proxy before the SPA

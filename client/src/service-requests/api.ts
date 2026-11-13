@@ -71,7 +71,7 @@ export interface AssignmentChange {
   officer: Person;
   /** Whom it was taken from, when reassigned. */
   previousOfficer: Person | null;
-  statusChange: { fromStatus: Status; toStatus: Status } | null;
+  statusUpdate: { fromStatus: Status; toStatus: Status } | null;
 }
 
 export type TimelineEntry = StatusUpdate | AssignmentChange;
