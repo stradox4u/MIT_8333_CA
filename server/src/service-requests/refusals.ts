@@ -34,3 +34,13 @@ export function refuseIf<Outcome>(
       refusal satisfies never;
   }
 }
+
+/**
+ * Answers a Service Request the User may not see exactly as one nobody has
+ * (404), so nobody learns that it exists.
+ */
+export function refuseUnlessVisible(visible: boolean): void {
+  if (!visible) {
+    refuseIf<NotFound>('not_found');
+  }
+}

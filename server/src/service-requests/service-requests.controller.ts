@@ -10,13 +10,17 @@ import {
 import type { z } from 'zod';
 import type { Priority } from '../database/schema.js';
 import type { User } from '../users/user.js';
-import { refuseIf } from './refusals.js';
+import { refuseIf, refuseUnlessVisible } from './refusals.js';
 import {
   serviceRequestDetailsResponse,
   serviceRequestPageResponse,
   submittedResponse,
 } from './service-request.responses.js';
-import { listQuery, reference, submitBody } from './service-request.schemas.js';
+import {
+  listQuery,
+  referenceParam,
+  submitBody,
+} from './service-request.schemas.js';
 import { ServiceRequestPolicy } from './service-request.policy.js';
 import { ServiceRequestsRepository } from './service-requests.repository.js';
 
@@ -43,8 +47,9 @@ export class ServiceRequestsController {
     @Body({ schema: submitBody }) body: z.infer<typeof submitBody>,
   ) {
     const submitted = await this.serviceRequests.submit({
-      requesterId: requester.id,
       ...body,
+      // Last, so nothing in the body can raise it in another User's name.
+      requesterId: requester.id,
     });
     refuseIf(submitted);
     return { reference: submitted.reference };
@@ -75,19 +80,13 @@ export class ServiceRequestsController {
   })
   async find(
     @CurrentUser() user: User,
-    @Param('reference', { schema: reference }) ref: string,
+    @Param('reference', { schema: referenceParam }) reference: string,
   ) {
-    const request =
-      (await this.serviceRequests.findByReference(ref)) ?? 'not_found';
+    const request = await this.serviceRequests.findByReference(reference);
     refuseIf(request);
-    const visible = await this.authorization.can(
-      ServiceRequestPolicy,
-      'view',
-      user,
-      request,
+    refuseUnlessVisible(
+      await this.authorization.can(ServiceRequestPolicy, 'view', user, request),
     );
-    // Hidden from this User: the same answer as for a Reference nobody has.
-    refuseIf(visible || 'not_found');
     return withPriorityIf(await this.seesPriority(user), request);
   }
 
@@ -100,7 +99,7 @@ export class ServiceRequestsController {
  * The request as shown: without its `priority` key at all, not `null`, for
  * Users the policy doesn't show the Priority to.
  */
-function withPriorityIf<Shown extends { priority: Priority }>(
+function withPriorityIf<Shown extends { priority?: Priority }>(
   shown: boolean,
   request: Shown,
 ): Shown | Omit<Shown, 'priority'> {

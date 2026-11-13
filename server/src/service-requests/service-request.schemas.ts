@@ -19,7 +19,7 @@ export const statusFilter = z.enum([...SERVICE_REQUEST_STATUSES, 'open']);
 export type StatusFilter = z.infer<typeof statusFilter>;
 
 /** How the API addresses a Service Request, such as SR-PLUMB-42. */
-export const reference = z
+export const referenceParam = z
   .string()
   .max(64)
   .regex(/^SR-[A-Z]+-[1-9][0-9]*$/, 'is not a Reference, such as SR-PLUMB-42');

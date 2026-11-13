@@ -83,7 +83,11 @@ describe('API documentation', () => {
       },
     });
     expect(schemaOf(tracking.get, '200')).toMatchObject({
-      properties: { reference: expect.anything(), timeline: expect.anything() },
+      properties: {
+        reference: expect.anything(),
+        submittedAt: { type: 'string', format: 'date-time' },
+        timeline: expect.anything(),
+      },
     });
     expect(tracking.get.responses['404'].description).toMatch(
       /Service Request/,
