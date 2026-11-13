@@ -1,6 +1,22 @@
-import type { TestApp } from './test-app.js';
+import type { Browser, TestApp } from './test-app.js';
 
-type Browser = ReturnType<TestApp['browser']>;
+/** The Roles that raise requests without managing them. */
+export const REQUESTER_ROLES = [
+  'student',
+  'staff',
+  'maintenance_officer',
+] as const;
+
+/** A new browser, signed in as a User of one of the `REQUESTER_ROLES`. */
+export function signInWithRole(
+  app: TestApp,
+  email: string,
+  role: (typeof REQUESTER_ROLES)[number],
+): Promise<Browser> {
+  return role === 'maintenance_officer'
+    ? app.signInAsMaintenanceOfficer(email)
+    : app.signUp(email, { role });
+}
 
 /** A valid body for `POST /api/service-requests`, to override field by field. */
 export const aServiceRequest = (
@@ -28,4 +44,22 @@ export async function submitServiceRequest(
     .send(body)
     .expect(201);
   return submitted.body.reference;
+}
+
+/** The id of the User a browser is signed in as. */
+export async function idOf(browser: Browser): Promise<string> {
+  const me = await browser.get('/api/auth/me').expect(200);
+  return me.body.id;
+}
+
+/** An Administrator gives a Service Request to a Maintenance Officer. */
+export async function assign(
+  admin: Browser,
+  reference: string,
+  officerId: string,
+) {
+  return admin
+    .put(`/api/service-requests/${reference}/assignment`)
+    .send({ officerId })
+    .expect(200);
 }

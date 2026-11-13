@@ -13,8 +13,9 @@ export class UserErasure {
     private readonly sessions: SessionService,
   ) {}
 
-  async erase(id: string) {
-    const outcome = await this.users.erase(id);
+  /** `actorId` is whoever erases them: an Administrator, or the User. */
+  async erase(id: string, actorId: string) {
+    const outcome = await this.users.erase(id, actorId);
     if (outcome === 'erased') {
       await this.sessions.revokeAll(id);
     }

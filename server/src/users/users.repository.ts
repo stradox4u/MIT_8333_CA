@@ -9,7 +9,9 @@ import {
   signInLinks,
   users,
 } from '../database/schema.js';
+import { activeWithRole } from './active-users.js';
 import { displayName } from './display-name.js';
+import { OfficerDepartures } from './officer-departures.js';
 import type { LastAdministrator, NotFound, UserErased } from './refusals.js';
 import type { User } from './user.js';
 
@@ -57,17 +59,8 @@ const managedUserColumns = {
   createdAt: users.createdAt,
 };
 
-/**
- * An active Administrator: one who can actually sign in and manage the
- * system. They have signed in at least once (an Invitation still pending
- * doesn't count), and are neither deactivated nor erased.
- */
-const activeAdministrator = and(
-  eq(users.roleId, 'administrator'),
-  isNotNull(users.emailVerifiedAt),
-  isNull(users.deactivatedAt),
-  isNull(users.erasedAt),
-);
+/** An active Administrator: one who can actually sign in and manage the system. */
+const activeAdministrator = activeWithRole('administrator');
 
 export interface NewUser {
   email: string;
@@ -81,6 +74,7 @@ export class UsersRepository {
   constructor(
     @InjectDatabase() private readonly db: Database,
     private readonly clock: Clock,
+    private readonly officerDepartures: OfficerDepartures,
   ) {}
 
   async findById(id: string): Promise<User | null> {
@@ -121,11 +115,13 @@ export class UsersRepository {
   }
 
   /**
-   * Deactivates a User, unless they're the last active Administrator.
-   * `already_deactivated` and `user_erased` change nothing.
+   * Deactivates a User and hands back their Open work in one transaction,
+   * attributed to `actorId`. Last-Administrator and unchanged-state checks
+   * prevent invalid or repeated changes.
    */
   async deactivate(
     id: string,
+    actorId: string,
   ): Promise<
     | 'deactivated'
     | 'already_deactivated'
@@ -133,20 +129,27 @@ export class UsersRepository {
     | NotFound
     | LastAdministrator
   > {
-    const changed = await this.db
-      .update(users)
-      .set({ deactivatedAt: this.now() })
-      .where(
-        and(
-          eq(users.id, id),
-          isNotNull(users.roleId),
-          isNull(users.deactivatedAt),
-          isNull(users.erasedAt),
-          this.notTheLastActiveAdministrator(id),
-        ),
-      )
-      .returning({ id: users.id });
-    if (changed.length > 0) {
+    const deactivated = await this.db.transaction(async (tx) => {
+      const changed = await tx
+        .update(users)
+        .set({ deactivatedAt: this.now() })
+        .where(
+          and(
+            eq(users.id, id),
+            isNotNull(users.roleId),
+            isNull(users.deactivatedAt),
+            isNull(users.erasedAt),
+            this.notTheLastActiveAdministrator(id),
+          ),
+        )
+        .returning({ id: users.id });
+      if (changed.length === 0) {
+        return false;
+      }
+      await this.officerDepartures.handBackAssignmentsOf(tx, id, actorId);
+      return true;
+    });
+    if (deactivated) {
       return 'deactivated';
     }
     const state = await this.stateOf(id);
@@ -160,13 +163,13 @@ export class UsersRepository {
   }
 
   /**
-   * Erases a User (ADR-0002): clears their name, email and password, and
-   * deletes Sign-in Links sent to them, keeping the row so their records stay
-   * linked. Refused for the last active Administrator. `already_erased`
-   * changes nothing.
+   * Anonymizes a User while preserving their linked records (ADR-0002),
+   * and hands back Open work in the same transaction, attributed to `actorId`.
+   * Refuses the last active Administrator and leaves already-erased Users unchanged.
    */
   async erase(
     id: string,
+    actorId: string,
   ): Promise<'erased' | 'already_erased' | NotFound | LastAdministrator> {
     return this.db.transaction(async (tx) => {
       const [target] = await tx
@@ -202,6 +205,7 @@ export class UsersRepository {
         await tx.delete(signInLinks).where(eq(signInLinks.email, target.email));
       }
       await tx.delete(googleIdentities).where(eq(googleIdentities.userId, id));
+      await this.officerDepartures.handBackAssignmentsOf(tx, id, actorId);
       return 'erased';
     });
   }
@@ -321,28 +325,39 @@ export class UsersRepository {
   }
 
   /**
-   * Changes a User's Role, unless that would leave no active Administrator.
-   * The check and the change are one statement.
+   * Changes a Role without removing the last active Administrator, and
+   * hands back Open work when leaving the officer Role in the same transaction.
+   * `actorId` identifies the Administrator making the change.
    */
   async changeRole(
     id: string,
     roleId: RoleId,
+    actorId: string,
   ): Promise<'changed' | UserErased | NotFound | LastAdministrator> {
-    const changed = await this.db
-      .update(users)
-      .set({ roleId })
-      .where(
-        and(
-          eq(users.id, id),
-          isNotNull(users.roleId),
-          isNull(users.erasedAt),
-          roleId === 'administrator'
-            ? undefined
-            : this.notTheLastActiveAdministrator(id),
-        ),
-      )
-      .returning({ id: users.id });
-    if (changed.length > 0) {
+    const changed = await this.db.transaction(async (tx) => {
+      const updated = await tx
+        .update(users)
+        .set({ roleId })
+        .where(
+          and(
+            eq(users.id, id),
+            isNotNull(users.roleId),
+            isNull(users.erasedAt),
+            roleId === 'administrator'
+              ? undefined
+              : this.notTheLastActiveAdministrator(id),
+          ),
+        )
+        .returning({ id: users.id });
+      if (updated.length === 0) {
+        return false;
+      }
+      if (roleId !== 'maintenance_officer') {
+        await this.officerDepartures.handBackAssignmentsOf(tx, id, actorId);
+      }
+      return true;
+    });
+    if (changed) {
       return 'changed';
     }
     const state = await this.stateOf(id);

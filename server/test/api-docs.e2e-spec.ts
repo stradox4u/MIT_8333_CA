@@ -31,7 +31,61 @@ describe('API documentation', () => {
         '/api/request-categories',
         '/api/service-requests',
         '/api/service-requests/{reference}',
+        '/api/service-requests/{reference}/assignment',
+        '/api/service-requests/{reference}/start',
+        '/api/service-requests/{reference}/complete',
+        '/api/maintenance-officers',
       ]),
+    );
+  });
+
+  it('documents the assignment, start and complete routes', () => {
+    const assignment =
+      document.paths['/api/service-requests/{reference}/assignment'];
+    const complete =
+      document.paths['/api/service-requests/{reference}/complete'];
+
+    expect(
+      assignment.put.requestBody.content['application/json'].schema,
+    ).toMatchObject({
+      properties: { officerId: expect.anything() },
+      required: ['officerId'],
+    });
+    expect(assignment.put.responses).toHaveProperty('409');
+    expect(assignment.delete.responses).toHaveProperty('200');
+    expect(
+      complete.post.requestBody.content['application/json'].schema,
+    ).toMatchObject({ properties: { note: { maxLength: 2000 } } });
+    expect(
+      document.paths['/api/service-requests/{reference}/start'].post.responses,
+    ).toHaveProperty('403');
+  });
+
+  it('documents the two kinds of timeline entry', () => {
+    const details =
+      document.paths['/api/service-requests/{reference}'].get.responses['200']
+        .content['application/json'].schema;
+    const kinds =
+      details.properties.timeline.items.oneOf ??
+      details.properties.timeline.items.anyOf;
+
+    expect(
+      kinds.map(
+        (kind: { properties: { type: { enum: string[] } } }) =>
+          kind.properties.type.enum,
+      ),
+    ).toEqual([['status_update'], ['assignment']]);
+    expect(kinds[1].properties).toHaveProperty('statusUpdate');
+    expect(kinds[1].properties).not.toHaveProperty('statusChange');
+  });
+
+  it('describes what the open Status filter means', () => {
+    const status = document.paths['/api/service-requests'].get.parameters.find(
+      (parameter: { name: string }) => parameter.name === 'status',
+    );
+
+    expect(JSON.stringify(status)).toContain(
+      'Submitted, Assigned or In Progress',
     );
   });
 
@@ -102,7 +156,9 @@ describe('API documentation', () => {
     const details = schemaOf('/api/service-requests/{reference}');
 
     for (const schema of [listItem, details]) {
-      expect(schema.properties.priority).toBeDefined();
+      expect(schema.properties.priority.description).toBe(
+        'Only for Administrators and the request’s current officer; absent for anyone else',
+      );
       expect(schema.required).not.toContain('priority');
     }
   });

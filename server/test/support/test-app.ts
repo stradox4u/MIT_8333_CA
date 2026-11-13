@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ConfigService } from '@nestjs/config';
 import { InMemoryMailTransport, MailTransport } from '@nestjs/mail';
@@ -14,7 +15,7 @@ import { DATABASE } from '../../src/database/database.js';
 import { DemoAccounts } from '../../src/users/demo-accounts.js';
 import { UsersRepository } from '../../src/users/users.repository.js';
 import { FakeGoogle, type GoogleAccount } from './fake-google.js';
-import { createTestDatabase } from './test-database.js';
+import { createTestDatabase, type TestDatabase } from './test-database.js';
 
 /** Every test starts at this instant. */
 export const TEST_START = Date.parse('2026-11-12T09:00:00.000Z');
@@ -38,6 +39,9 @@ export class TestClock extends Clock {
 
 export type TestApp = Awaited<ReturnType<typeof createTestApp>>;
 
+/** A test client that keeps its cookies, like a browser. */
+export type Browser = ReturnType<TestApp['browser']>;
+
 /**
  * The whole application over HTTP, with the three system boundaries
  * replaced: an in-process database, a mailbox that keeps what is sent, and a
@@ -46,46 +50,53 @@ export type TestApp = Awaited<ReturnType<typeof createTestApp>>;
 export async function createTestApp({
   config = {},
   port = 0,
+  database: suppliedDatabase,
 }: {
   /** Settings to override, by `AppConfig` property, for this file's app. */
   config?: Partial<AppConfig>;
   /** Browser journeys use a stable port; ordinary tests keep a free one. */
   port?: number;
+  /** Concurrency suites supply an isolated real Postgres database. */
+  database?: TestDatabase;
 } = {}) {
-  const database = await createTestDatabase();
+  const database = suppliedDatabase ?? (await createTestDatabase());
   const mailbox = new InMemoryMailTransport();
   const clock = new TestClock();
   const google = new FakeGoogle(() => clock.now());
 
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-    .overrideProvider(DATABASE)
-    .useValue(database.db)
-    .overrideProvider(MailTransport)
-    .useValue(mailbox)
-    .overrideProvider(Clock)
-    .useValue(clock)
-    .overrideProvider(GoogleFetch)
-    .useValue({ fetch: google.fetch })
-    .overrideProvider(AppConfig)
-    .useFactory({
-      inject: [ConfigService],
-      factory: (settings: ConfigService<Environment, true>) =>
-        new Proxy(new AppConfig(settings), {
-          get: (real, name, receiver) =>
-            Object.hasOwn(config, name)
-              ? config[name as keyof AppConfig]
-              : Reflect.get(real, name, receiver),
-        }),
-    })
-    .compile();
-  const app = moduleRef.createNestApplication();
+  let app: INestApplication | undefined;
   try {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(DATABASE)
+      .useValue(database.db)
+      .overrideProvider(MailTransport)
+      .useValue(mailbox)
+      .overrideProvider(Clock)
+      .useValue(clock)
+      .overrideProvider(GoogleFetch)
+      .useValue({ fetch: google.fetch })
+      .overrideProvider(AppConfig)
+      .useFactory({
+        inject: [ConfigService],
+        factory: (settings: ConfigService<Environment, true>) =>
+          new Proxy(new AppConfig(settings), {
+            get: (real, name, receiver) =>
+              Object.hasOwn(config, name)
+                ? config[name as keyof AppConfig]
+                : Reflect.get(real, name, receiver),
+          }),
+      })
+      .compile();
+    app = moduleRef.createNestApplication();
     configureApp(app);
     // Listen once: otherwise supertest opens a new port for every request.
     await app.listen(port, '127.0.0.1');
   } catch (error) {
-    await app.close();
-    await database.close();
+    try {
+      await app?.close();
+    } finally {
+      await database.close();
+    }
     throw error;
   }
 
@@ -160,6 +171,23 @@ export async function createTestApp({
     return signInByLink(email);
   };
 
+  /**
+   * A new browser, signed in as an active Maintenance Officer: created as an
+   * Administrator's Invitation creates one, then signed in once.
+   */
+  const signInAsMaintenanceOfficer = async (
+    email = 'officer@example.com',
+    { firstName = 'Chinedu', lastName = 'Eze' } = {},
+  ) => {
+    await app.get(UsersRepository).createUser({
+      email,
+      firstName,
+      lastName,
+      roleId: 'maintenance_officer',
+    });
+    return signInByLink(email);
+  };
+
   /** The browser that started sign-in visits this fake Google callback. */
   const googleCallbackFor = (
     authorizationUrl: string,
@@ -211,7 +239,7 @@ export async function createTestApp({
   return {
     mailbox,
     clock,
-    googleFetch: moduleRef.get(GoogleFetch),
+    googleFetch: app.get(GoogleFetch),
     googleCallbackFor,
     url: await app.getUrl(),
     continueWithGoogle,
@@ -226,6 +254,7 @@ export async function createTestApp({
     signInByLink,
     signUp,
     signInAsAdministrator,
+    signInAsMaintenanceOfficer,
     databaseMentions: (text: string) => database.mentions(text),
     async reset() {
       mailbox.clear();

@@ -45,3 +45,21 @@ Compose separately waits for PostgreSQL health and successful migrations.
 No demo accounts are created automatically. When explicitly configured,
 `npm run db:seed` is available in the runtime image after migrations; see the
 root instructions for supplying the demo password and invoking it.
+
+## Concurrency tests
+
+`npm run test:postgres` runs the HTTP concurrency regressions against real
+Postgres; PGlite serializes transactions and cannot reproduce these races.
+Set `TEST_POSTGRES_URL` to a local test Postgres connection whose user can create
+databases. Each suite creates a uniquely named database, applies the real
+migrations, and drops only that database on exit. Existing databases are untouched.
+
+For example, start a disposable Postgres separately from the application stack:
+
+```sh
+docker run --rm --name mit8333-test-postgres -e POSTGRES_PASSWORD=test -p 127.0.0.1:55433:5432 -d postgres:17-alpine
+TEST_POSTGRES_URL=postgres://postgres:test@127.0.0.1:55433/postgres npm run test:postgres
+docker stop mit8333-test-postgres
+```
+
+Ordinary `npm test` and `npm run test:e2e` continue to use their existing fixtures.
