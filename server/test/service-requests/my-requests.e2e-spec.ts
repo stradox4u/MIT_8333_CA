@@ -1,4 +1,7 @@
-import { aServiceRequest } from '../support/service-requests.js';
+import {
+  aServiceRequest,
+  submitServiceRequest,
+} from '../support/service-requests.js';
 import { createTestApp, type TestApp } from '../support/test-app.js';
 
 const MINUTE = 60 * 1000;
@@ -14,14 +17,6 @@ describe('Listing the Service Requests a User raised', () => {
 
   type Browser = Awaited<ReturnType<TestApp['signUp']>>;
 
-  const submit = async (browser: Browser, body = aServiceRequest()) => {
-    const submitted = await browser
-      .post('/api/service-requests')
-      .send(body)
-      .expect(201);
-    return submitted.body.reference as string;
-  };
-
   const list = (browser: Browser, query: Record<string, unknown> = {}) =>
     browser
       .get('/api/service-requests')
@@ -33,11 +28,17 @@ describe('Listing the Service Requests a User raised', () => {
       lastName: 'Lovelace',
     });
     const grace = await app.signUp('grace@example.com');
-    await submit(ada, aServiceRequest({ categoryId: 'plumbing' }));
+    await submitServiceRequest(
+      ada,
+      aServiceRequest({ categoryId: 'plumbing' }),
+    );
     app.clock.advance(MINUTE);
-    await submit(grace, aServiceRequest({ categoryId: 'plumbing' }));
+    await submitServiceRequest(
+      grace,
+      aServiceRequest({ categoryId: 'plumbing' }),
+    );
     app.clock.advance(MINUTE);
-    await submit(
+    await submitServiceRequest(
       ada,
       aServiceRequest({
         title: 'Projector won’t turn on',
@@ -79,7 +80,7 @@ describe('Listing the Service Requests a User raised', () => {
     'leaves the Priority out for a Requester (%s)',
     async (role) => {
       const requester = await app.signUp('requester@example.com', { role });
-      await submit(requester);
+      await submitServiceRequest(requester);
 
       const listed = await list(requester).expect(200);
 
@@ -90,7 +91,7 @@ describe('Listing the Service Requests a User raised', () => {
 
   it('shows an Administrator the Priority of the requests they raised', async () => {
     const admin = await app.signInAsAdministrator();
-    await submit(admin);
+    await submitServiceRequest(admin);
 
     const listed = await list(admin).expect(200);
 
@@ -101,7 +102,7 @@ describe('Listing the Service Requests a User raised', () => {
     const ada = await app.signUp('ada@example.com');
     const submitted: string[] = [];
     for (let i = 0; i < 23; i++) {
-      submitted.push(await submit(ada));
+      submitted.push(await submitServiceRequest(ada));
     }
 
     const first = await list(ada).expect(200);
@@ -120,7 +121,7 @@ describe('Listing the Service Requests a User raised', () => {
   it('takes a page size, and answers an empty page past the end', async () => {
     const ada = await app.signUp('ada@example.com');
     for (let i = 0; i < 3; i++) {
-      await submit(ada);
+      await submitServiceRequest(ada);
     }
 
     const second = await list(ada, { page: 2, pageSize: 2 }).expect(200);
@@ -131,9 +132,18 @@ describe('Listing the Service Requests a User raised', () => {
     expect(past.body).toEqual({ items: [], page: 3, pageSize: 2, total: 3 });
   });
 
+  it('takes a page size of up to 100', async () => {
+    const ada = await app.signUp('ada@example.com');
+    await submitServiceRequest(ada);
+
+    const listed = await list(ada, { pageSize: 100 }).expect(200);
+
+    expect(listed.body).toMatchObject({ pageSize: 100, total: 1 });
+  });
+
   it('filters by Status', async () => {
     const ada = await app.signUp('ada@example.com');
-    await submit(ada);
+    await submitServiceRequest(ada);
 
     const submitted = await list(ada, { status: 'submitted' }).expect(200);
     const completed = await list(ada, { status: 'completed' }).expect(200);
@@ -146,7 +156,7 @@ describe('Listing the Service Requests a User raised', () => {
   // leaving out Completed, Verified and Cancelled ones; later slices can.
   it('filters by Open: Submitted, Assigned or In Progress', async () => {
     const ada = await app.signUp('ada@example.com');
-    const reference = await submit(ada);
+    const reference = await submitServiceRequest(ada);
 
     const open = await list(ada, { status: 'open' }).expect(200);
 
@@ -196,5 +206,9 @@ describe('Listing the Service Requests a User raised', () => {
     const pending = await app.signInByLink('pending@example.com');
 
     await list(pending).expect(403);
+  });
+
+  it('needs a signed-in User', async () => {
+    await list(app.browser()).expect(401);
   });
 });

@@ -1,4 +1,7 @@
-import { aServiceRequest } from '../support/service-requests.js';
+import {
+  aServiceRequest,
+  submitServiceRequest,
+} from '../support/service-requests.js';
 import { createTestApp, type TestApp } from '../support/test-app.js';
 
 describe('Submitting a Service Request', () => {
@@ -21,15 +24,24 @@ describe('Submitting a Service Request', () => {
     expect(submitted.body).toEqual({ reference: 'SR-PLUMB-1' });
   });
 
+  it('raises it in the signed-in User’s name, whatever the body says', async () => {
+    const ada = await app.signUp('ada@example.com');
+    const grace = await app.signUp('grace@example.com');
+    const graceId = (await grace.get('/api/auth/me').expect(200)).body.id;
+
+    const reference = await submitServiceRequest(ada, {
+      ...aServiceRequest(),
+      requesterId: graceId,
+    });
+
+    await ada.get(`/api/service-requests/${reference}`).expect(200);
+    await grace.get(`/api/service-requests/${reference}`).expect(404);
+  });
+
   it('numbers each Request Category’s References separately', async () => {
     const student = await app.signUp('student@example.com');
-    const submit = async (categoryId: string) => {
-      const submitted = await student
-        .post('/api/service-requests')
-        .send(aServiceRequest({ categoryId }))
-        .expect(201);
-      return submitted.body.reference;
-    };
+    const submit = (categoryId: string) =>
+      submitServiceRequest(student, aServiceRequest({ categoryId }));
 
     expect(await submit('plumbing')).toBe('SR-PLUMB-1');
     expect(await submit('plumbing')).toBe('SR-PLUMB-2');
@@ -37,6 +49,9 @@ describe('Submitting a Service Request', () => {
     expect(await submit('plumbing')).toBe('SR-PLUMB-3');
   });
 
+  // PGlite runs one transaction at a time, so this only checks the References
+  // come out distinct. It can't make two transactions race for the category's
+  // row: that's the row lock UPDATE … RETURNING takes in Postgres.
   it('gives simultaneous submissions in one Request Category different numbers', async () => {
     const student = await app.signUp('student@example.com');
     const staff = await app.signUp('staff@example.com', { role: 'staff' });
@@ -126,5 +141,13 @@ describe('Submitting a Service Request', () => {
       .post('/api/service-requests')
       .send(aServiceRequest())
       .expect(403);
+  });
+
+  it('needs a signed-in User', async () => {
+    await app
+      .browser()
+      .post('/api/service-requests')
+      .send(aServiceRequest())
+      .expect(401);
   });
 });
