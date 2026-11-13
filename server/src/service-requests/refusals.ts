@@ -1,13 +1,13 @@
 import { NotFoundException } from '@nestjs/common';
 import { invalidInput } from '../validation.js';
 
-/**
- * The outcomes that refuse an action on a Service Request. Repositories name
- * them through these types, and `refuseIf()` switches on them, so renaming
- * one breaks the build wherever it's stale.
- */
+// The outcomes that refuse an action on a Service Request. Repositories name
+// them through these types, and `refuseIf()` switches on them, so renaming
+// one breaks the build wherever it's stale.
+
 /** No such Service Request, or one the User may not see: the same answer. */
 export type NotFound = 'not_found';
+/** A `categoryId` that names no Request Category. */
 export type UnknownCategory = 'unknown_category';
 type Refusal = NotFound | UnknownCategory;
 

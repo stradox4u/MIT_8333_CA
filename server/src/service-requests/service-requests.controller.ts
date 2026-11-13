@@ -56,8 +56,8 @@ export class ServiceRequestsController {
     @CurrentUser() user: User,
     @Query({ schema: listQuery }) query: z.infer<typeof listQuery>,
   ) {
-    const { scope: _requested, ...filters } = query;
-    return this.serviceRequests.listRequestedBy(user.id, filters);
+    // The schema admits only `requested` so far: the User's own.
+    return this.serviceRequests.listRequestedBy(user.id, query);
   }
 
   /** The tracking page: the details, and the timeline oldest first. */
