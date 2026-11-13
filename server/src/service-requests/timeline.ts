@@ -95,8 +95,11 @@ export function buildTimeline(
     });
 
     const { endedAt, endReason } = assignment;
-    // A reassignment's end is part of the next Assignment's entry.
-    if (endedAt && endReason && endReason !== 'reassigned') {
+    // Reassignment and closing actions already have their own timeline entry.
+    if (
+      endedAt &&
+      (endReason === 'unassigned' || endReason === 'officer_left')
+    ) {
       const handedBack = causedBy(assignment, 'submitted');
       placed.push({
         occurredAt: endedAt,

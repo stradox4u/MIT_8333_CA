@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -31,9 +32,12 @@ import {
 import {
   assignBody,
   completeBody,
+  editBody,
+  priorityBody,
   listQuery,
   type ListScopeName,
   referenceParam,
+  reasonBody,
   submitBody,
 } from './service-request.schemas.js';
 import {
@@ -202,6 +206,136 @@ export class ServiceRequestsController {
       'completed',
     );
     return this.show(officer, reference);
+  }
+
+  /** Confirms Completed work without another confirmation step. */
+  @Post(':reference/verify')
+  @HttpCode(200)
+  @ApiOkResponse(ANSWERS_THE_REQUEST)
+  @ApiForbiddenResponse({
+    description: 'Only the Requester or an Administrator may verify',
+  })
+  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiConflictResponse({ description: 'It is not Completed' })
+  async verify(
+    @CurrentUser() user: User,
+    @Param('reference', { schema: referenceParam }) reference: string,
+  ) {
+    const access = await this.findVisible(user, reference);
+    await this.authorization.authorize(
+      ServiceRequestPolicy,
+      'verify',
+      user,
+      access,
+    );
+    refuseIf(await this.lifecycle.verify(reference, user.id), 'verified');
+    return this.show(user, reference);
+  }
+
+  /** Returns Completed work with the Requester's explanation. */
+  @Post(':reference/not-fixed')
+  @HttpCode(200)
+  @ApiOkResponse(ANSWERS_THE_REQUEST)
+  @ApiForbiddenResponse({
+    description: 'Only the Requester may answer Not fixed',
+  })
+  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiConflictResponse({ description: 'It is not Completed' })
+  async notFixed(
+    @CurrentUser() user: User,
+    @Param('reference', { schema: referenceParam }) reference: string,
+    @Body({ schema: reasonBody }) body: z.infer<typeof reasonBody>,
+  ) {
+    const access = await this.findVisible(user, reference);
+    await this.authorization.authorize(
+      ServiceRequestPolicy,
+      'notFixed',
+      user,
+      access,
+    );
+    refuseIf(
+      await this.lifecycle.notFixed(reference, user.id, body.reason),
+      'returned as Not fixed',
+    );
+    return this.show(user, reference);
+  }
+
+  /** Cancels a report in place of deleting its history. */
+  @Post(':reference/cancel')
+  @HttpCode(200)
+  @ApiOkResponse(ANSWERS_THE_REQUEST)
+  @ApiForbiddenResponse({
+    description: 'Only the Requester or an Administrator may cancel',
+  })
+  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiConflictResponse({
+    description: 'Requesters need Submitted; Administrators need Open',
+  })
+  async cancel(
+    @CurrentUser() user: User,
+    @Param('reference', { schema: referenceParam }) reference: string,
+    @Body({ schema: reasonBody }) body: z.infer<typeof reasonBody>,
+  ) {
+    const access = await this.findVisible(user, reference);
+    await this.authorization.authorize(
+      ServiceRequestPolicy,
+      'cancel',
+      user,
+      access,
+    );
+    refuseIf(
+      await this.lifecycle.cancel(reference, user.id, body.reason),
+      'cancelled',
+    );
+    return this.show(user, reference);
+  }
+
+  /** Changes only the details this User may edit in the current Status. */
+  @Patch(':reference')
+  @ApiOkResponse(ANSWERS_THE_REQUEST)
+  @ApiBadRequestResponse({
+    description: 'Invalid field or unknown Request Category',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Only the Requester or Administrator; administrators correct category and location only',
+  })
+  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiConflictResponse({
+    description: 'Requesters need Submitted; Administrators need Open',
+  })
+  async edit(
+    @CurrentUser() user: User,
+    @Param('reference', { schema: referenceParam }) reference: string,
+    @Body({ schema: editBody }) body: z.infer<typeof editBody>,
+  ) {
+    const access = await this.findVisible(user, reference);
+    await this.authorization.authorize(
+      ServiceRequestPolicy,
+      'edit',
+      user,
+      access,
+    );
+    refuseIf(await this.lifecycle.edit(reference, user.id, body), 'edited');
+    return this.show(user, reference);
+  }
+
+  /** Sets the Administrator's Priority while the work is Open. */
+  @Put(':reference/priority')
+  @Can(ServiceRequestPolicy, 'manage')
+  @ApiOkResponse(ANSWERS_THE_REQUEST)
+  @ApiNotFoundResponse({ description: 'No such Service Request' })
+  @ApiConflictResponse({ description: 'The Service Request is not Open' })
+  async setPriority(
+    @CurrentUser() user: User,
+    @Param('reference', { schema: referenceParam }) reference: string,
+    @Body({ schema: priorityBody }) body: z.infer<typeof priorityBody>,
+  ) {
+    refuseIf(
+      await this.lifecycle.setPriority(reference, user.id, body.priority),
+      'given a Priority',
+    );
+    return this.show(user, reference);
   }
 
   /** 404 unless `user` may see the request; then 403 unless they're its current officer. */

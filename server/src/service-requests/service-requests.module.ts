@@ -8,6 +8,7 @@ import { ServiceRequestLifecycle } from './service-request-lifecycle.js';
 import { ServiceRequestPolicy } from './service-request.policy.js';
 import { ServiceRequestsController } from './service-requests.controller.js';
 import { ServiceRequestsRepository } from './service-requests.repository.js';
+import { DemoServiceRequests } from './demo-service-requests.js';
 
 /**
  * Service Requests: Users reporting faults on campus, Maintenance Officers
@@ -30,8 +31,9 @@ import { ServiceRequestsRepository } from './service-requests.repository.js';
     ServiceRequestLifecycle,
     MaintenanceOfficers,
     ServiceRequestPolicy,
+    DemoServiceRequests,
     { provide: OfficerDepartures, useExisting: ServiceRequestLifecycle },
   ],
-  exports: [OfficerDepartures],
+  exports: [OfficerDepartures, ServiceRequestLifecycle],
 })
 export class ServiceRequestsModule {}

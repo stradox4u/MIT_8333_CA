@@ -35,6 +35,10 @@ describe('API documentation', () => {
         '/api/service-requests/{reference}/start',
         '/api/service-requests/{reference}/complete',
         '/api/maintenance-officers',
+        '/api/service-requests/{reference}/verify',
+        '/api/service-requests/{reference}/not-fixed',
+        '/api/service-requests/{reference}/cancel',
+        '/api/service-requests/{reference}/priority',
       ]),
     );
   });
@@ -77,6 +81,38 @@ describe('API documentation', () => {
     ).toEqual([['status_update'], ['assignment']]);
     expect(kinds[1].properties).toHaveProperty('statusUpdate');
     expect(kinds[1].properties).not.toHaveProperty('statusChange');
+  });
+
+  it('documents closing actions, strict partial edits and the allowed Priorities', () => {
+    for (const action of ['verify', 'not-fixed', 'cancel']) {
+      const operation =
+        document.paths[`/api/service-requests/{reference}/${action}`].post;
+      expect(operation.responses).toHaveProperty('200');
+      expect(operation.responses).toHaveProperty('409');
+      if (action !== 'verify')
+        expect(
+          operation.requestBody.content['application/json'].schema,
+        ).toMatchObject({
+          properties: { reason: { minLength: 3, maxLength: 1000 } },
+          required: ['reason'],
+        });
+    }
+    const edit = document.paths['/api/service-requests/{reference}'].patch;
+    expect(edit.requestBody.content['application/json'].schema).toMatchObject({
+      additionalProperties: false,
+      properties: {
+        title: { minLength: 3, maxLength: 120 },
+        location: { minLength: 2, maxLength: 200 },
+        description: { minLength: 10, maxLength: 5000 },
+      },
+    });
+    expect(
+      document.paths['/api/service-requests/{reference}/priority'].put
+        .requestBody.content['application/json'].schema,
+    ).toMatchObject({
+      properties: { priority: { enum: ['low', 'normal', 'high', 'urgent'] } },
+      required: ['priority'],
+    });
   });
 
   it('describes what the open Status filter means', () => {

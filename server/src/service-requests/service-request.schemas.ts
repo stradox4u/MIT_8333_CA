@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SERVICE_REQUEST_STATUSES } from '../database/schema.js';
+import { PRIORITIES, SERVICE_REQUEST_STATUSES } from '../database/schema.js';
 import { userId } from '../users/user.schemas.js';
 
 /** Zod pieces for Service Request data (docs/service-requests.md, Validation). */
@@ -46,6 +46,20 @@ export const completeBody = z
     note: z.string().trim().min(1).max(2000).optional(),
   })
   .optional();
+
+export const reasonBody = z.object({
+  reason: z.string().trim().min(3).max(1000),
+});
+
+export const editBody = submitBody
+  .partial()
+  .strict()
+  .refine(
+    (body) => Object.keys(body).length > 0,
+    'Provide at least one field to edit',
+  );
+
+export const priorityBody = z.object({ priority: z.enum(PRIORITIES) });
 
 /**
  * Which Service Requests a list shows: those the User raised (`requested`),

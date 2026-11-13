@@ -59,6 +59,26 @@ export class ServiceRequestPolicy {
     return isOfficer(user) && request.currentOfficerId === user.id;
   }
 
+  /** The Requester or an Administrator confirms Completed work is fixed. */
+  verify(user: User, request: Pick<ServiceRequestAccess, 'requesterId'>) {
+    return request.requesterId === user.id || isAdministrator(user);
+  }
+
+  /** Only the Requester can say the fault was not fixed. */
+  notFixed(user: User, request: Pick<ServiceRequestAccess, 'requesterId'>) {
+    return request.requesterId === user.id;
+  }
+
+  /** Requesters withdraw their own reports; Administrators can cancel Open work. */
+  cancel(user: User, request: Pick<ServiceRequestAccess, 'requesterId'>) {
+    return request.requesterId === user.id || isAdministrator(user);
+  }
+
+  /** Requesters edit their reports; Administrators correct category and location. */
+  edit(user: User, request: Pick<ServiceRequestAccess, 'requesterId'>) {
+    return request.requesterId === user.id || isAdministrator(user);
+  }
+
   /**
    * Seeing a Service Request's Priority: Administrators and its current
    * officer. Requesters don't, even for their own; nor do officers it was

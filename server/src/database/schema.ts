@@ -124,6 +124,8 @@ export const ACTIVITY_ACTIONS = [
   'reassigned',
   'unassigned',
   'officer_left',
+  'details_changed',
+  'priority_changed',
 ] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 
@@ -213,6 +215,8 @@ export const serviceRequests = pgTable(
     id: uuid().primaryKey().defaultRandom(),
     /** Such as SR-PLUMB-42. It never changes, even if the Request Category does. */
     reference: text().notNull(),
+    /** Private seed slot; never returned by the API. */
+    demoKey: text().unique(),
     categoryId: text()
       .notNull()
       .references(() => requestCategories.id),
@@ -253,6 +257,8 @@ const timelineId = () =>
 export const ASSIGNMENT_END_REASONS = [
   'reassigned',
   'unassigned',
+  'not_fixed',
+  'cancelled',
   /** The officer was demoted, deactivated or erased. */
   'officer_left',
 ] as const;

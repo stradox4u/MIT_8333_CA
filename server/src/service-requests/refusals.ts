@@ -18,6 +18,8 @@ export type UnknownCategory = 'unknown_category';
 export type NotAnActiveOfficer = 'not_an_active_officer';
 /** The User stopped being the request's current officer before acting. */
 export type NotCurrentOfficer = 'not_current_officer';
+/** The User no longer has permission when the request is locked. */
+export type NotAllowed = 'not_allowed';
 /** The action doesn't fit the request's current Status, which it names. */
 export interface WrongStatus {
   wrongStatus: ServiceRequestStatus;
@@ -27,6 +29,7 @@ type Refusal =
   | UnknownCategory
   | NotAnActiveOfficer
   | NotCurrentOfficer
+  | NotAllowed
   | WrongStatus;
 
 /** Refusals whose message says what was refused. */
@@ -83,6 +86,8 @@ export function refuseIf<Outcome>(
       throw new ForbiddenException(
         'Only the request’s current officer can do this',
       );
+    case 'not_allowed':
+      throw new ForbiddenException('You may not change this Service Request');
     default:
       // Any other outcome went ahead; this only checks every refusal is handled.
       refusal satisfies never;

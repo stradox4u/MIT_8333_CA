@@ -13,6 +13,7 @@ import { AppConfig } from '../../src/config/app-config.js';
 import type { Environment } from '../../src/config/environment.js';
 import { DATABASE } from '../../src/database/database.js';
 import { DemoAccounts } from '../../src/users/demo-accounts.js';
+import { DemoServiceRequests } from '../../src/service-requests/demo-service-requests.js';
 import { UsersRepository } from '../../src/users/users.repository.js';
 import { FakeGoogle, type GoogleAccount } from './fake-google.js';
 import { createTestDatabase, type TestDatabase } from './test-database.js';
@@ -246,8 +247,10 @@ export async function createTestApp({
     /** What the scheduler runs once a day. */
     runDailyCleanup: () => app.get(DailyCleanup).run(),
     /** What `npm run db:seed` does, with the given settings. */
-    seedDemoAccounts: (settings: AppConfig['demoAccounts']) =>
-      app.get(DemoAccounts).seed(settings),
+    seedDemoAccounts: async (settings: AppConfig['demoAccounts']) => {
+      await app.get(DemoAccounts).seed(settings);
+      await app.get(DemoServiceRequests).seed(settings.domain);
+    },
     browser,
     latestMailTo,
     signInLinkTokenSentTo,

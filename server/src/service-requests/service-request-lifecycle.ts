@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { Clock } from '../clock.js';
 import { InjectDatabase, type Database } from '../database/database.js';
 import {
@@ -7,6 +7,7 @@ import {
   type AssignmentEndReason,
   assignments,
   OPEN_STATUSES,
+  type Priority,
   requestCategories,
   serviceRequests,
   type ServiceRequestStatus,
@@ -18,6 +19,7 @@ import { activeWithRole } from '../users/active-users.js';
 import type { OfficerDepartures } from '../users/officer-departures.js';
 import {
   type NotAnActiveOfficer,
+  type NotAllowed,
   type NotCurrentOfficer,
   type NotFound,
   type UnknownCategory,
@@ -34,10 +36,15 @@ export interface NewServiceRequest {
   description: string;
 }
 
+export type DetailsEdits = Partial<Omit<NewServiceRequest, 'requesterId'>>;
+
 /** A Service Request locked for a change, with its current Assignment. */
 interface Locked {
   id: string;
+  requesterId: string;
   status: ServiceRequestStatus;
+  completedAt: Date | null;
+  priority: Priority;
   assignment: { id: number; officerId: string } | null;
 }
 
@@ -238,8 +245,233 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       if (request.status !== 'in_progress') {
         return wrongStatus(request.status);
       }
-      await this.changeStatus(tx, request, 'completed', officerId, note);
+      await this.changeStatus(tx, request, 'completed', officerId, { note });
       return 'completed';
+    });
+  }
+
+  /** Confirms Completed work while preserving the officer's Assignment. */
+  async verify(
+    reference: string,
+    actorId: string,
+  ): Promise<'verified' | NotFound | NotAllowed | WrongStatus> {
+    return this.db.transaction(async (tx) => {
+      const actor = await this.lockActor(tx, actorId);
+      const request = await this.lock(tx, reference);
+      if (!request) return 'not_found';
+      if (
+        !actor ||
+        (actor.roleId !== 'administrator' && request.requesterId !== actorId)
+      )
+        return 'not_allowed';
+      if (request.status !== 'completed') return wrongStatus(request.status);
+      await this.changeStatus(tx, request, 'verified', actorId);
+      return 'verified';
+    });
+  }
+
+  /** Rechecks each deadline under its request lock so answers can safely race the job. */
+  async verifyOverdue(): Promise<number> {
+    const cutoff = new Date(this.clock.now() - 7 * 24 * 60 * 60 * 1000);
+    const due = await this.db
+      .select({ reference: serviceRequests.reference })
+      .from(serviceRequests)
+      .where(
+        and(
+          eq(serviceRequests.status, 'completed'),
+          lte(serviceRequests.completedAt, cutoff),
+        ),
+      )
+      .orderBy(asc(serviceRequests.id));
+    let verified = 0;
+    for (const { reference } of due) {
+      const changed = await this.db.transaction(async (tx) => {
+        const request = await this.lock(tx, reference);
+        if (
+          !request ||
+          request.status !== 'completed' ||
+          !request.completedAt ||
+          request.completedAt > cutoff
+        )
+          return false;
+        await this.changeStatus(tx, request, 'verified', null);
+        return true;
+      });
+      if (changed) verified++;
+    }
+    return verified;
+  }
+
+  /** Records the Requester's reason for returning Completed work to its officer. */
+  async notFixed(
+    reference: string,
+    actorId: string,
+    reason: string,
+  ): Promise<'returned' | NotFound | NotAllowed | WrongStatus> {
+    return this.db.transaction(async (tx) => {
+      const actor = await this.lockActor(tx, actorId);
+      const request = await this.lock(tx, reference);
+      if (!request) return 'not_found';
+      if (!actor || request.requesterId !== actorId) return 'not_allowed';
+      if (request.status !== 'completed') return wrongStatus(request.status);
+      const [officer] = request.assignment
+        ? await tx
+            .select({ id: users.id })
+            .from(users)
+            .where(
+              and(
+                eq(users.id, request.assignment.officerId),
+                activeWithRole('maintenance_officer'),
+              ),
+            )
+        : [];
+      if (!officer && request.assignment) {
+        await this.endAssignment(
+          tx,
+          request.assignment.id,
+          'not_fixed',
+          actorId,
+          this.now(),
+        );
+      }
+      await this.changeStatus(
+        tx,
+        request,
+        officer ? 'assigned' : 'submitted',
+        actorId,
+        { reason },
+      );
+      return 'returned';
+    });
+  }
+
+  /** Cancels work atomically with its Assignment ending and the actor's reason. */
+  async cancel(
+    reference: string,
+    actorId: string,
+    reason: string,
+  ): Promise<'cancelled' | NotFound | NotAllowed | WrongStatus> {
+    return this.db.transaction(async (tx) => {
+      const actor = await this.lockActor(tx, actorId);
+      const request = await this.lock(tx, reference);
+      if (!request) return 'not_found';
+      if (
+        !actor ||
+        (actor.roleId !== 'administrator' && request.requesterId !== actorId)
+      )
+        return 'not_allowed';
+      if (
+        !OPEN_STATUSES.includes(request.status) ||
+        (actor.roleId !== 'administrator' && request.status !== 'submitted')
+      )
+        return wrongStatus(request.status);
+      if (request.assignment)
+        await this.endAssignment(
+          tx,
+          request.assignment.id,
+          'cancelled',
+          actorId,
+          this.now(),
+        );
+      await this.changeStatus(tx, request, 'cancelled', actorId, { reason });
+      return 'cancelled';
+    });
+  }
+
+  /** Records only changed fields, keeping corrections off the Status timeline. */
+  async edit(
+    reference: string,
+    actorId: string,
+    edits: DetailsEdits,
+  ): Promise<
+    | 'edited'
+    | 'unchanged'
+    | NotFound
+    | NotAllowed
+    | WrongStatus
+    | UnknownCategory
+  > {
+    return this.db.transaction(async (tx) => {
+      const actor = await this.lockActor(tx, actorId);
+      const request = await this.lock(tx, reference);
+      if (!request) return 'not_found';
+      if (
+        !actor ||
+        (actor.roleId !== 'administrator' && request.requesterId !== actorId)
+      )
+        return 'not_allowed';
+      if (
+        !OPEN_STATUSES.includes(request.status) ||
+        (actor.roleId !== 'administrator' && request.status !== 'submitted')
+      )
+        return wrongStatus(request.status);
+      const fullEdit =
+        request.requesterId === actorId && request.status === 'submitted';
+      if (
+        !fullEdit &&
+        (edits.title !== undefined || edits.description !== undefined)
+      )
+        return 'not_allowed';
+      if (edits.categoryId !== undefined) {
+        const [category] = await tx
+          .select({ id: requestCategories.id })
+          .from(requestCategories)
+          .where(eq(requestCategories.id, edits.categoryId));
+        if (!category) return 'unknown_category';
+      }
+      const [before] = await tx
+        .select({
+          title: serviceRequests.title,
+          categoryId: serviceRequests.categoryId,
+          location: serviceRequests.location,
+          description: serviceRequests.description,
+        })
+        .from(serviceRequests)
+        .where(eq(serviceRequests.id, request.id));
+      const changes: Record<string, { from: string; to: string }> = {};
+      for (const field of Object.keys(edits) as (keyof DetailsEdits)[]) {
+        const value = edits[field];
+        if (value !== undefined && value !== before[field])
+          changes[field] = { from: before[field], to: value };
+      }
+      if (Object.keys(changes).length === 0) return 'unchanged';
+      await tx
+        .update(serviceRequests)
+        .set(edits)
+        .where(eq(serviceRequests.id, request.id));
+      await this.record(tx, request.id, this.now(), {
+        actorId,
+        action: 'details_changed',
+        details: { changes },
+      });
+      return 'edited';
+    });
+  }
+
+  /** Changes Priority only on Open work, recording no entry for an unchanged value. */
+  async setPriority(
+    reference: string,
+    actorId: string,
+    priority: Priority,
+  ): Promise<'changed' | 'unchanged' | NotFound | NotAllowed | WrongStatus> {
+    return this.db.transaction(async (tx) => {
+      const actor = await this.lockActor(tx, actorId);
+      const request = await this.lock(tx, reference);
+      if (!request) return 'not_found';
+      if (actor?.roleId !== 'administrator') return 'not_allowed';
+      if (!OPEN_STATUSES.includes(request.status))
+        return wrongStatus(request.status);
+      if (request.priority === priority) return 'unchanged';
+      await tx
+        .update(serviceRequests)
+        .set({ priority })
+        .where(eq(serviceRequests.id, request.id));
+      await this.record(tx, request.id, this.now(), {
+        actorId,
+        action: 'priority_changed',
+        details: { from: request.priority, to: priority },
+      });
+      return 'changed';
     });
   }
 
@@ -254,7 +486,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     officerId: string,
     actorId: string,
   ): Promise<void> {
-    const held = await db
+    const candidates = await db
       .select({
         reference: serviceRequests.reference,
       })
@@ -264,16 +496,12 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
         eq(serviceRequests.id, assignments.serviceRequestId),
       )
       .where(
-        and(
-          eq(assignments.officerId, officerId),
-          isNull(assignments.endedAt),
-          inArray(serviceRequests.status, HELD),
-        ),
+        and(eq(assignments.officerId, officerId), isNull(assignments.endedAt)),
       )
       .orderBy(asc(assignments.id));
-    for (const { reference } of held) {
-      // A reassignment may commit while we wait for the request lock. Read
-      // its current Assignment in a fresh statement after acquiring the lock.
+    for (const { reference } of candidates) {
+      // Completed work can reopen concurrently, so filter Status after locking.
+      // Re-read its Assignment in case reassignment committed during the wait.
       const request = await this.lock(db, reference);
       if (
         !request ||
@@ -307,10 +535,34 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     return officer !== undefined;
   }
 
+  /** Locks the actor before the request, including later foreign-key checks. */
+  private async lockActor(db: Database, actorId: string) {
+    const [actor] = await db
+      .select({ id: users.id, roleId: users.roleId })
+      .from(users)
+      .where(
+        and(
+          eq(users.id, actorId),
+          isNotNull(users.roleId),
+          isNotNull(users.emailVerifiedAt),
+          isNull(users.deactivatedAt),
+          isNull(users.erasedAt),
+        ),
+      )
+      .for('share');
+    return actor;
+  }
+
   /** Locks a request for a change, and reads its current Assignment. */
   private async lock(db: Database, reference: string): Promise<Locked | null> {
     const [request] = await db
-      .select({ id: serviceRequests.id, status: serviceRequests.status })
+      .select({
+        id: serviceRequests.id,
+        requesterId: serviceRequests.requesterId,
+        status: serviceRequests.status,
+        completedAt: serviceRequests.completedAt,
+        priority: serviceRequests.priority,
+      })
       .from(serviceRequests)
       .where(eq(serviceRequests.reference, reference))
       .for('update');
@@ -334,11 +586,15 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     db: Database,
     request: Locked,
     to: ServiceRequestStatus,
-    actorId: string,
-    note: string | null = null,
+    actorId: string | null,
+    details: { note?: string | null; reason?: string | null } = {},
   ) {
     const at = this.now();
-    const moved = await this.moveTo(db, request, to, { actorId, at, note });
+    const moved = await this.moveTo(db, request, to, {
+      actorId,
+      at,
+      ...details,
+    });
     await this.record(db, request.id, at, {
       actorId,
       action: 'status_changed',
@@ -399,10 +655,11 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     request: Locked,
     to: ServiceRequestStatus,
     change: {
-      actorId: string;
+      actorId: string | null;
       at: Date;
       assignmentId?: number;
       note?: string | null;
+      reason?: string | null;
     },
   ): Promise<Moved | undefined> {
     if (request.status === to) {
@@ -413,6 +670,10 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       .set({
         status: to,
         ...(to === 'completed' && { completedAt: change.at }),
+        ...(to === 'verified' && { verifiedAt: change.at }),
+        ...(to === 'cancelled' && { cancelledAt: change.at }),
+        ...(request.status === 'completed' &&
+          (to === 'assigned' || to === 'submitted') && { completedAt: null }),
       })
       .where(eq(serviceRequests.id, request.id));
     await db.insert(statusUpdates).values({
@@ -422,6 +683,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       toStatus: to,
       assignmentId: change.assignmentId,
       note: change.note,
+      reason: change.reason,
       occurredAt: change.at,
     });
     return { from: request.status, to };
