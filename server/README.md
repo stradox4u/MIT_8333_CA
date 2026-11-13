@@ -50,6 +50,7 @@ The seed also creates twelve demonstration Service Requests: one in every
 Status for Student and Staff, with current work and Assignment history for the
 officer and all requests visible to the Administrator. Reruns preserve existing
 demo requests and their history; a private unique seed key prevents duplicates.
+New demo requests include a Progress Note before work begins.
 
 ## Closing Service Requests
 
@@ -62,6 +63,22 @@ Submitted, and Administrators can correct category and location while Open.
 The daily 03:00 job verifies Completed requests unanswered for at least seven
 days, including when their Requester has left; the Status Update and Activity Log
 have no actor. A new completion after Not fixed starts a fresh seven-day deadline.
+
+## Progress Notes
+
+`POST /api/service-requests/:reference/progress-notes` accepts `{ text }` and
+returns the updated request with `201`. The Requester, current Maintenance Officer
+and Administrators can append while Open or Completed; former officers remain
+read-only unless they also have Requester or Administrator rights. Text is trimmed
+and must contain 1–2,000 characters. Notes cannot be edited or deleted and change
+neither Status nor the Activity Log; they send no email.
+
+Every viewer sees notes in the oldest-first timeline as
+`{ type: "progress_note", occurredAt, actor: { id, name }, text }`. Erased authors
+show as "Erased user". Migration `0014_progress_notes` adds the table, foreign keys
+and request index, using the existing shared timeline sequence for timestamp ties.
+Run migrations before deploying the API. The client currently ignores this new
+variant safely; displaying and composing notes belongs to client slice 4.
 
 ## Concurrency tests
 

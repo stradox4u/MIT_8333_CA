@@ -967,3 +967,42 @@ test("a session that ends while reporting goes to Sign in and comes back to the 
   expect(runtime.router.currentRoute.value.path).toBe("/requests/new");
   runtime.queryClient.clear();
 });
+
+test("the tracking page safely ignores new timeline variants while retaining known entries", async () => {
+  signedIn("student");
+  server.use(
+    http.get(`${api}/service-requests/SR-PLUMB-1`, () =>
+      HttpResponse.json({
+        ...submitted,
+        timeline: [
+          ...submitted.timeline,
+          {
+            type: "progress_note",
+            occurredAt: "2026-11-12T09:01:00.000Z",
+            actor: { id: "ada", name: "Ada Okafor" },
+            text: "The pipe is still leaking.",
+          },
+          {
+            type: "assignment",
+            occurredAt: "2026-11-12T09:02:00.000Z",
+            actor: { id: "admin", name: "Grace Hopper" },
+            change: "assigned",
+            officer: { id: "officer", name: "Chinedu Eze" },
+            previousOfficer: null,
+            statusUpdate: { fromStatus: "submitted", toStatus: "assigned" },
+          },
+        ],
+      }),
+    ),
+  );
+  const { runtime } = open("/requests/SR-PLUMB-1");
+  await screen.findByRole("heading", { name: "Leaking pipe under the sink" });
+  const region = await screen.findByRole("region", { name: "Timeline" });
+  const entries = within(region).getAllByRole("listitem");
+  expect(entries.map((entry) => entry.textContent)).toEqual([
+    expect.stringContaining("Fault reported"),
+    expect.stringContaining("Assigned to Chinedu Eze"),
+  ]);
+  expect(within(region).queryByText("The pipe is still leaking.")).toBeNull();
+  runtime.queryClient.clear();
+});

@@ -5,6 +5,7 @@ import { InjectDatabase, type Database } from '../database/database.js';
 import {
   assignments,
   OPEN_STATUSES,
+  progressNotes,
   requestCategories,
   serviceRequests,
   statusUpdates,
@@ -230,6 +231,16 @@ export class ServiceRequestsRepository {
       .leftJoin(enders, eq(enders.id, assignments.endedById))
       .where(eq(assignments.serviceRequestId, serviceRequestId))
       .orderBy(asc(assignments.id));
+    const notes = await this.db
+      .select({
+        id: progressNotes.id,
+        createdAt: progressNotes.createdAt,
+        actor: { id: actors.id, name: displayName(actors) },
+        text: progressNotes.text,
+      })
+      .from(progressNotes)
+      .innerJoin(actors, eq(actors.id, progressNotes.authorId))
+      .where(eq(progressNotes.serviceRequestId, serviceRequestId));
     return buildTimeline(
       updates.map(({ actorId, actorName, ...update }) => ({
         ...update,
@@ -239,6 +250,7 @@ export class ServiceRequestsRepository {
         ...assignment,
         endedBy: personOrNull(endedById, endedByName),
       })),
+      notes,
     );
   }
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import ThumbsDown from "~icons/lucide/thumbs-down";
 import UserRoundCheck from "~icons/lucide/user-round-check";
 import UserRoundMinus from "~icons/lucide/user-round-minus";
@@ -25,6 +26,13 @@ const props = defineProps<{
   /** The signed-in User's id, so their own entries read "You". */
   viewerId?: string;
 }>();
+
+// Server slices may add timeline variants before their client renderer ships.
+const visibleEntries = computed(() =>
+  props.entries.filter(
+    (entry) => entry.type === "status_update" || entry.type === "assignment",
+  ),
+);
 
 const notFixed = (entry: StatusUpdate) =>
   entry.fromStatus === "completed" &&
@@ -88,7 +96,7 @@ const label =
     class="relative m-0 p-0 list-none [&>li]:before:absolute [&>li]:before:left-4 [&>li]:before:top-8.5 [&>li]:before:bottom-0 [&>li]:before:w-0.5 [&>li]:before:bg-campus-panel [&>li:last-child]:pb-0 [&>li:last-child]:before:hidden"
   >
     <li
-      v-for="(entry, index) in entries"
+      v-for="(entry, index) in visibleEntries"
       :key="`${entry.occurredAt}-${index}`"
       class="relative grid grid-cols-[34px_minmax(0,1fr)] gap-3 pb-5"
     >

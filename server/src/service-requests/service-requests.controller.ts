@@ -34,6 +34,7 @@ import {
   completeBody,
   editBody,
   priorityBody,
+  progressNoteBody,
   listQuery,
   type ListScopeName,
   referenceParam,
@@ -317,6 +318,39 @@ export class ServiceRequestsController {
       access,
     );
     refuseIf(await this.lifecycle.edit(reference, user.id, body), 'edited');
+    return this.show(user, reference);
+  }
+
+  /** Appends an immutable Progress Note while the request is Open or Completed. */
+  @Post(':reference/progress-notes')
+  @ApiCreatedResponse(ANSWERS_THE_REQUEST)
+  @ApiBadRequestResponse({
+    description: 'Text must be 1–2,000 characters after trimming',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Only the Requester, current officer or an Administrator may add notes',
+  })
+  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiConflictResponse({
+    description: 'The Service Request is Verified or Cancelled',
+  })
+  async addProgressNote(
+    @CurrentUser() user: User,
+    @Param('reference', { schema: referenceParam }) reference: string,
+    @Body({ schema: progressNoteBody }) body: z.infer<typeof progressNoteBody>,
+  ) {
+    const access = await this.findVisible(user, reference);
+    await this.authorization.authorize(
+      ServiceRequestPolicy,
+      'addProgressNote',
+      user,
+      access,
+    );
+    refuseIf(
+      await this.lifecycle.addProgressNote(reference, user.id, body.text),
+      'given a Progress Note',
+    );
     return this.show(user, reference);
   }
 

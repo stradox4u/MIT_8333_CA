@@ -59,6 +59,10 @@ export const editBody = submitBody
     'Provide at least one field to edit',
   );
 
+export const progressNoteBody = z.object({
+  text: z.string().trim().min(1).max(2000),
+});
+
 export const priorityBody = z.object({ priority: z.enum(PRIORITIES) });
 
 /**

@@ -7,6 +7,7 @@ import {
   type AssignmentEndReason,
   assignments,
   OPEN_STATUSES,
+  progressNotes,
   type Priority,
   requestCategories,
   serviceRequests,
@@ -445,6 +446,41 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
         details: { changes },
       });
       return 'edited';
+    });
+  }
+
+  /** Rechecks author rights and Status under the same locks as lifecycle changes. */
+  async addProgressNote(
+    reference: string,
+    actorId: string,
+    text: string,
+  ): Promise<'added' | NotFound | NotAllowed | WrongStatus> {
+    return this.db.transaction(async (tx) => {
+      const actor = await this.lockActor(tx, actorId);
+      const request = await this.lock(tx, reference);
+      if (!request) return 'not_found';
+      if (
+        !actor ||
+        !(
+          actor.roleId === 'administrator' ||
+          request.requesterId === actorId ||
+          (actor.roleId === 'maintenance_officer' &&
+            request.assignment?.officerId === actorId)
+        )
+      )
+        return 'not_allowed';
+      if (
+        !OPEN_STATUSES.includes(request.status) &&
+        request.status !== 'completed'
+      )
+        return wrongStatus(request.status);
+      await tx.insert(progressNotes).values({
+        serviceRequestId: request.id,
+        authorId: actorId,
+        text,
+        createdAt: this.now(),
+      });
+      return 'added';
     });
   }
 

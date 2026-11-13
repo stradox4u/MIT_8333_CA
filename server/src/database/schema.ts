@@ -244,7 +244,7 @@ export const serviceRequests = pgTable(
 
 /**
  * One counter for the rows a Service Request's timeline is built from
- * (Assignments and Status Updates), so entries at the same instant keep the
+ * (Assignments, Status Updates and Progress Notes), so entries at the same instant keep the
  * order they happened in.
  */
 export const timelineSequence = pgSequence('timeline_sequence');
@@ -319,6 +319,23 @@ export const statusUpdates = pgTable(
      */
     assignmentId: integer().references(() => assignments.id),
     occurredAt: instant().notNull(),
+  },
+  (table) => [index().on(table.serviceRequestId)],
+);
+
+/** Progress Notes are append-only and leave Status unchanged. */
+export const progressNotes = pgTable(
+  'progress_notes',
+  {
+    id: timelineId(),
+    serviceRequestId: uuid()
+      .notNull()
+      .references(() => serviceRequests.id),
+    authorId: uuid()
+      .notNull()
+      .references(() => users.id),
+    text: text().notNull(),
+    createdAt: instant().notNull(),
   },
   (table) => [index().on(table.serviceRequestId)],
 );

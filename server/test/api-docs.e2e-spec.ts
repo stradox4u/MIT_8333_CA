@@ -39,6 +39,7 @@ describe('API documentation', () => {
         '/api/service-requests/{reference}/not-fixed',
         '/api/service-requests/{reference}/cancel',
         '/api/service-requests/{reference}/priority',
+        '/api/service-requests/{reference}/progress-notes',
       ]),
     );
   });
@@ -65,7 +66,7 @@ describe('API documentation', () => {
     ).toHaveProperty('403');
   });
 
-  it('documents the two kinds of timeline entry', () => {
+  it('documents all three kinds of timeline entry', () => {
     const details =
       document.paths['/api/service-requests/{reference}'].get.responses['200']
         .content['application/json'].schema;
@@ -78,9 +79,36 @@ describe('API documentation', () => {
         (kind: { properties: { type: { enum: string[] } } }) =>
           kind.properties.type.enum,
       ),
-    ).toEqual([['status_update'], ['assignment']]);
+    ).toEqual([['status_update'], ['assignment'], ['progress_note']]);
     expect(kinds[1].properties).toHaveProperty('statusUpdate');
     expect(kinds[1].properties).not.toHaveProperty('statusChange');
+  });
+
+  it('documents Progress Note validation and its safe timeline actor', () => {
+    const operation =
+      document.paths['/api/service-requests/{reference}/progress-notes'].post;
+    expect(
+      operation.requestBody.content['application/json'].schema,
+    ).toMatchObject({
+      properties: { text: { minLength: 1, maxLength: 2000 } },
+      required: ['text'],
+    });
+    for (const status of ['201', '400', '403', '404', '409'])
+      expect(operation.responses).toHaveProperty(status);
+    const timeline =
+      document.paths['/api/service-requests/{reference}'].get.responses['200']
+        .content['application/json'].schema.properties.timeline.items;
+    const note = (timeline.oneOf ?? timeline.anyOf)[2];
+    expect(Object.keys(note.properties)).toEqual([
+      'type',
+      'occurredAt',
+      'actor',
+      'text',
+    ]);
+    expect(Object.keys(note.properties.actor.properties)).toEqual([
+      'id',
+      'name',
+    ]);
   });
 
   it('documents closing actions, strict partial edits and the allowed Priorities', () => {
