@@ -176,6 +176,13 @@ export const SERVICE_REQUEST_STATUSES = [
 ] as const;
 export type ServiceRequestStatus = (typeof SERVICE_REQUEST_STATUSES)[number];
 
+/** Open: the work on it hasn't finished (GLOSSARY.md). */
+export const OPEN_STATUSES: ServiceRequestStatus[] = [
+  'submitted',
+  'assigned',
+  'in_progress',
+];
+
 export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 export type Priority = (typeof PRIORITIES)[number];
 

@@ -1,4 +1,7 @@
-import { aServiceRequest } from '../support/service-requests.js';
+import {
+  aServiceRequest,
+  submitServiceRequest,
+} from '../support/service-requests.js';
 import { createTestApp, type TestApp } from '../support/test-app.js';
 
 describe('Tracking a Service Request', () => {
@@ -12,14 +15,6 @@ describe('Tracking a Service Request', () => {
 
   type Browser = Awaited<ReturnType<TestApp['signUp']>>;
 
-  const submit = async (browser: Browser, body = aServiceRequest()) => {
-    const submitted = await browser
-      .post('/api/service-requests')
-      .send(body)
-      .expect(201);
-    return submitted.body.reference as string;
-  };
-
   const idOf = async (browser: Browser) => {
     const me = await browser.get('/api/auth/me').expect(200);
     return me.body.id as string;
@@ -30,7 +25,7 @@ describe('Tracking a Service Request', () => {
       firstName: 'Ada',
       lastName: 'Lovelace',
     });
-    const reference = await submit(
+    const reference = await submitServiceRequest(
       ada,
       aServiceRequest({
         title: 'Leaking tap',
@@ -69,7 +64,7 @@ describe('Tracking a Service Request', () => {
 
   it('keeps the fields as submitted, without spaces at the ends', async () => {
     const ada = await app.signUp('ada@example.com');
-    const reference = await submit(
+    const reference = await submitServiceRequest(
       ada,
       aServiceRequest({
         title: '  Broken chair ',
@@ -93,7 +88,7 @@ describe('Tracking a Service Request', () => {
     'leaves the Priority out for its Requester (%s)',
     async (role) => {
       const requester = await app.signUp('requester@example.com', { role });
-      const reference = await submit(requester);
+      const reference = await submitServiceRequest(requester);
 
       const shown = await requester
         .get(`/api/service-requests/${reference}`)
@@ -105,7 +100,7 @@ describe('Tracking a Service Request', () => {
 
   it('shows it to an Administrator, with its Priority', async () => {
     const ada = await app.signUp('ada@example.com');
-    const reference = await submit(ada);
+    const reference = await submitServiceRequest(ada);
     const admin = await app.signInAsAdministrator();
 
     const shown = await admin
@@ -123,7 +118,7 @@ describe('Tracking a Service Request', () => {
     'answers 404 to another User (%s), as for a Reference nobody has',
     async (role) => {
       const ada = await app.signUp('ada@example.com');
-      const reference = await submit(ada);
+      const reference = await submitServiceRequest(ada);
       const other = await app.signUp('other@example.com', { role });
 
       const hidden = await other
@@ -137,9 +132,9 @@ describe('Tracking a Service Request', () => {
     },
   );
 
-  it('answers 404 to a Maintenance Officer with no Assignment for it', async () => {
+  it('answers 404 to a Maintenance Officer with no Assignment for it, as for a Reference nobody has', async () => {
     const ada = await app.signUp('ada@example.com');
-    const reference = await submit(ada);
+    const reference = await submitServiceRequest(ada);
     const admin = await app.signInAsAdministrator();
     await admin
       .post('/api/users')
@@ -152,12 +147,19 @@ describe('Tracking a Service Request', () => {
       .expect(201);
     const officer = await app.signInByLink('katherine@example.com');
 
-    await officer.get(`/api/service-requests/${reference}`).expect(404);
+    const hidden = await officer
+      .get(`/api/service-requests/${reference}`)
+      .expect(404);
+    const missing = await officer
+      .get('/api/service-requests/SR-PLUMB-999')
+      .expect(404);
+
+    expect(hidden.body).toEqual(missing.body);
   });
 
   it('shows an Erased Requester as "Erased user"', async () => {
     const ada = await app.signUp('ada@example.com');
-    const reference = await submit(ada);
+    const reference = await submitServiceRequest(ada);
     const adaId = await idOf(ada);
     const admin = await app.signInAsAdministrator();
     await ada.delete('/api/me').expect(204);
@@ -188,5 +190,9 @@ describe('Tracking a Service Request', () => {
     const pending = await app.signInByLink('pending@example.com');
 
     await pending.get('/api/service-requests/SR-PLUMB-1').expect(403);
+  });
+
+  it('needs a signed-in User', async () => {
+    await app.browser().get('/api/service-requests/SR-PLUMB-1').expect(401);
   });
 });

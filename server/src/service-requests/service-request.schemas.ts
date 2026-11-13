@@ -14,8 +14,12 @@ export const categoryId = z.string().min(1).max(64);
 
 export const status = z.enum(SERVICE_REQUEST_STATUSES);
 
+/** A list's Status filter: any Status, or `open` for Submitted, Assigned or In Progress. */
+export const statusFilter = z.enum([...SERVICE_REQUEST_STATUSES, 'open']);
+export type StatusFilter = z.infer<typeof statusFilter>;
+
 /** How the API addresses a Service Request, such as SR-PLUMB-42. */
-export const reference = z
+export const referenceParam = z
   .string()
   .max(64)
   .regex(/^SR-[A-Z]+-[1-9][0-9]*$/, 'is not a Reference, such as SR-PLUMB-42');
@@ -34,7 +38,7 @@ const scope = z.literal('requested', {
 
 export const listQuery = z.object({
   scope,
-  status: status.optional(),
+  status: statusFilter.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });

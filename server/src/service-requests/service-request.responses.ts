@@ -3,12 +3,22 @@ import { PRIORITIES } from '../database/schema.js';
 import { status } from './service-request.schemas.js';
 
 /**
- * What the Service Request routes answer, for the API documentation. The
- * end-to-end tests pin the exact shapes.
+ * What the Service Request routes answer: the one definition of each shape.
+ * Swagger documents a schema's output, which is the JSON sent. The types
+ * below are its input, which is what the server builds before sending, with
+ * `Date`s where the JSON has ISO strings. The end-to-end tests pin the
+ * exact shapes.
  */
 
-// Formats only: the patterns Zod would add say nothing a reader needs.
-const instant = z.string().meta({ format: 'date-time' });
+/**
+ * A `Date` on the server, and an ISO 8601 string in the JSON, as
+ * `JSON.stringify` writes it. Documented by format only: the pattern Zod
+ * would add says nothing a reader needs.
+ */
+const instant = z.codec(z.date(), z.string().meta({ format: 'date-time' }), {
+  decode: (date) => date.toISOString(),
+  encode: (text) => new Date(text),
+});
 
 const person = z.object({
   id: z.string().meta({ format: 'uuid' }),
@@ -63,3 +73,16 @@ export const serviceRequestDetailsResponse = summary.extend({
   description: z.string(),
   timeline: z.array(statusUpdateEntry).meta({ description: 'Oldest first' }),
 });
+
+/** A Request Category as the API shows it. */
+export type RequestCategory = z.input<typeof requestCategoryResponse>;
+/** A Status Update, as the timeline shows it. */
+export type StatusUpdateEntry = z.input<typeof statusUpdateEntry>;
+/** A Service Request as lists show it. */
+export type ServiceRequestSummary = z.input<typeof summary>;
+/** One page of a Service Request list, and how many the whole list holds. */
+export type ServiceRequestPage = z.input<typeof serviceRequestPageResponse>;
+/** A Service Request's page: its details, and its timeline oldest first. */
+export type ServiceRequestDetails = z.input<
+  typeof serviceRequestDetailsResponse
+>;

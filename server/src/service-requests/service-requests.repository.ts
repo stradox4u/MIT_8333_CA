@@ -1,19 +1,24 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { alias, type SelectedFields } from 'drizzle-orm/pg-core';
 import { Clock } from '../clock.js';
 import { InjectDatabase, type Database } from '../database/database.js';
 import {
-  type Priority,
+  OPEN_STATUSES,
   requestCategories,
   serviceRequests,
-  type ServiceRequestStatus,
   statusUpdates,
   users,
 } from '../database/schema.js';
 import { displayName } from '../users/display-name.js';
-import type { RequestCategory } from './request-categories.js';
-import type { UnknownCategory } from './refusals.js';
+import { requestCategoryColumns } from './request-categories.js';
+import type { NotFound, UnknownCategory } from './refusals.js';
+import type {
+  ServiceRequestDetails,
+  ServiceRequestPage,
+  StatusUpdateEntry,
+} from './service-request.responses.js';
+import type { StatusFilter } from './service-request.schemas.js';
 
 const requesters = alias(users, 'requester');
 const actors = alias(users, 'actor');
@@ -27,65 +32,24 @@ export interface NewServiceRequest {
   description: string;
 }
 
-/** A User as Service Requests show them: "First Last", or "Erased user". */
-export interface Person {
-  id: string;
-  name: string;
-}
-
-/** A Status Update, as the timeline shows it. */
-export interface StatusUpdateEntry {
-  type: 'status_update';
-  occurredAt: Date;
-  /** `null` when nobody acted: the automatic verification after 7 days. */
-  actor: Person | null;
-  /** `null` for the move to Submitted when the request was submitted. */
-  fromStatus: ServiceRequestStatus | null;
-  toStatus: ServiceRequestStatus;
-  reason: string | null;
-}
-
-/** A Service Request as lists show it. */
-export interface ServiceRequestSummary {
-  reference: string;
-  title: string;
-  category: RequestCategory;
-  location: string;
-  status: ServiceRequestStatus;
-  priority: Priority;
-  requester: Person;
-  submittedAt: Date;
-}
-
-/** A Service Request's page: its details, and its timeline oldest first. */
-export interface ServiceRequestDetails extends ServiceRequestSummary {
-  description: string;
-  timeline: StatusUpdateEntry[];
-}
-
-/** One page of a list, and how many items the whole list holds. */
-export interface Page<Item> {
-  items: Item[];
-  page: number;
-  pageSize: number;
-  total: number;
-}
-
 /** The columns of a `ServiceRequestSummary`. */
 const summaryColumns = {
   reference: serviceRequests.reference,
   title: serviceRequests.title,
-  category: {
-    id: requestCategories.id,
-    name: requestCategories.name,
-    code: requestCategories.code,
-  },
+  category: requestCategoryColumns,
   location: serviceRequests.location,
   status: serviceRequests.status,
   priority: serviceRequests.priority,
   requester: { id: requesters.id, name: displayName(requesters) },
   submittedAt: serviceRequests.submittedAt,
 };
+
+/** A Status filter as a condition: that one Status, or any Open one. */
+function hasStatus(filter: StatusFilter) {
+  return filter === 'open'
+    ? inArray(serviceRequests.status, OPEN_STATUSES)
+    : eq(serviceRequests.status, filter);
+}
 
 @Injectable()
 export class ServiceRequestsRepository {
@@ -104,8 +68,10 @@ export class ServiceRequestsRepository {
     request: NewServiceRequest,
   ): Promise<{ reference: string } | UnknownCategory> {
     return this.db.transaction(async (tx) => {
-      // Locks the category's row until the transaction ends, so simultaneous
-      // submissions take turns for its numbers.
+      // UPDATE … RETURNING takes a row lock on the category until this
+      // transaction ends. A simultaneous submission in the same category
+      // waits on that lock, then increments the committed number, so no two
+      // submissions get the same one.
       const [category] = await tx
         .update(requestCategories)
         .set({ lastNumber: sql`${requestCategories.lastNumber} + 1` })
@@ -142,13 +108,13 @@ export class ServiceRequestsRepository {
   /** A Service Request with its timeline, whoever asks: check `view` first. */
   async findByReference(
     reference: string,
-  ): Promise<ServiceRequestDetails | null> {
+  ): Promise<ServiceRequestDetails | NotFound> {
     const [request] = await this.selectSummaries({
       id: serviceRequests.id,
       description: serviceRequests.description,
     }).where(eq(serviceRequests.reference, reference));
     if (!request) {
-      return null;
+      return 'not_found';
     }
     const { id, ...details } = request;
     return { ...details, timeline: await this.timeline(id) };
@@ -157,12 +123,12 @@ export class ServiceRequestsRepository {
   /** One page of the Service Requests a User raised, newest first. */
   async listRequestedBy(
     requesterId: string,
-    filters: { status?: ServiceRequestStatus; page: number; pageSize: number },
-  ): Promise<Page<ServiceRequestSummary>> {
+    filters: { status?: StatusFilter; page: number; pageSize: number },
+  ): Promise<ServiceRequestPage> {
     const { page, pageSize } = filters;
     const matching = and(
       eq(serviceRequests.requesterId, requesterId),
-      filters.status ? eq(serviceRequests.status, filters.status) : undefined,
+      filters.status ? hasStatus(filters.status) : undefined,
     );
     const items = await this.selectSummaries()
       .where(matching)
