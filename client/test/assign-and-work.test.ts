@@ -924,14 +924,21 @@ test.each([
     "You’ll see here when it’s Completed.",
   ],
 ])(
-  "the Requester sees what happens next while it's %s, and no actions",
+  "the Requester sees what happens next while it's %s, with editing and cancellation only while Submitted",
   async (status, holder, heading, text) => {
     signedIn("student");
     withRequest({ status, assignment: holder ? assignedTo(holder) : null });
     const { runtime } = open("/requests/SR-PLUMB-1");
     const next = await panel(heading);
     expect(next.textContent).toContain(text);
-    expect(within(next).queryByRole("button")).toBeNull();
+    if (status === "submitted") {
+      expect(
+        within(next).getByRole("link", { name: "Edit details" }),
+      ).toBeTruthy();
+      expect(
+        within(next).getByRole("button", { name: "Cancel request" }),
+      ).toBeTruthy();
+    } else expect(within(next).queryByRole("button")).toBeNull();
     runtime.queryClient.clear();
   },
 );
@@ -1022,7 +1029,9 @@ test("Unassign asks first, then takes the request back to Submitted", async () =
   await user.click(
     within(confirm).getByRole("button", { name: "Keep Assignment" }),
   );
-  expect(within(manage).queryByRole("group")).toBeNull();
+  expect(
+    within(manage).queryByRole("group", { name: "Unassign Chinedu Eze?" }),
+  ).toBeNull();
   expect(bodies).toEqual([]);
   await user.click(within(manage).getByRole("button", { name: "Unassign" }));
   await user.click(
@@ -1077,7 +1086,9 @@ test("an action on a request that has gone answers 404, and the page says it can
   const manage = await screen.findByRole("region", { name: "Manage" });
   await user.click(within(manage).getByRole("button", { name: "Unassign" }));
   await user.click(
-    within(within(manage).getByRole("group")).getByRole("button", {
+    within(
+      within(manage).getByRole("group", { name: "Unassign Chinedu Eze?" }),
+    ).getByRole("button", {
       name: "Unassign",
     }),
   );

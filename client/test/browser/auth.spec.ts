@@ -152,7 +152,7 @@ test("password changes require fresh proof when stale and revoke other sessions"
   const other = await browser.newContext();
   const otherPage = await other.newPage();
   async function passwordSignIn() {
-    await otherPage.goto("http://127.0.0.1:5173/sign-in/password");
+    await otherPage.goto("/sign-in/password");
     await otherPage.getByLabel("Email address").fill(email);
     await otherPage.getByLabel("Password", { exact: true }).fill(password);
     await otherPage
@@ -169,9 +169,7 @@ test("password changes require fresh proof when stale and revoke other sessions"
     await expect(
       page.getByText("Session ended.", { exact: true }),
     ).toBeVisible();
-    expect(
-      (await other.request.get("http://127.0.0.1:5173/api/auth/me")).status(),
-    ).toBe(401);
+    expect((await other.request.get("/api/auth/me")).status()).toBe(401);
     await passwordSignIn();
     await request.post(`${controls}/advance`, {
       data: { milliseconds: 11 * 60_000 },
@@ -202,9 +200,7 @@ test("password changes require fresh proof when stale and revoke other sessions"
     await expect(
       page.getByText("Password saved. Your other sessions have ended."),
     ).toBeVisible();
-    expect(
-      (await other.request.get("http://127.0.0.1:5173/api/auth/me")).status(),
-    ).toBe(401);
+    expect((await other.request.get("/api/auth/me")).status()).toBe(401);
     await page
       .getByRole("button", { name: "Sign out everywhere", exact: true })
       .click();

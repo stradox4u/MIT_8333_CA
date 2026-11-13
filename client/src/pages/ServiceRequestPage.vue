@@ -48,11 +48,14 @@ useExpiredSession(request.error);
 
 /** The submitted notice shows once, on the page for the Reference just submitted. */
 const justSubmitted = ref(false);
+const justEdited = ref(false);
 watch(
   reference,
   (current) => {
     justSubmitted.value = ui.submittedReference === current;
     if (justSubmitted.value) ui.submittedReference = "";
+    justEdited.value = ui.editedReference === current;
+    if (justEdited.value) ui.editedReference = "";
   },
   { immediate: true },
 );
@@ -106,6 +109,7 @@ const actionNotice = ref<{ message: string; kind: "success" | "error" } | null>(
 );
 const report: Report = (message, kind = "success") => {
   justSubmitted.value = false;
+  justEdited.value = false;
   actionNotice.value = { message, kind };
 };
 watch(reference, () => {
@@ -177,6 +181,11 @@ const cancellation = computed(() => {
       :message="actionNotice.message"
       :kind="actionNotice.kind"
     />
+    <PageNotice
+      v-if="justEdited"
+      :message="`Details saved. The Reference stays ${reference}.`"
+      kind="success"
+    />
     <p
       v-if="justSubmitted"
       ref="notice"
@@ -237,7 +246,8 @@ const cancellation = computed(() => {
         <div class="flex flex-wrap items-center gap-y-2 gap-x-2.5 mb-2.5">
           <span
             class="font-[ui-monospace,SFMono-Regular,Menlo,Consolas,monospace] font-semibold leading-[1.3] tracking-[0.02em] whitespace-nowrap text-[13px]"
-            >{{ request.data.value.reference }}</span><StatusChip
+            >{{ request.data.value.reference }}</span
+          ><StatusChip
             :status="request.data.value.status"
             labelled
           /><PriorityTag
@@ -282,7 +292,8 @@ const cancellation = computed(() => {
                 request.data.value.assignment.officer.id === me.data.value?.id
                   ? "You"
                   : request.data.value.assignment.officer.name
-              }}</template><span v-else class="text-campus-muted">{{
+              }}</template
+              ><span v-else class="text-campus-muted">{{
                 ["submitted", "assigned", "in_progress"].includes(
                   request.data.value.status,
                 )
@@ -393,6 +404,9 @@ const cancellation = computed(() => {
             v-else-if="viewer"
             :request="request.data.value"
             :viewer="viewer"
+            :is-requester="
+              request.data.value.requester.id === me.data.value?.id
+            "
             :report="report"
             @assign="assigning = 'assign'"
           />
