@@ -221,11 +221,13 @@ export class ServiceRequestsController {
    * its Priority unless they may see that too.
    */
   private async show(user: User, reference: string) {
-    const access = await this.findVisible(user, reference);
+    await this.findVisible(user, reference);
     const request = await this.serviceRequests.findDetails(reference);
     refuseIf(request);
     return withPriorityIfVisible(
-      await this.priorityVisible(user, access),
+      await this.priorityVisible(user, {
+        currentOfficerId: request.assignment?.officer.id ?? null,
+      }),
       request,
     );
   }

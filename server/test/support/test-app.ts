@@ -14,7 +14,7 @@ import { DATABASE } from '../../src/database/database.js';
 import { DemoAccounts } from '../../src/users/demo-accounts.js';
 import { UsersRepository } from '../../src/users/users.repository.js';
 import { FakeGoogle, type GoogleAccount } from './fake-google.js';
-import { createTestDatabase } from './test-database.js';
+import { createTestDatabase, type TestDatabase } from './test-database.js';
 
 /** Every test starts at this instant. */
 export const TEST_START = Date.parse('2026-11-12T09:00:00.000Z');
@@ -49,13 +49,16 @@ export type Browser = ReturnType<TestApp['browser']>;
 export async function createTestApp({
   config = {},
   port = 0,
+  database: suppliedDatabase,
 }: {
   /** Settings to override, by `AppConfig` property, for this file's app. */
   config?: Partial<AppConfig>;
   /** Browser journeys use a stable port; ordinary tests keep a free one. */
   port?: number;
+  /** Concurrency suites supply an isolated real Postgres database. */
+  database?: TestDatabase;
 } = {}) {
-  const database = await createTestDatabase();
+  const database = suppliedDatabase ?? (await createTestDatabase());
   const mailbox = new InMemoryMailTransport();
   const clock = new TestClock();
   const google = new FakeGoogle(() => clock.now());

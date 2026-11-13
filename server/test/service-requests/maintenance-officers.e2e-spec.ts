@@ -45,7 +45,7 @@ describe('The Maintenance Officers to choose from', () => {
     ]);
   });
 
-  it('leaves out invited officers who never signed in, deactivated ones, and other Roles', async () => {
+  it('leaves out invited, deactivated and erased officers, and other Roles', async () => {
     const admin = await app.signInAsAdministrator();
     await app.signUp('student@example.com');
     await admin
@@ -59,6 +59,8 @@ describe('The Maintenance Officers to choose from', () => {
       .expect(201);
     const gone = await app.signInAsMaintenanceOfficer('gone@example.com');
     await admin.post(`/api/users/${await idOf(gone)}/deactivate`).expect(200);
+    const erased = await app.signInAsMaintenanceOfficer('erased@example.com');
+    await admin.post(`/api/users/${await idOf(erased)}/erase`).expect(200);
 
     const listed = await admin.get('/api/maintenance-officers').expect(200);
 

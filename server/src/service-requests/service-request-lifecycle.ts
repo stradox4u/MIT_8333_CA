@@ -41,7 +41,7 @@ interface Locked {
   assignment: { id: number; officerId: string } | null;
 }
 
-/** The Status change an action made, as the Activity Log records it. */
+/** The Status Update an action made, as the Activity Log records it. */
 type Moved = { from: ServiceRequestStatus | null; to: ServiceRequestStatus };
 
 /** The Statuses in which an officer holds the work: an Assignment can end. */
@@ -265,9 +265,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
   ): Promise<void> {
     const held = await db
       .select({
-        id: serviceRequests.id,
-        status: serviceRequests.status,
-        assignmentId: assignments.id,
+        reference: serviceRequests.reference,
       })
       .from(assignments)
       .innerJoin(
@@ -281,14 +279,22 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
           inArray(serviceRequests.status, HELD),
         ),
       )
-      .orderBy(asc(assignments.id))
-      .for('update', { of: serviceRequests });
-    for (const { assignmentId, ...request } of held) {
-      const assignment = { id: assignmentId, officerId };
+      .orderBy(asc(assignments.id));
+    for (const { reference } of held) {
+      // A reassignment may commit while we wait for the request lock. Read
+      // its current Assignment in a fresh statement after acquiring the lock.
+      const request = await this.lock(db, reference);
+      if (
+        !request ||
+        !HELD.includes(request.status) ||
+        request.assignment?.officerId !== officerId
+      ) {
+        continue;
+      }
       await this.handBack(
         db,
-        { ...request, assignment },
-        assignment,
+        request,
+        request.assignment,
         'officer_left',
         actorId,
       );
@@ -317,7 +323,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     return { ...request, assignment: assignment ?? null };
   }
 
-  /** A Status change on its own, such as starting or completing the work. */
+  /** A Status Update on its own, such as starting or completing the work. */
   private async changeStatus(
     db: Database,
     request: Locked,
@@ -366,10 +372,16 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     actorId: string,
     at: Date,
   ) {
-    await db
+    const ended = await db
       .update(assignments)
       .set({ endedAt: at, endedById: actorId, endReason })
-      .where(eq(assignments.id, assignmentId));
+      .where(and(eq(assignments.id, assignmentId), isNull(assignments.endedAt)))
+      .returning({ id: assignments.id });
+    if (ended.length !== 1) {
+      throw new Error(
+        'The current Assignment ended while its request was locked',
+      );
+    }
   }
 
   /**

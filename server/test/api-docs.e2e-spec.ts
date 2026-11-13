@@ -75,6 +75,8 @@ describe('API documentation', () => {
           kind.properties.type.enum,
       ),
     ).toEqual([['status_update'], ['assignment']]);
+    expect(kinds[1].properties).toHaveProperty('statusUpdate');
+    expect(kinds[1].properties).not.toHaveProperty('statusChange');
   });
 
   it('describes what the open Status filter means', () => {

@@ -38,7 +38,7 @@ interface Placed {
 /**
  * A Service Request's timeline, oldest first, from its Status Updates and
  * its Assignments (in the order they were made). One action makes one
- * entry: an Assignment change carries the Status change it caused, and a
+ * entry: an Assignment change carries the Status Update it caused, and a
  * reassignment is a single entry naming both officers. Entries at the same
  * instant keep the order their rows were written in.
  */
@@ -56,7 +56,7 @@ export function buildTimeline(
       (update) =>
         update.assignmentId === assignment.id && update.toStatus === to,
     );
-  const statusChangeOf = (update: StatusUpdateRow | undefined) =>
+  const statusUpdateOf = (update: StatusUpdateRow | undefined) =>
     update?.fromStatus
       ? { fromStatus: update.fromStatus, toStatus: update.toStatus }
       : null;
@@ -92,7 +92,7 @@ export function buildTimeline(
         change: replaced ? 'reassigned' : 'assigned',
         officer: assignment.officer,
         previousOfficer: replaced?.officer ?? null,
-        statusChange: statusChangeOf(causedBy(assignment, 'assigned')),
+        statusUpdate: statusUpdateOf(causedBy(assignment, 'assigned')),
       },
     });
 
@@ -110,7 +110,7 @@ export function buildTimeline(
           change: endReason,
           officer: assignment.officer,
           previousOfficer: null,
-          statusChange: statusChangeOf(handedBack),
+          statusUpdate: statusUpdateOf(handedBack),
         },
       });
     }
