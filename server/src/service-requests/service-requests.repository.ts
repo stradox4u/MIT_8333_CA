@@ -160,7 +160,32 @@ export class ServiceRequestsRepository {
     filters: Omit<z.infer<typeof listQuery>, 'scope'>,
   ): Promise<ServiceRequestPage> {
     const { page, pageSize } = filters;
-    const matching = and(
+    const matching = this.matching(scope, filters);
+    const rows = await this.selectSummaries()
+      .where(matching)
+      .orderBy(...this.orderFor(filters))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    const total = await this.db.$count(serviceRequests, matching);
+    return { items: rows.map(withAssignment), page, pageSize, total };
+  }
+
+  /** Every matching Administrator report row, without pagination. */
+  async exportRows(filters: Omit<z.infer<typeof listQuery>, 'scope'>) {
+    const rows = await this.selectSummaries({
+      completedAt: serviceRequests.completedAt,
+      verifiedAt: serviceRequests.verifiedAt,
+    })
+      .where(this.matching({ all: true }, filters))
+      .orderBy(...this.orderFor(filters));
+    return rows.map(withAssignment);
+  }
+
+  private matching(
+    scope: ListScope,
+    filters: Omit<z.infer<typeof listQuery>, 'scope'>,
+  ) {
+    return and(
       this.inScope(scope),
       filters.status ? hasStatus(filters.status) : undefined,
       filters.search
@@ -221,28 +246,25 @@ export class ServiceRequestsRepository {
           )
         : undefined,
     );
-    const rows = await this.selectSummaries()
-      .where(matching)
-      // The id breaks ties, so pages never overlap.
-      .orderBy(
-        ...(filters.sort === 'priority'
-          ? [
-              desc(
-                sql`case ${serviceRequests.priority} when 'urgent' then 4 when 'high' then 3 when 'normal' then 2 when 'low' then 1 end`,
-              ),
-            ]
-          : []),
-        filters.sort === 'priority'
-          ? asc(serviceRequests.submittedAt)
-          : desc(serviceRequests.submittedAt),
-        filters.sort === 'priority'
-          ? asc(serviceRequests.id)
-          : desc(serviceRequests.id),
-      )
-      .limit(pageSize)
-      .offset((page - 1) * pageSize);
-    const total = await this.db.$count(serviceRequests, matching);
-    return { items: rows.map(withAssignment), page, pageSize, total };
+  }
+
+  /** The ID breaks ties identically in pages and the full report. */
+  private orderFor(filters: Omit<z.infer<typeof listQuery>, 'scope'>) {
+    return [
+      ...(filters.sort === 'priority'
+        ? [
+            desc(
+              sql`case ${serviceRequests.priority} when 'urgent' then 4 when 'high' then 3 when 'normal' then 2 when 'low' then 1 end`,
+            ),
+          ]
+        : []),
+      filters.sort === 'priority'
+        ? asc(serviceRequests.submittedAt)
+        : desc(serviceRequests.submittedAt),
+      filters.sort === 'priority'
+        ? asc(serviceRequests.id)
+        : desc(serviceRequests.id),
+    ];
   }
 
   /** Counts only requests in the authorized scope; no list filter or page applies. */

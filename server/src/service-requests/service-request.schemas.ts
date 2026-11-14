@@ -77,7 +77,7 @@ const submittedDay = z.iso
   .date()
   .refine((day) => !day.startsWith('0000-'), 'Year must be 0001–9999');
 
-export const listQuery = z
+const listQueryFields = z
   .object({
     scope: listScope,
     status: statusFilter.optional(),
@@ -123,60 +123,84 @@ export const listQuery = z
       .pipe(z.coerce.number<string>().int().min(1).max(100))
       .default(20),
   })
-  .strict()
-  .superRefine((query, context) => {
-    if (
-      typeof query.page === 'number' &&
-      typeof query.pageSize === 'number' &&
-      !Number.isSafeInteger((query.page - 1) * query.pageSize)
-    )
-      context.addIssue({
-        code: 'custom',
-        path: ['page'],
-        message: 'Page offset is too large',
-      });
-    if (query.scope !== 'all') {
-      for (const field of [
-        'category',
-        'priority',
-        'submittedFrom',
-        'submittedTo',
-      ] as const) {
-        if (query[field] !== undefined)
-          context.addIssue({
-            code: 'custom',
-            path: [field],
-            message: 'Only available with scope=all',
-          });
-      }
-      if (query.officerId && query.scope !== 'assigned')
+  .strict();
+
+function validateListQuery(
+  query: z.infer<typeof listQueryFields>,
+  context: z.RefinementCtx,
+) {
+  if (
+    typeof query.page === 'number' &&
+    typeof query.pageSize === 'number' &&
+    !Number.isSafeInteger((query.page - 1) * query.pageSize)
+  )
+    context.addIssue({
+      code: 'custom',
+      path: ['page'],
+      message: 'Page offset is too large',
+    });
+  if (query.scope !== 'all') {
+    for (const field of [
+      'category',
+      'priority',
+      'submittedFrom',
+      'submittedTo',
+    ] as const) {
+      if (query[field] !== undefined)
         context.addIssue({
           code: 'custom',
-          path: ['officerId'],
-          message: 'Only available with scope=all or assigned',
-        });
-      if (
-        query.sort === 'priority' &&
-        !(query.scope === 'assigned' && query.officerId)
-      )
-        context.addIssue({
-          code: 'custom',
-          path: ['sort'],
-          message:
-            'Priority ordering needs scope=all or your current Assignments (officerId)',
+          path: [field],
+          message: 'Only available with scope=all',
         });
     }
+    if (query.officerId && query.scope !== 'assigned')
+      context.addIssue({
+        code: 'custom',
+        path: ['officerId'],
+        message: 'Only available with scope=all or assigned',
+      });
     if (
-      query.submittedFrom &&
-      query.submittedTo &&
-      query.submittedFrom > query.submittedTo
+      query.sort === 'priority' &&
+      !(query.scope === 'assigned' && query.officerId)
     )
       context.addIssue({
         code: 'custom',
-        path: ['submittedTo'],
-        message: 'Must not precede submittedFrom',
+        path: ['sort'],
+        message:
+          'Priority ordering needs scope=all or your current Assignments (officerId)',
       });
-  });
+  }
+  if (
+    query.submittedFrom &&
+    query.submittedTo &&
+    query.submittedFrom > query.submittedTo
+  )
+    context.addIssue({
+      code: 'custom',
+      path: ['submittedTo'],
+      message: 'Must not precede submittedFrom',
+    });
+}
+
+export const listQuery = listQueryFields.superRefine(validateListQuery);
 
 /** Dashboard counts use the same visibility scopes, without list filters. */
 export const summaryQuery = z.object({ scope: listScope }).strict();
+
+/** The Administrator report accepts list URLs, but never paginates their rows. */
+export const exportQuery = listQueryFields
+  .extend({
+    scope: z
+      .literal('all')
+      .default('all')
+      .meta({ description: 'Administrator all scope; omitted means all' }),
+    page: listQuery.shape.page.meta({
+      description:
+        'Validated as for the list, but ignored: every matching row is exported',
+    }),
+    pageSize: listQuery.shape.pageSize.meta({
+      description:
+        'Validated as for the list, but ignored: every matching row is exported',
+    }),
+  })
+  .superRefine(validateListQuery);

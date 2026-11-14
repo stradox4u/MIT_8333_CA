@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   ForbiddenException,
   HttpCode,
   Param,
@@ -20,9 +21,11 @@ import {
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiProduces,
 } from '@nestjs/swagger';
 import type { z } from 'zod';
 import type { User } from '../users/user.js';
+import { serviceRequestsCsv } from './service-requests.csv.js';
 import { refuseIf, refuseUnlessVisible } from './refusals.js';
 import { ServiceRequestLifecycle } from './service-request-lifecycle.js';
 import {
@@ -35,6 +38,7 @@ import {
   assignBody,
   completeBody,
   editBody,
+  exportQuery,
   priorityBody,
   progressNoteBody,
   listQuery,
@@ -155,6 +159,37 @@ export class ServiceRequestsController {
       await this.scopeFor(user, query.scope),
       await this.authorization.can(ServiceRequestPolicy, 'manage', user),
     );
+  }
+
+  /** Downloads all matching requests for Administrator reporting. */
+  @Get('export.csv')
+  @Can(ServiceRequestPolicy, 'manage')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="service-requests.csv"')
+  @Header('Cache-Control', 'no-store')
+  @ApiProduces('text/csv')
+  @ApiOkResponse({
+    description:
+      'Every matching row, UTF-8 CSV; pagination is validated but ignored. Priority/Status use display labels; dates are UTC ISO 8601, absent values empty. Formula-like cells are prefixed with an apostrophe.',
+    headers: {
+      'Content-Disposition': {
+        schema: {
+          type: 'string',
+          example: 'attachment; filename="service-requests.csv"',
+        },
+      },
+      'Cache-Control': { schema: { type: 'string', example: 'no-store' } },
+    },
+    schema: { type: 'string' },
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid list filters or scope other than all',
+  })
+  @ApiForbiddenResponse({ description: 'Only Administrators may export' })
+  async exportCsv(
+    @Query({ schema: exportQuery }) query: z.infer<typeof exportQuery>,
+  ) {
+    return serviceRequestsCsv(await this.serviceRequests.exportRows(query));
   }
 
   /** The tracking page: the details, and the timeline oldest first. */
