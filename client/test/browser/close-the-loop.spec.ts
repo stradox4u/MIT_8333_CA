@@ -6,7 +6,7 @@ import {
   type Page,
 } from "@playwright/test";
 
-const controls = "http://127.0.0.1:4175";
+const controls = process.env.BROWSER_CONTROLS_URL ?? "http://127.0.0.1:4175";
 async function signIn(
   browser: Browser,
   request: APIRequestContext,

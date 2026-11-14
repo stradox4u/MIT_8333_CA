@@ -409,6 +409,19 @@ test("list and dashboard states match the approved responsive layout without ove
           path: `test-results/search-and-dashboards/${name}-${state}-${size}.png`,
           fullPage: true,
         });
+        if (name === "management") {
+          // The preview ends Export CSV at the content edge, full width on phones.
+          const link = (await page
+            .getByRole("link", { name: "Export CSV" })
+            .boundingBox())!;
+          const sort = (await page
+            .getByLabel("Sort", { exact: true })
+            .boundingBox())!;
+          expect(link.x + link.width).toBeCloseTo(sort.x + sort.width, 0);
+          expect(link.height).toBeCloseTo(40, 0);
+          if (size === "desktop") expect(link.width).toBeLessThan(160);
+          else expect(link.x).toBeCloseTo(sort.x, 0);
+        }
       }
       if (state === "populated" && name === "management") {
         await page

@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { useRoute } from "vue-router";
+import { useQuery } from "@tanstack/vue-query";
+import Download from "~icons/lucide/download";
 import ListChecks from "~icons/lucide/list-checks";
 import UserRoundPlus from "~icons/lucide/user-round-plus";
 import WorkspaceLayout from "../layouts/WorkspaceLayout.vue";
@@ -7,11 +10,29 @@ import ListHeading from "../components/ListHeading.vue";
 import PageNotice from "../components/PageNotice.vue";
 import ServiceRequestList from "../components/ServiceRequestList.vue";
 import AssignPicker from "../components/AssignPicker.vue";
-import type {
-  MaintenanceOfficer,
-  ServiceRequestDetails,
-  ServiceRequestSummary,
+import {
+  exportCsvHref,
+  serviceRequestsOptions,
+  type MaintenanceOfficer,
+  type ServiceRequestDetails,
+  type ServiceRequestSummary,
 } from "../service-requests/api";
+import { readListFilters } from "../service-requests/list-filters";
+
+/** The export follows the list's committed URL filters, so a pending search stays out. */
+const route = useRoute();
+const filters = computed(() => readListFilters(route.query, "all"));
+const exportHref = computed(() => exportCsvHref(filters.value));
+// Shares the list's cached page, so it adds no request.
+const list = useQuery(
+  computed(() => serviceRequestsOptions("all", filters.value)),
+);
+const exportHint = computed(() => {
+  const total = list.data.value?.total;
+  if (total === undefined) return "";
+  if (!total) return "No matching requests to export";
+  return `All ${total.toLocaleString("en-GB")} matching ${total === 1 ? "request" : "requests"}, not just this page`;
+});
 
 /** The request the assign picker is open for. */
 const assigning = ref<ServiceRequestSummary | null>(null);
@@ -27,7 +48,25 @@ function assigned(details: ServiceRequestDetails, officer: MaintenanceOfficer) {
       eyebrow="Administrator"
       title="Request management"
       intro="Every Service Request on campus. Assign Submitted ones straight from the list."
-    />
+    >
+      <div
+        class="grid justify-items-end gap-3 phone:w-full phone:justify-items-stretch"
+      >
+        <a
+          :href="exportHref"
+          download
+          class="inline-flex relative items-center justify-center gap-2 min-h-10 py-2 px-3.5 border border-campus-navy rounded-[7px] bg-transparent text-campus-navy text-[12px] font-semibold leading-[1.4] text-center no-underline whitespace-nowrap hover:bg-campus-surface"
+          :aria-describedby="exportHint ? 'export-hint' : undefined"
+          ><Download class="size-3.75" aria-hidden="true" />Export CSV</a
+        >
+        <p
+          id="export-hint"
+          class="min-h-4.5 m-0 text-campus-muted text-[11px] leading-[1.6]"
+        >
+          {{ exportHint }}
+        </p>
+      </div>
+    </ListHeading>
     <ServiceRequestList scope="all" label="Request management">
       <template #empty>
         <span
