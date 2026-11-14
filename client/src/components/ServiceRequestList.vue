@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useQuery } from "@tanstack/vue-query";
 import MapPin from "~icons/lucide/map-pin";
@@ -21,6 +21,8 @@ import {
   type ServiceRequestSummary,
   type StatusFilter,
 } from "../service-requests/api";
+import RequestListFilters from "./RequestListFilters.vue";
+import { useListFilters } from "../service-requests/list-filters";
 import { formatShortDate, statusNames } from "../service-requests/display";
 
 /** A page of Service Requests in one scope; the Status filter and page live in the URL. */
@@ -40,28 +42,38 @@ const route = useRoute();
 const router = useRouter();
 const me = useQuery(meOptions);
 
-const statusFilters: StatusFilter[] = ["open", ...STATUSES];
-const isStatusFilter = (value: unknown): value is StatusFilter =>
-  statusFilters.includes(value as StatusFilter);
-
-const filters = computed<ListFilters>(() => {
-  const status = route.query.status;
-  return {
-    ...(isStatusFilter(status) ? { status } : {}),
-    page: pageFrom(route.query.page),
-  };
-});
-/** Only a plain whole number names a page; anything else, such as 1e21, is page 1. */
-function pageFrom(value: unknown) {
-  if (typeof value !== "string" || !/^[1-9][0-9]*$/.test(value)) return 1;
-  const page = Number(value);
-  return Number.isSafeInteger(page) ? page : 1;
-}
-/** A new filter starts again at page 1. */
+const { filters, update: updateUrl } = useListFilters(() => props.scope);
 function filterByStatus(event: Event) {
-  const status = (event.target as HTMLSelectElement).value;
-  void router.push({ query: status ? { status } : {} });
+  update({
+    status:
+      ((event.target as HTMLSelectElement).value as StatusFilter) || undefined,
+  });
 }
+const search = ref("");
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+function update(changes: Partial<ListFilters>) {
+  clearTimeout(searchTimer);
+  updateUrl({ search: search.value.trim() || undefined, ...changes });
+}
+watch(
+  () => route.fullPath,
+  () => {
+    clearTimeout(searchTimer);
+    search.value = filters.value.search ?? "";
+  },
+  { immediate: true },
+);
+function searchNow() {
+  clearTimeout(searchTimer);
+  const value = search.value.trim();
+  if (value === (filters.value.search ?? "")) return;
+  update({ search: value || undefined });
+}
+function searchSoon() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(searchNow, 300);
+}
+onBeforeUnmount(() => clearTimeout(searchTimer));
 const list = useQuery(
   computed(() => serviceRequestsOptions(props.scope, filters.value)),
 );
@@ -110,7 +122,8 @@ let focusSummary = false;
 watch(
   () => list.data.value?.page,
   async () => {
-    if (!focusSummary || list.isPlaceholderData.value) return;
+    if (!focusSummary || !list.data.value || list.isPlaceholderData.value)
+      return;
     focusSummary = false;
     await nextTick();
     summaryElement.value?.focus();
@@ -134,9 +147,33 @@ const readOnlyTag =
   <form
     class="flex flex-wrap items-end gap-3 mb-3.5"
     :aria-label="`Filter ${label}`"
-    @submit.prevent
+    @submit.prevent="searchNow"
   >
-    <div class="min-w-0 grid gap-1.25 flex-[0_1_260px] phone:flex-[1_1_100%]">
+    <div class="min-w-0 grid gap-1.25 flex-[1_1_280px]">
+      <label for="search" class="text-[12px] font-semibold">Search</label>
+      <div class="relative">
+        <Search class="absolute left-3 top-3.5 w-4 h-4" aria-hidden="true" />
+        <input
+          id="search"
+          v-model="search"
+          type="search"
+          name="search"
+          maxlength="200"
+          autocomplete="off"
+          :placeholder="
+            scope === 'all'
+              ? 'Reference, title, location or Requester'
+              : 'Reference or title'
+          "
+          class="w-full min-w-0 h-11.5 pl-9 pr-3 border border-campus-control rounded-[7px] bg-campus-surface text-[14px] phone:text-[16px]"
+          @input="searchSoon"
+        />
+      </div>
+    </div>
+    <div
+      v-if="scope !== 'all'"
+      class="min-w-0 grid gap-1.25 flex-[0_1_190px] phone:flex-[1_1_100%]"
+    >
       <label class="block m-0 text-[12px] font-semibold" for="status"
         >Status</label
       >
@@ -154,6 +191,11 @@ const readOnlyTag =
         </option>
       </select>
     </div>
+    <RequestListFilters
+      v-if="scope === 'all'"
+      :filters="filters"
+      @update="update"
+    />
   </form>
   <LoadFailure
     v-if="isLoadFailure(list.error.value)"
@@ -182,7 +224,12 @@ const readOnlyTag =
     </div>
   </div>
   <div
-    v-else-if="list.data.value?.total === 0 && filters.status"
+    v-else-if="
+      list.data.value?.total === 0 &&
+      Object.entries(filters).some(
+        ([key, value]) => key !== 'page' && key !== 'sort' && value,
+      )
+    "
     :class="box"
     role="status"
   >
@@ -191,13 +238,13 @@ const readOnlyTag =
       ><Search class="inline-block flex-none w-5.5 h-5.5" aria-hidden="true"
     /></span>
     <h2 class="mb-1.5">No Service Requests match</h2>
-    <p :class="boxText">Try a different Status, or clear the filter.</p>
+    <p :class="boxText">Try a different search, or clear the filters.</p>
     <button
       type="button"
       :class="outlineButton"
       @click="router.push({ query: {} })"
     >
-      Clear the filter
+      Clear search and filters
     </button>
   </div>
   <div
@@ -234,8 +281,19 @@ const readOnlyTag =
       >
         Showing <strong>{{ range.first }}–{{ range.last }}</strong> of
         <strong>{{ list.data.value.total.toLocaleString("en-GB") }}</strong>
-        {{ plural(list.data.value.total) }}
+        {{ plural(list.data.value.total)
+        }}<template v-if="filters.search">
+          matching “{{ filters.search }}”</template
+        >
       </p>
+      <span v-if="scope === 'all'"
+        >Sorted by
+        {{
+          filters.sort === "priority"
+            ? "Priority, highest first"
+            : "newest first"
+        }}</span
+      >
     </div>
     <div
       class="overflow-hidden border border-campus-gray rounded-xl bg-campus-surface tablet:[&_table]:hidden"
@@ -280,7 +338,8 @@ const readOnlyTag =
               <RouterLink
                 :to="href(item)"
                 class="text-campus-navy font-semibold no-underline wrap-anywhere hover:underline hover:underline-offset-[3px]"
-                >{{ item.title }}</RouterLink><span
+                >{{ item.title }}</RouterLink
+              ><span
                 class="block mt-0.75 text-campus-muted text-[11px] wrap-anywhere"
                 ><MapPin
                   class="inline-block flex-none w-3 h-3 align-[-2px]"
@@ -338,8 +397,8 @@ const readOnlyTag =
           <div
             class="flex flex-wrap items-center justify-between gap-2 mb-1.75"
           >
-            <span :class="reference">{{ item.reference }}</span><span
-              class="flex flex-wrap gap-1.5"
+            <span :class="reference">{{ item.reference }}</span
+            ><span class="flex flex-wrap gap-1.5"
               ><StatusChip :status="item.status" /><span
                 v-if="readOnly(item)"
                 :class="readOnlyTag"
@@ -353,7 +412,8 @@ const readOnlyTag =
           <RouterLink
             :to="href(item)"
             class="text-campus-navy font-semibold no-underline wrap-anywhere hover:underline hover:underline-offset-[3px] after:absolute after:inset-0"
-            >{{ item.title }}</RouterLink><span
+            >{{ item.title }}</RouterLink
+          ><span
             class="block mt-0.75 text-campus-muted text-[11px] wrap-anywhere"
             ><MapPin
               class="inline-block flex-none w-3 h-3 align-[-2px]"

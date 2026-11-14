@@ -55,7 +55,7 @@ test("confirmed erasure clears old private data even when its response arrives a
   );
   await waiting;
   await user.click(screen.getByRole("link", { name: "Dashboard" }));
-  await screen.findByRole("heading", { name: "Your campus workspace" });
+  await screen.findByRole("heading", { name: /^Welcome back,/ });
   release();
   await waitFor(() => expect(runtime.queryClient.isMutating()).toBe(0));
   expect(runtime.queryClient.getQueryData(meKey)).not.toMatchObject({
@@ -147,7 +147,7 @@ test("leaving settings during its identity preflight prevents a later erasure re
   );
   await waiting;
   await user.click(screen.getByRole("link", { name: "Dashboard" }));
-  await screen.findByRole("heading", { name: "Your campus workspace" });
+  await screen.findByRole("heading", { name: /^Welcome back,/ });
   release();
   await waitFor(() => expect(runtime.queryClient.isMutating()).toBe(0));
   expect(erasures).toBe(0);
@@ -386,7 +386,7 @@ test.each([
   const runtime = createClientRuntime(history);
   render(App, { global: { plugins: [runtime.plugin] } });
   await screen.findByRole("heading", {
-    name: path === "/dashboard" ? "Your campus workspace" : "Account settings",
+    name: path === "/dashboard" ? /^Welcome back,/ : "Account settings",
   });
   expect(runtime.router.currentRoute.value.path).toBe(path);
   runtime.queryClient.clear();
@@ -472,7 +472,7 @@ test("passwordless reauthentication never resumes erasure for a different User",
   await user.click(
     await screen.findByRole("button", { name: "Continue signing in" }),
   );
-  await screen.findByRole("heading", { name: "Your campus workspace" });
+  await screen.findByRole("heading", { name: /^Welcome back,/ });
   await screen.findByText(
     "You signed in with a different email. Your previous change was not made.",
   );
@@ -771,7 +771,7 @@ test("password sign-in accepts an existing password, shows generic rejection inl
       .disabled,
   ).toBe(false);
   await user.click(screen.getByRole("button", { name: "Sign in" }));
-  await screen.findByRole("heading", { name: "Your campus workspace" });
+  await screen.findByRole("heading", { name: /^Welcome back,/ });
   runtime.queryClient.clear();
 });
 

@@ -28,7 +28,11 @@ test("the workspace links to My requests and offers Report a fault as its primar
       .getByRole("link", { name: "Dashboard" })
       .getAttribute("aria-current"),
   ).toBe("page");
-  await user.click(screen.getByRole("link", { name: "Report a fault" }));
+  await user.click(
+    within(screen.getByRole("banner")).getByRole("link", {
+      name: "Report a fault",
+    }),
+  );
   await screen.findByRole("heading", { name: "Report a fault" });
   expect(runtime.router.currentRoute.value.path).toBe("/requests/new");
   expect(
@@ -556,6 +560,15 @@ test("the tracking page offers another try when it couldn't load", async () => {
 
 test("My requests lists the requests the User raised, without Priority, even for an Administrator", async () => {
   signedIn("administrator");
+  server.use(
+    http.get(`${api}/service-requests/SR-PLUMB-2`, () =>
+      HttpResponse.json({
+        ...summary("SR-PLUMB-2", "Blocked shower drain"),
+        description: "Water collects on the floor.",
+        timeline: [],
+      }),
+    ),
+  );
   const year = new Date().getFullYear();
   const queries = withRequests([
     {
@@ -615,6 +628,7 @@ test("My requests lists the requests the User raised, without Priority, even for
   await user.click(
     within(table).getByRole("link", { name: "Blocked shower drain" }),
   );
+  await screen.findByRole("heading", { name: "Blocked shower drain" });
   expect(runtime.router.currentRoute.value.path).toBe("/requests/SR-PLUMB-2");
   runtime.queryClient.clear();
 });
@@ -751,7 +765,9 @@ test("My requests explains an empty list, and an empty filter can be cleared", a
   items.push(summary("SR-PLUMB-1", "Leaking pipe", "submitted"));
   await runtime.router.push("/requests?status=verified");
   await screen.findByRole("heading", { name: "No Service Requests match" });
-  await user.click(screen.getByRole("button", { name: "Clear the filter" }));
+  await user.click(
+    screen.getByRole("button", { name: "Clear search and filters" }),
+  );
   await screen.findByText("Leaking pipe", { selector: "table a" });
   expect(runtime.router.currentRoute.value.fullPath).toBe("/requests");
   runtime.queryClient.clear();
@@ -786,7 +802,9 @@ test("while a new filter loads, My requests doesn't choose an empty state from t
   const { runtime, user } = open("/requests?status=verified");
   await screen.findByRole("heading", { name: "No Service Requests match" });
   hold = true;
-  await user.click(screen.getByRole("button", { name: "Clear the filter" }));
+  await user.click(
+    screen.getByRole("button", { name: "Clear search and filters" }),
+  );
   await waitFor(() =>
     expect(runtime.router.currentRoute.value.fullPath).toBe("/requests"),
   );

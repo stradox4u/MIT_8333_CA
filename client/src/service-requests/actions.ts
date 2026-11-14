@@ -34,6 +34,7 @@ export function useRequestAction<Variables>(options: {
         queryKey: serviceRequestOptions(options.reference()).queryKey,
       }),
       queryClient.invalidateQueries({ queryKey: ["service-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["service-requests-summary"] }),
       queryClient.invalidateQueries({
         queryKey: maintenanceOfficersOptions.queryKey,
       }),
@@ -54,6 +55,9 @@ export function useRequestAction<Variables>(options: {
       // Another response may be newer; keep it visible while checking the API.
       else void queryClient.invalidateQueries({ queryKey, refetchType: "all" });
       void queryClient.invalidateQueries({ queryKey: ["service-requests"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["service-requests-summary"],
+      });
       void queryClient.invalidateQueries({
         queryKey: maintenanceOfficersOptions.queryKey,
       });

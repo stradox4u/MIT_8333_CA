@@ -101,19 +101,32 @@ async function focusFirstError() {
 
 const send = useScreenMutation({
   mutationFn: async (report: NewServiceRequest) => {
-    if (!editing) return submitServiceRequest(report);
+    if (!editing) {
+      const submitted = await submitServiceRequest(report);
+      void queryClient.invalidateQueries({ queryKey: ["service-requests"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["service-requests-summary"],
+      });
+      return submitted;
+    }
     const details = await editRequest(props.reference!, report);
     queryClient.setQueryData(
       serviceRequestOptions(details.reference).queryKey,
       details,
     );
     void queryClient.invalidateQueries({ queryKey: ["service-requests"] });
+    void queryClient.invalidateQueries({
+      queryKey: ["service-requests-summary"],
+    });
     return { reference: details.reference };
   },
   onSuccess: async ({ reference }) => {
     if (editing) ui.editedReference = reference;
     else ui.submittedReference = reference;
     await queryClient.invalidateQueries({ queryKey: ["service-requests"] });
+    await queryClient.invalidateQueries({
+      queryKey: ["service-requests-summary"],
+    });
     await router.push(`/requests/${encodeURIComponent(reference)}`);
   },
   onError: async (error) => {

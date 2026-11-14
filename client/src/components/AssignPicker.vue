@@ -93,6 +93,7 @@ const refreshRequest = () =>
       queryKey: serviceRequestOptions(props.request.reference).queryKey,
     }),
     queryClient.invalidateQueries({ queryKey: ["service-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["service-requests-summary"] }),
   ]);
 const assign = useScreenMutation({
   // The cache takes the answer even if the page has gone by then.
@@ -103,6 +104,7 @@ const assign = useScreenMutation({
       details,
     );
     void queryClient.invalidateQueries({ queryKey: ["service-requests"] });
+    void queryClient.invalidateQueries({ queryKey: ["service-requests-summary"] });
     void queryClient.invalidateQueries({
       queryKey: maintenanceOfficersOptions.queryKey,
     });
