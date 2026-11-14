@@ -97,14 +97,20 @@ export class ServiceRequestNotifications {
 
   /** One email per recipient, leaving out the actor and anyone unreachable. */
   private async compose(change: ServiceRequestChange): Promise<Mail[]> {
-    const request = await this.requests.notificationDetails(change.reference);
-    if (!request)
-      throw new Error(`Missing notification request ${change.reference}`);
-    const notices = [
-      ...forOfficers(change, request),
-      ...forRequester(change, request),
-      ...(await this.forAdministrators(change, request)),
-    ].filter(({ recipientId }) => recipientId !== change.actorId);
+    const request = await this.requests.notificationDetails(
+      change.reference,
+      !!change.deleted,
+    );
+    if (!request) return [];
+    const notices = (
+      change.deleted
+        ? forDeletion(change, request)
+        : [
+            ...forOfficers(change, request),
+            ...forRequester(change, request),
+            ...(await this.forAdministrators(change, request)),
+          ]
+    ).filter(({ recipientId }) => recipientId !== change.actorId);
     if (notices.length === 0) {
       return [];
     }
@@ -125,7 +131,8 @@ export class ServiceRequestNotifications {
           [
             `Hello ${recipient.firstName},`,
             ...theirs.map(({ paragraph }) => paragraph),
-          ].join('\n\n') + `\n\nSee ${change.reference}:\n${link}`,
+          ].join('\n\n') +
+          (change.deleted ? '' : `\n\nSee ${change.reference}:\n${link}`),
       };
     });
   }
@@ -158,6 +165,25 @@ export class ServiceRequestNotifications {
   }
 }
 
+function forDeletion(
+  change: ServiceRequestChange,
+  request: Described,
+): Notice[] {
+  const deletion = change.deleted!;
+  return [
+    ...new Set([
+      change.requesterId,
+      ...(deletion.officerId ? [deletion.officerId] : []),
+    ]),
+  ].map((recipientId) => ({
+    recipientId,
+    subject: `${request.reference}: Service Request deleted`,
+    paragraph:
+      `${request.reference}, “${request.title}”, was deleted by an Administrator and is no longer available. Any current Assignment has ended.` +
+      quoted('The reason given', deletion.reason),
+  }));
+}
+
 /** Officers hear about Assignments they're given or lose, and Not fixed answers. */
 function forOfficers(
   change: ServiceRequestChange,
@@ -173,6 +199,7 @@ function forOfficers(
         ': an Administrator Cancelled the request.' +
         quoted('The reason given', change.moved?.reason),
       officer_left: ' because you’re no longer a Maintenance Officer.',
+      request_deleted: ': an Administrator deleted the Service Request.',
     }[change.ended.why];
     notices.push({
       recipientId: change.ended.officerId,

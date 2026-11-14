@@ -29,6 +29,7 @@ export type Section =
   | "assignments"
   | "management"
   | "requests"
+  | "users"
   | "settings"
   | "report";
 
@@ -57,6 +58,7 @@ const logout = useMutation({
 
 /** Which part of the workspace each route belongs to, for `aria-current`. */
 const sections: Record<Section, readonly string[]> = {
+  users: ["users"],
   dashboard: ["dashboard"],
   assignments: ["my-assignments"],
   management: ["request-management"],
@@ -100,6 +102,12 @@ const links = computed(() => [
           to: "/admin/requests",
           label: "Requests",
           icon: ListChecks,
+        },
+        {
+          section: "users" as const,
+          to: "/admin/users",
+          label: "Users",
+          icon: UserCog,
         },
       ]
     : []),

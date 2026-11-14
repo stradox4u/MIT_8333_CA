@@ -23,6 +23,7 @@ export const ASSIGNMENT_END_REASONS = [
   'unassigned',
   'not_fixed',
   'cancelled',
+  'request_deleted',
   /** The officer was demoted, deactivated or erased. */
   'officer_left',
 ] as const;

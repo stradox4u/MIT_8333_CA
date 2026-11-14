@@ -209,6 +209,7 @@ export const serviceRequests = pgTable(
     completedAt: instant(),
     verifiedAt: instant(),
     cancelledAt: instant(),
+    deletedAt: instant(),
   },
   (table) => [
     uniqueIndex().on(table.reference),

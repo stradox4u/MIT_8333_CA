@@ -109,6 +109,7 @@ export class ServiceRequestWritesRepository {
       .from(serviceRequests)
       .where(
         and(
+          isNull(serviceRequests.deletedAt),
           eq(serviceRequests.status, 'completed'),
           lte(serviceRequests.completedAt, cutoff),
         ),
@@ -167,7 +168,12 @@ export class ServiceRequestWritesRepository {
         priority: serviceRequests.priority,
       })
       .from(serviceRequests)
-      .where(eq(serviceRequests.reference, reference))
+      .where(
+        and(
+          eq(serviceRequests.reference, reference),
+          isNull(serviceRequests.deletedAt),
+        ),
+      )
       .for('update');
     if (!request) return null;
     const [assignment] = await this.db
@@ -221,6 +227,13 @@ export class ServiceRequestWritesRepository {
       .values({ serviceRequestId: id, authorId: actorId, text, createdAt: at });
   }
 
+  async markDeleted(id: string, at: Date): Promise<void> {
+    await this.db
+      .update(serviceRequests)
+      .set({ deletedAt: at })
+      .where(eq(serviceRequests.id, id));
+  }
+
   async setPriority(id: string, priority: Priority): Promise<void> {
     await this.db
       .update(serviceRequests)
@@ -237,7 +250,11 @@ export class ServiceRequestWritesRepository {
         eq(serviceRequests.id, assignments.serviceRequestId),
       )
       .where(
-        and(eq(assignments.officerId, officerId), isNull(assignments.endedAt)),
+        and(
+          eq(assignments.officerId, officerId),
+          isNull(assignments.endedAt),
+          isNull(serviceRequests.deletedAt),
+        ),
       )
       .orderBy(asc(assignments.id));
   }

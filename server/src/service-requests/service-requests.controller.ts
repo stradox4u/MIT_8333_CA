@@ -20,6 +20,7 @@ import {
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiProduces,
 } from '@nestjs/swagger';
@@ -341,7 +342,23 @@ export class ServiceRequestsController {
     return this.show(user, reference);
   }
 
-  /** Cancels a report in place of deleting its history. */
+  /** Administrator soft deletion is distinct from cancellation in every Status. */
+  @Delete(':reference')
+  @Can(ServiceRequestPolicy, 'manage')
+  @HttpCode(204)
+  @ApiNoContentResponse({
+    description: 'Deleted from ordinary use; history retained',
+  })
+  @ApiNotFoundResponse({ description: HIDDEN })
+  async delete(
+    @CurrentUser() user: User,
+    @Param('reference', { schema: referenceParam }) reference: string,
+    @Body({ schema: reasonBody }) body: z.infer<typeof reasonBody>,
+  ) {
+    refuseIf(await this.lifecycle.delete(reference, user.id, body.reason));
+  }
+
+  /** Cancels a report while retaining its visible history. */
   @Post(':reference/cancel')
   @HttpCode(200)
   @ApiOkResponse(ANSWERS_THE_REQUEST)

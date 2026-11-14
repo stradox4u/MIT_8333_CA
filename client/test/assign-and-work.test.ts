@@ -48,7 +48,7 @@ test.each<[Role, string[]]>([
   ],
   [
     "administrator",
-    ["Dashboard", "Requests", "My Requests", "Account Settings"],
+    ["Dashboard", "Requests", "Users", "My Requests", "Account Settings"],
   ],
 ])("a %s sees the navigation for their Role", async (role, links) => {
   signedIn(role);
@@ -310,7 +310,13 @@ test("the picker shows the server's officerId refusal and a conflict inside it, 
     "Tunde Bakare is no longer an active Maintenance Officer. Choose someone else.",
   );
   expect(refusal.id).toBeTruthy();
-  expect((within(dialog).getByRole("radio", { name: /Tunde Bakare/ }) as HTMLInputElement).checked).toBe(false);
+  expect(
+    (
+      within(dialog).getByRole("radio", {
+        name: /Tunde Bakare/,
+      }) as HTMLInputElement
+    ).checked,
+  ).toBe(false);
   answer = "conflict";
   await user.click(
     within(dialog).getByRole("radio", { name: /Blessing Okoro/ }),

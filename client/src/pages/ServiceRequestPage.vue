@@ -9,6 +9,7 @@ import History from "~icons/lucide/history";
 import Ban from "~icons/lucide/ban";
 import Check from "~icons/lucide/check";
 import WorkspaceLayout from "../layouts/WorkspaceLayout.vue";
+import DeleteRequest from "../components/DeleteRequest.vue";
 import StatusChip from "../components/StatusChip.vue";
 import PriorityTag from "../components/PriorityTag.vue";
 import CategoryTag from "../components/CategoryTag.vue";
@@ -533,6 +534,11 @@ const cancellation = computed(() => {
           </section>
         </div>
       </div>
+      <DeleteRequest
+        v-if="viewer === 'admin'"
+        :key="reference"
+        :reference="reference"
+      />
       <AssignPicker
         v-if="assigning"
         :request="request.data.value"

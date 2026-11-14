@@ -364,6 +364,41 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     });
   }
 
+  /** Removes any Status from ordinary use while retaining the request and its history. */
+  async delete(
+    reference: string,
+    actorId: string,
+    reason: string,
+  ): Promise<'deleted' | NotFound | NotAllowed> {
+    return this.change(async (store, changed) => {
+      const actor = await store.lockActor(actorId);
+      const request = await store.lock(reference);
+      if (!request) return 'not_found';
+      if (actor?.roleId !== 'administrator') return 'not_allowed';
+      const at = this.now();
+      if (request.assignment)
+        await store.endAssignment(
+          request.assignment.id,
+          'request_deleted',
+          actorId,
+          at,
+        );
+      await store.markDeleted(request.id, at);
+      await this.record(store, request.id, at, {
+        actorId,
+        action: 'request_deleted',
+        details: { reference, previousStatus: request.status, reason },
+      });
+      changed.push({
+        reference,
+        requesterId: request.requesterId,
+        actorId,
+        deleted: { reason, officerId: request.assignment?.officerId },
+      });
+      return 'deleted';
+    });
+  }
+
   /** Records only changed fields, keeping corrections off the Status timeline. */
   async edit(
     reference: string,

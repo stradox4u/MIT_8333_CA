@@ -115,6 +115,7 @@ export class ServiceRequestsRepository {
 
   async notificationDetails(
     reference: string,
+    includeDeleted = false,
   ): Promise<NotificationRequest | null> {
     const [request] = await this.db
       .select({
@@ -129,7 +130,12 @@ export class ServiceRequestsRepository {
         requestCategories,
         eq(requestCategories.id, serviceRequests.categoryId),
       )
-      .where(eq(serviceRequests.reference, reference));
+      .where(
+        and(
+          eq(serviceRequests.reference, reference),
+          includeDeleted ? undefined : isNull(serviceRequests.deletedAt),
+        ),
+      );
     return request ?? null;
   }
 
@@ -145,7 +151,12 @@ export class ServiceRequestsRepository {
       })
       .from(serviceRequests)
       .leftJoin(currentAssignments, isCurrentAssignment)
-      .where(eq(serviceRequests.reference, reference));
+      .where(
+        and(
+          eq(serviceRequests.reference, reference),
+          isNull(serviceRequests.deletedAt),
+        ),
+      );
     if (!request) {
       return 'not_found';
     }
@@ -167,7 +178,12 @@ export class ServiceRequestsRepository {
     const [request] = await this.selectSummaries({
       id: serviceRequests.id,
       description: serviceRequests.description,
-    }).where(eq(serviceRequests.reference, reference));
+    }).where(
+      and(
+        eq(serviceRequests.reference, reference),
+        isNull(serviceRequests.deletedAt),
+      ),
+    );
     if (!request) {
       return 'not_found';
     }
@@ -207,6 +223,7 @@ export class ServiceRequestsRepository {
     filters: Omit<z.infer<typeof listQuery>, 'scope'>,
   ) {
     return and(
+      isNull(serviceRequests.deletedAt),
       this.inScope(scope),
       filters.status ? hasStatus(filters.status) : undefined,
       filters.search
@@ -300,7 +317,7 @@ export class ServiceRequestsRepository {
         count: count(),
       })
       .from(serviceRequests)
-      .where(this.inScope(scope))
+      .where(and(isNull(serviceRequests.deletedAt), this.inScope(scope)))
       .groupBy(serviceRequests.status, serviceRequests.categoryId);
     const byStatus = Object.fromEntries(
       SERVICE_REQUEST_STATUSES.map((status) => [status, 0]),

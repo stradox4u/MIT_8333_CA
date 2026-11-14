@@ -18,6 +18,7 @@ export interface ServiceRequestChange {
     note?: string | null;
     reason?: string | null;
   };
+  deleted?: { reason: string; officerId?: string };
   /** The officer it gave an Assignment. */
   assignedTo?: string;
   /** The officer whose Assignment on Open work it ended, and why. */

@@ -39,6 +39,7 @@ export class MaintenanceOfficersRepository {
         and(
           eq(serviceRequests.id, assignments.serviceRequestId),
           inArray(serviceRequests.status, OPEN_STATUSES),
+          isNull(serviceRequests.deletedAt),
         ),
       )
       .where(activeWithRole('maintenance_officer'))
