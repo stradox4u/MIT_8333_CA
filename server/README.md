@@ -12,15 +12,16 @@ configuration at runtime; no credentials are build arguments or image inputs.
 | Target    | Purpose                                                                               | Default command      |
 | --------- | ------------------------------------------------------------------------------------- | -------------------- |
 | `runtime` | Compiled Nest API and database commands, Node 24, production dependencies, nonroot `node` user | `node dist/main.js`  |
-| `migrate` | Same application image with a one-shot migration command for local Compose                  | `npm run db:migrate` |
+| `application` | Shared application image; Compose supplies the migration command                         | Set by caller       |
 
 Build either image independently from the repository root:
 
 ```sh
 docker build --target runtime -t mit8333-api ./server
-docker build --target migrate -t mit8333-migrate ./server
+docker build --target application -t mit8333-migrate ./server
 ```
 
+Compose runs `npm run db:migrate` explicitly on the `application` image.
 Both images include the checked-in SQL and Drizzle's runtime migrator; neither
 connects to the database during the build. Run the migrator after PostgreSQL is
 healthy and require its successful exit before starting the API. It needs only
