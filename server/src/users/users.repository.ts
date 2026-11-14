@@ -11,7 +11,7 @@ import {
 } from '../database/schema.js';
 import { activeWithRole } from './active-users.js';
 import { displayName } from './display-name.js';
-import { OfficerDepartures } from './officer-departures.js';
+import { type AfterCommit, OfficerDepartures } from './officer-departures.js';
 import type { LastAdministrator, NotFound, UserErased } from './refusals.js';
 import type { User } from './user.js';
 
@@ -129,6 +129,7 @@ export class UsersRepository {
     | NotFound
     | LastAdministrator
   > {
+    let handedBack: AfterCommit | undefined;
     const deactivated = await this.db.transaction(async (tx) => {
       const changed = await tx
         .update(users)
@@ -146,9 +147,14 @@ export class UsersRepository {
       if (changed.length === 0) {
         return false;
       }
-      await this.officerDepartures.handBackAssignmentsOf(tx, id, actorId);
+      handedBack = await this.officerDepartures.handBackAssignmentsOf(
+        tx,
+        id,
+        actorId,
+      );
       return true;
     });
+    handedBack?.();
     if (deactivated) {
       return 'deactivated';
     }
@@ -171,7 +177,8 @@ export class UsersRepository {
     id: string,
     actorId: string,
   ): Promise<'erased' | 'already_erased' | NotFound | LastAdministrator> {
-    return this.db.transaction(async (tx) => {
+    let handedBack: AfterCommit | undefined;
+    const outcome = await this.db.transaction(async (tx) => {
       const [target] = await tx
         .select({
           email: users.email,
@@ -205,9 +212,15 @@ export class UsersRepository {
         await tx.delete(signInLinks).where(eq(signInLinks.email, target.email));
       }
       await tx.delete(googleIdentities).where(eq(googleIdentities.userId, id));
-      await this.officerDepartures.handBackAssignmentsOf(tx, id, actorId);
-      return 'erased';
+      handedBack = await this.officerDepartures.handBackAssignmentsOf(
+        tx,
+        id,
+        actorId,
+      );
+      return 'erased' as const;
     });
+    handedBack?.();
+    return outcome;
   }
 
   /**
@@ -334,6 +347,7 @@ export class UsersRepository {
     roleId: RoleId,
     actorId: string,
   ): Promise<'changed' | UserErased | NotFound | LastAdministrator> {
+    let handedBack: AfterCommit | undefined;
     const changed = await this.db.transaction(async (tx) => {
       const updated = await tx
         .update(users)
@@ -353,10 +367,15 @@ export class UsersRepository {
         return false;
       }
       if (roleId !== 'maintenance_officer') {
-        await this.officerDepartures.handBackAssignmentsOf(tx, id, actorId);
+        handedBack = await this.officerDepartures.handBackAssignmentsOf(
+          tx,
+          id,
+          actorId,
+        );
       }
       return true;
     });
+    handedBack?.();
     if (changed) {
       return 'changed';
     }

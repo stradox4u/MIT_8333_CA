@@ -165,3 +165,25 @@ LF, gains a leading apostrophe before CSV quoting. That apostrophe is part of th
 downloaded text. Empty results return the header alone. Responses use
 `Content-Type: text/csv; charset=utf-8`, an attachment filename and
 `Cache-Control: no-store`. No migration, configuration or dependency is needed.
+
+## Email notifications
+
+`ServiceRequestNotifications` sends plain-text emails through the existing
+`Mailer` once a change commits. Every subject names the Reference and every body
+links to `APP_URL/requests/<Reference>`.
+
+- The Requester hears about every Status Update. The Completed email asks for
+  Fixed or Not fixed, and the daily job's verification says it was automatic.
+- A Maintenance Officer hears when given an Assignment, when it ends (reassigned,
+  unassigned, Cancelled or their leaving) and when the Requester answers Not fixed.
+- Every active Administrator hears when a request becomes Submitted, new or handed back.
+
+Nobody is emailed about their own change, and Deactivated or Erased Users get
+nothing. Someone with two parts in one change gets one email. A departure sends one
+email per handed-back request per recipient. A rolled-back change sends nothing; a
+failed send is logged and the change stands. After commit, the lifecycle emits
+an in-process event; its singleton listener sends in the background so SMTP cannot
+hold up the response. Shutdown drains scheduled notifications.
+A crash before delivery loses that email: there is no outbox. The first-party
+`@nestjs/event-emitter` dependency is required; no migration or new configuration
+is needed.

@@ -14,6 +14,7 @@ import type { Environment } from '../../src/config/environment.js';
 import { DATABASE } from '../../src/database/database.js';
 import { DemoAccounts } from '../../src/users/demo-accounts.js';
 import { DemoServiceRequests } from '../../src/service-requests/demo-service-requests.js';
+import { ServiceRequestNotifications } from '../../src/service-requests/service-request-notifications.js';
 import { UsersRepository } from '../../src/users/users.repository.js';
 import { FakeGoogle, type GoogleAccount } from './fake-google.js';
 import { createTestDatabase, type TestDatabase } from './test-database.js';
@@ -101,8 +102,13 @@ export async function createTestApp({
     throw error;
   }
 
+  /** Waits for Service Request emails sent in the background after a change. */
+  const notificationsSent = () =>
+    app.get(ServiceRequestNotifications).settled();
+
   /** The latest mail sent to `email`, waiting briefly for it to arrive. */
   const latestMailTo = async (email: string) => {
+    await notificationsSent();
     const deadline = Date.now() + 1_000;
     do {
       const mail = mailbox.find({ to: email });
@@ -252,6 +258,7 @@ export async function createTestApp({
       await app.get(DemoServiceRequests).seed(settings.domain);
     },
     browser,
+    notificationsSent,
     latestMailTo,
     signInLinkTokenSentTo,
     signInByLink,
@@ -260,6 +267,7 @@ export async function createTestApp({
     signInAsMaintenanceOfficer,
     databaseMentions: (text: string) => database.mentions(text),
     async reset() {
+      await notificationsSent();
       mailbox.clear();
       clock.reset();
       google.reset();
@@ -267,6 +275,7 @@ export async function createTestApp({
     },
     async close() {
       try {
+        await notificationsSent();
         await app.close();
       } finally {
         await database.close();

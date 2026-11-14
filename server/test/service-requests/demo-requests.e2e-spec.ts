@@ -10,6 +10,12 @@ describe('Demo Service Requests', () => {
   beforeEach(() => app.reset());
   afterAll(() => app.close());
 
+  it('emails nobody about the demo history', async () => {
+    await app.seedDemoAccounts(DEMO);
+
+    expect(app.mailbox.mails).toEqual([]);
+  });
+
   const signIn = async (role: string) => {
     const browser = app.browser();
     await browser

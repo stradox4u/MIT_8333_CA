@@ -1,3 +1,4 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Injectable } from '@nestjs/common';
 import { eq, inArray } from 'drizzle-orm';
 import { Clock } from '../clock.js';
@@ -57,7 +58,12 @@ export class DemoServiceRequests {
             .where(eq(serviceRequests.demoKey, demoKey));
           if (existing) return;
           let at = this.clock.now() - (index + 1) * 60 * 60 * 1000;
-          const lifecycle = new ServiceRequestLifecycle(tx, { now: () => at });
+          // Demo history emails nobody.
+          const lifecycle = new ServiceRequestLifecycle(
+            tx,
+            { now: () => at },
+            new EventEmitter2(),
+          );
           const submitted = await lifecycle.submit({
             requesterId,
             title: `Demo plumbing fault: ${STATUS_NAMES[status]}`,
