@@ -161,6 +161,53 @@ test("a pending Search stays out of Export CSV until the list commits it", async
   runtime.queryClient.clear();
 });
 
+test("Export CSV picks up a Search once its pause commits it", async () => {
+  signedIn("administrator");
+  withRequests(items);
+  const { runtime, user } = open("/admin/requests");
+  const search = await screen.findByRole("searchbox", { name: "Search" });
+  await user.type(search, "Leaking");
+  expect((await exportLink()).href).toBe(exportPath);
+  await waitFor(async () =>
+    expect((await exportLink()).query).toEqual({ search: "Leaking" }),
+  );
+  runtime.queryClient.clear();
+});
+
+test("Export CSV picks up a pending Search committed with the next filter change", async () => {
+  signedIn("administrator");
+  withRequests(items);
+  const { runtime, user } = open("/admin/requests");
+  const search = await screen.findByRole("searchbox", { name: "Search" });
+  await user.type(search, "pipe");
+  await user.selectOptions(screen.getByLabelText("Sort"), "priority");
+  await waitFor(async () =>
+    expect((await exportLink()).query).toEqual({
+      search: "pipe",
+      sort: "priority",
+    }),
+  );
+  runtime.queryClient.clear();
+});
+
+test("the export hint reuses the list's request for each filter state", async () => {
+  signedIn("administrator");
+  const queries = withRequests(items);
+  const { runtime, user } = open("/admin/requests?status=open");
+  await screen.findByText("All 27 matching requests, not just this page");
+  await user.selectOptions(screen.getByLabelText("Priority"), "high");
+  await waitFor(async () =>
+    expect((await exportLink()).query).toEqual({
+      status: "open",
+      priority: "high",
+    }),
+  );
+  await screen.findByText("All 27 matching requests, not just this page");
+  await waitFor(() => expect(runtime.queryClient.isFetching()).toBe(0));
+  expect(queries.map((query) => query.get("priority"))).toEqual([null, "high"]);
+  runtime.queryClient.clear();
+});
+
 test("Export CSV says when no Service Requests match", async () => {
   signedIn("administrator");
   withRequests(items);

@@ -93,6 +93,8 @@ function parseCsv(text: string) {
       cell = "";
     } else cell += char;
   }
+  // Keep a final row that has no line break after it.
+  if (cell || row.length) rows.push([...row, cell.replace(/\r$/, "")]);
   return rows;
 }
 

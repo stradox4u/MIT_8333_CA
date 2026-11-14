@@ -57,7 +57,7 @@ function assigned(details: ServiceRequestDetails, officer: MaintenanceOfficer) {
           download
           class="inline-flex relative items-center justify-center gap-2 min-h-10 py-2 px-3.5 border border-campus-navy rounded-[7px] bg-transparent text-campus-navy text-[12px] font-semibold leading-[1.4] text-center no-underline whitespace-nowrap hover:bg-campus-surface"
           :aria-describedby="exportHint ? 'export-hint' : undefined"
-          ><Download class="w-3.75 h-3.75" aria-hidden="true" />Export CSV</a
+          ><Download class="size-3.75" aria-hidden="true" />Export CSV</a
         >
         <p
           id="export-hint"
