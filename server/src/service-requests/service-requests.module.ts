@@ -1,5 +1,6 @@
 import { ServiceRequestWritesRepository } from './service-request-writes.repository.js';
 import { UsersModule } from '../users/users.module.js';
+import { PhotosModule } from '../photos/photos.module.js';
 import { Global, Module } from '@nestjs/common';
 import { OfficerDepartures } from '../users/officer-departures.js';
 import { MaintenanceOfficersRepository } from './maintenance-officers.repository.js';
@@ -23,7 +24,7 @@ import { DemoServiceRequests } from './demo-service-requests.js';
  */
 @Global()
 @Module({
-  imports: [UsersModule],
+  imports: [UsersModule, PhotosModule],
   controllers: [
     RequestCategoriesController,
     ServiceRequestsController,

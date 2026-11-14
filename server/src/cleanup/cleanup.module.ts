@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PhotosModule } from '../photos/photos.module.js';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RateLimitCountersModule } from '../rate-limiting/rate-limit-counters.js';
 import { UsersModule } from '../users/users.module.js';
@@ -7,6 +8,7 @@ import { ServiceRequestsModule } from '../service-requests/service-requests.modu
 
 @Module({
   imports: [
+    PhotosModule,
     ScheduleModule.forRoot(),
     UsersModule,
     RateLimitCountersModule,

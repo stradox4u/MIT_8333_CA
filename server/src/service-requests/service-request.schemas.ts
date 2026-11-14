@@ -1,6 +1,10 @@
 import { z } from 'zod';
-import { PRIORITIES, SERVICE_REQUEST_STATUSES } from './service-request.types.js';
+import {
+  PRIORITIES,
+  SERVICE_REQUEST_STATUSES,
+} from './service-request.types.js';
 import { userId } from '../users/user.schemas.js';
+import { photoKeys } from '../photos/photo.schemas.js';
 
 /** Zod pieces for Service Request data (docs/service-requests.md, Validation). */
 
@@ -33,6 +37,7 @@ export const submitBody = z.object({
   categoryId,
   location,
   description,
+  photoKeys: photoKeys.optional(),
 });
 
 export const assignBody = z.object({
@@ -44,6 +49,7 @@ export const completeBody = z
   .object({
     /** The officer's note on the finished work, kept on that Status Update. */
     note: z.string().trim().min(1).max(2000).optional(),
+    photoKeys: photoKeys.optional(),
   })
   .optional();
 

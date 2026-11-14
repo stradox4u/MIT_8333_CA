@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Clock } from '../clock.js';
+import { Photos } from '../photos/photos.js';
 import type { RepositoryTransaction } from '../persistence/transaction.js';
 import { ServiceRequestWritesRepository } from './service-request-writes.repository.js';
 import {
@@ -53,6 +54,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     private readonly writes: ServiceRequestWritesRepository,
     private readonly clock: Clock,
     private readonly events: EventEmitter2,
+    private readonly photos: Photos,
   ) {}
 
   /**
@@ -62,12 +64,23 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
    * used twice or skipped.
    */
   async submit(
-    request: NewServiceRequest,
+    request: NewServiceRequest & { photoKeys?: string[] },
   ): Promise<{ reference: string } | UnknownCategory> {
     return this.change(async (store, changed) => {
-      const submitted = await store.submit(request, () => this.now());
+      const { photoKeys, ...details } = request;
+      const submitted = await store.submit(details, () => this.now());
       if (typeof submitted === 'string') return submitted;
       const { reference } = submitted;
+      if (photoKeys?.length) {
+        const created = await store.lock(reference);
+        await this.photos.attach(
+          store.photos,
+          photoKeys,
+          request.requesterId,
+          created!.id,
+          'report',
+        );
+      }
       changed.push({
         reference,
         requesterId: request.requesterId,
@@ -200,6 +213,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     reference: string,
     officerId: string,
     note: string | null,
+    photoKeys: string[] = [],
   ): Promise<'completed' | NotFound | NotCurrentOfficer | WrongStatus> {
     return this.change(async (store, changed) => {
       const officer = await store.lockActiveOfficer(officerId);
@@ -213,6 +227,13 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       if (request.status !== 'in_progress') {
         return wrongStatus(request.status);
       }
+      await this.photos.attach(
+        store.photos,
+        photoKeys,
+        officerId,
+        request.id,
+        'completion',
+      );
       changed.push(
         await this.changeStatus(store, request, 'completed', officerId, {
           note,
@@ -347,7 +368,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
   async edit(
     reference: string,
     actorId: string,
-    edits: DetailsEdits,
+    edits: DetailsEdits & { photoKeys?: string[] },
   ): Promise<
     | 'edited'
     | 'unchanged'
@@ -374,22 +395,45 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
         request.requesterId === actorId && request.status === 'submitted';
       if (
         !fullEdit &&
-        (edits.title !== undefined || edits.description !== undefined)
+        (edits.title !== undefined ||
+          edits.description !== undefined ||
+          edits.photoKeys !== undefined)
       )
         return 'not_allowed';
       if (edits.categoryId !== undefined) {
         if (!(await store.hasCategory(edits.categoryId)))
           return 'unknown_category';
       }
+      const { photoKeys, ...details } = edits;
       const before = await store.details(request.id);
-      const changes: Record<string, { from: string; to: string }> = {};
-      for (const field of Object.keys(edits) as (keyof DetailsEdits)[]) {
-        const value = edits[field];
+      const changes: Record<
+        string,
+        { from: string | string[]; to: string | string[] }
+      > = {};
+      for (const field of Object.keys(details) as (keyof DetailsEdits)[]) {
+        const value = details[field];
         if (value !== undefined && value !== before[field])
           changes[field] = { from: before[field], to: value };
       }
+      if (photoKeys !== undefined) {
+        const previous = await store.photos.forRequest(request.id, 'report');
+        if (
+          await this.photos.attach(
+            store.photos,
+            photoKeys,
+            actorId,
+            request.id,
+            'report',
+          )
+        )
+          changes.photos = {
+            from: previous.map((photo) => photo.uploadKey),
+            to: photoKeys,
+          };
+      }
       if (Object.keys(changes).length === 0) return 'unchanged';
-      await store.editDetails(request.id, edits);
+      if (Object.keys(details).length)
+        await store.editDetails(request.id, details);
       await this.record(store, request.id, this.now(), {
         actorId,
         action: 'details_changed',

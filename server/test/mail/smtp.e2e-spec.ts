@@ -56,6 +56,11 @@ describe('Configured SMTP delivery to a trusted plaintext relay', () => {
     // localhost default, reproducing the policy used for Docker service names.
     const settings = environment.parse({
       APP_URL: 'https://maintenance.example',
+      S3_BUCKET: 'test-photos',
+      S3_REGION: 'eu-west-1',
+      S3_ACCESS_KEY_ID: 'test-key',
+      S3_SECRET_ACCESS_KEY: 'test-secret',
+      S3_KEY_PREFIX: 'test-env/',
       DATABASE_URL: 'postgres://test:test@localhost/test',
       SMTP_URL: `smtp://${host}:${port}`,
       MAIL_FROM: 'Sender <sender@example.test>',

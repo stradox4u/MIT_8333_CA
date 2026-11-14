@@ -5,6 +5,7 @@ import {
 } from '../service-requests/service-request.types.js';
 import { type ActivityAction } from '../users/activity-log.types.js';
 import { type RoleId } from '../users/user.types.js';
+import type { PhotoStage } from '../photos/photo.types.js';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -309,4 +310,35 @@ export const progressNotes = pgTable(
     createdAt: instant().notNull(),
   },
   (table) => [index().on(table.serviceRequestId)],
+);
+
+/** Pending uploads and attached Photos retain both keys so failed changes remain cleanable. */
+export const photos = pgTable(
+  'photos',
+  {
+    id: uuid().primaryKey(),
+    uploadedById: uuid()
+      .notNull()
+      .references(() => users.id),
+    serviceRequestId: uuid().references(() => serviceRequests.id),
+    stage: text().$type<PhotoStage>(),
+    uploadKey: text().notNull().unique(),
+    storageKey: text().notNull().unique(),
+    contentType: text().notNull(),
+    size: integer().notNull(),
+    uploadedAt: instant().notNull(),
+    attachedAt: instant(),
+    finalizedAt: instant(),
+    unattachedSince: instant(),
+    uploadDeletedAt: instant(),
+  },
+  (table) => [
+    index().on(table.serviceRequestId),
+    index().on(table.unattachedSince),
+    index().on(table.uploadedAt),
+    check(
+      'photos_attachment',
+      sql`(${table.serviceRequestId} is null and ${table.stage} is null and ${table.attachedAt} is null and ${table.unattachedSince} is not null) or (${table.serviceRequestId} is not null and ${table.stage} is not null and ${table.attachedAt} is not null and ${table.unattachedSince} is null)`,
+    ),
+  ],
 );

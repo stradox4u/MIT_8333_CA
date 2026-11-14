@@ -1,6 +1,7 @@
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Injectable } from '@nestjs/common';
 import { Clock } from '../clock.js';
+import { Photos } from '../photos/photos.js';
 import { SERVICE_REQUEST_STATUSES } from './service-request.types.js';
 import { ServiceRequestWritesRepository } from './service-request-writes.repository.js';
 import { UsersRepository } from '../users/users.repository.js';
@@ -14,6 +15,7 @@ export class DemoServiceRequests {
     private readonly writes: ServiceRequestWritesRepository,
     private readonly users: UsersRepository,
     private readonly clock: Clock,
+    private readonly photos: Photos,
   ) {}
 
   async seed(domain: string): Promise<void> {
@@ -45,6 +47,7 @@ export class DemoServiceRequests {
               store,
               { now: () => at },
               new EventEmitter2(),
+              this.photos,
             );
             const submitted = await lifecycle.submit({
               requesterId,

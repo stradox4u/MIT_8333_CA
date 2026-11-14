@@ -25,6 +25,7 @@ import {
 } from '@nestjs/swagger';
 import type { z } from 'zod';
 import type { User } from '../users/user.js';
+import { Photos } from '../photos/photos.js';
 import { serviceRequestsCsv } from './service-requests.csv.js';
 import { refuseIf, refuseUnlessVisible } from './refusals.js';
 import { ServiceRequestLifecycle } from './service-request-lifecycle.js';
@@ -73,6 +74,7 @@ export class ServiceRequestsController {
     private readonly serviceRequests: ServiceRequestsRepository,
     private readonly lifecycle: ServiceRequestLifecycle,
     private readonly authorization: AuthorizationService,
+    private readonly photos: Photos,
   ) {}
 
   /** Submits a Service Request, raised by the signed-in User. */
@@ -194,6 +196,7 @@ export class ServiceRequestsController {
 
   /** The tracking page: the details, and the timeline oldest first. */
   @Get(':reference')
+  @Header('Cache-Control', 'no-store')
   @ApiOkResponse({ standardSchema: serviceRequestDetailsResponse })
   @ApiNotFoundResponse({ description: HIDDEN })
   find(
@@ -275,7 +278,12 @@ export class ServiceRequestsController {
   ) {
     await this.authorizeWork(officer, reference);
     refuseIf(
-      await this.lifecycle.complete(reference, officer.id, body?.note ?? null),
+      await this.lifecycle.complete(
+        reference,
+        officer.id,
+        body?.note ?? null,
+        body?.photoKeys,
+      ),
       'completed',
     );
     return this.show(officer, reference);
@@ -463,11 +471,12 @@ export class ServiceRequestsController {
     await this.findVisible(user, reference);
     const request = await this.serviceRequests.findDetails(reference);
     refuseIf(request);
+    const photos = await this.photos.forReference(reference);
     return withPriorityIfVisible(
       await this.priorityVisible(user, {
         currentOfficerId: request.assignment?.officer.id ?? null,
       }),
-      request,
+      { ...request, ...(photos.length && { photos }) },
     );
   }
 

@@ -7,9 +7,39 @@ const REQUIRED = {
   MAIL_FROM: 'MIT 8333 Maintenance <no-reply@example.com>',
   GOOGLE_CLIENT_ID: 'client.apps.googleusercontent.com',
   GOOGLE_CLIENT_SECRET: 'secret',
+  S3_BUCKET: 'test-photos',
+  S3_REGION: 'eu-west-1',
+  S3_ACCESS_KEY_ID: 'test-key',
+  S3_SECRET_ACCESS_KEY: 'test-secret',
+  S3_KEY_PREFIX: 'test-env/',
 };
 
 describe('the environment', () => {
+  it.each(['dev', 'prod/', 'campus/dev_1/'])(
+    'normalizes the configured S3 prefix %s',
+    (prefix) => {
+      expect(
+        environment.parse({ ...REQUIRED, S3_KEY_PREFIX: prefix }).S3_KEY_PREFIX,
+      ).toBe(`${prefix.replace(/\/$/, '')}/`);
+    },
+  );
+
+  it.each([
+    '',
+    '/',
+    '/dev',
+    '../dev',
+    'dev/../prod',
+    'dev//photos',
+    'dev\\photos',
+    'dev/photos%2F',
+    'dev\n',
+  ])('rejects unsafe S3 prefix %j', (prefix) => {
+    expect(
+      environment.safeParse({ ...REQUIRED, S3_KEY_PREFIX: prefix }).success,
+    ).toBe(false);
+  });
+
   it('accepts the required variables and fills in the defaults', () => {
     expect(environment.parse(REQUIRED)).toMatchObject({
       PORT: 3000,

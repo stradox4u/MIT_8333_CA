@@ -24,6 +24,11 @@ export default defineConfig({
       SMTP_URL: 'smtp://localhost:1025',
       GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com',
       GOOGLE_CLIENT_SECRET: 'test-secret',
+      S3_BUCKET: 'test-photos',
+      S3_REGION: 'eu-west-1',
+      S3_ACCESS_KEY_ID: 'test-key',
+      S3_SECRET_ACCESS_KEY: 'test-secret',
+      S3_KEY_PREFIX: 'test-env/',
       // Tests set the client's IP with X-Forwarded-For.
       TRUST_PROXY_HOPS: '1',
     },

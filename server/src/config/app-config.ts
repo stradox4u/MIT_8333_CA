@@ -38,6 +38,20 @@ export class AppConfig {
     return this.read('DATABASE_URL');
   }
 
+  get photoStorage() {
+    return {
+      bucket: this.read('S3_BUCKET'),
+      region: this.read('S3_REGION'),
+      credentials: {
+        accessKeyId: this.read('S3_ACCESS_KEY_ID'),
+        secretAccessKey: this.read('S3_SECRET_ACCESS_KEY'),
+      },
+      endpoint: this.read('S3_ENDPOINT'),
+      forcePathStyle: this.read('S3_FORCE_PATH_STYLE'),
+      keyPrefix: this.read('S3_KEY_PREFIX'),
+    };
+  }
+
   get mail(): MailSettings {
     return {
       transport: this.read('MAIL_TRANSPORT'),
