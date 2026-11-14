@@ -5,10 +5,14 @@ import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import ArrowLeft from "~icons/lucide/arrow-left";
 import ShieldAlert from "~icons/lucide/shield-alert";
 import WorkspaceLayout from "../layouts/WorkspaceLayout.vue";
+import PhotoUploadField from "../components/PhotoUploadField.vue";
+import type { PhotoSelection } from "../service-requests/photos";
 import TextField from "../components/TextField.vue";
 import SubmitButton from "../components/SubmitButton.vue";
 import StatusChip from "../components/StatusChip.vue";
 import { ApiError } from "../lib/api";
+import { usePhotoLinks } from "../service-requests/photo-links";
+import PageNotice from "../components/PageNotice.vue";
 import { lengthRule, useFields } from "../lib/fields";
 import { useAuthNavigation } from "../auth/navigation";
 import { isExpiredSession, useExpiredSession } from "../lib/expired-session";
@@ -40,6 +44,14 @@ const source = useQuery(
   })),
 );
 useExpiredSession(source.error);
+const {
+  refreshFailed,
+  refresh: refreshPhotoLinks,
+  failed: refreshPhoto,
+} = usePhotoLinks(
+  computed(() => props.reference ?? ""),
+  source,
+);
 const allowed = computed(
   () =>
     source.data.value?.status === "submitted" &&
@@ -60,6 +72,7 @@ const form = useFields(
     location: lengthRule("where the fault is", 2, 200),
     description: lengthRule("a description of the fault", 10, 5000),
   },
+  ["photoKeys"],
 );
 let initialized = false;
 watch(
@@ -88,6 +101,11 @@ const categoryDescribedBy = () =>
     .filter(Boolean)
     .join(" ");
 
+const photos = ref<PhotoSelection>({
+  photoKeys: [],
+  pending: false,
+  failed: false,
+});
 const formElement = ref<HTMLFormElement | null>(null);
 /** Moves to the first field with an error, once it shows. */
 async function focusFirstError() {
@@ -164,13 +182,26 @@ const send = useScreenMutation({
 });
 
 function submit() {
-  if (send.isPending.value || (editing && !allowed.value)) return;
+  if (
+    send.isPending.value ||
+    photos.value.pending ||
+    (editing && !allowed.value)
+  )
+    return;
+  if (photos.value.failed) {
+    form.formError.value = "A photo didn’t upload. Try it again, or remove it.";
+    return;
+  }
   if (!form.validate()) return void focusFirstError();
+  form.errors.photoKeys = "";
   send.mutate({
     title: form.values.title.trim(),
     categoryId: form.values.categoryId,
     location: form.values.location.trim(),
     description: form.values.description.trim(),
+    ...(editing || photos.value.photoKeys.length
+      ? { photoKeys: photos.value.photoKeys }
+      : {}),
   });
 }
 </script>
@@ -201,7 +232,7 @@ function submit() {
       Loading request details…
     </p>
     <section
-      v-else-if="editing && source.error.value"
+      v-else-if="editing && source.error.value && !refreshFailed"
       class="p-6 border border-campus-gray rounded-[13px] bg-campus-surface"
     >
       <h1
@@ -232,6 +263,11 @@ function submit() {
       </p>
     </section>
     <template v-else>
+      <PageNotice
+        v-if="refreshFailed"
+        kind="error"
+        message="Photo links couldn’t refresh. Your changes are still here. Try again."
+      />
       <div class="flex flex-wrap items-end justify-between gap-4.5 mb-5.5">
         <div class="min-w-0">
           <p
@@ -274,8 +310,9 @@ function submit() {
             <div>
               <strong class="block text-[13px]"
                 >Don’t include personal details</strong
-              >Leave out names, phone numbers and matriculation numbers. Your
-              request stays on record.
+              >Leave out names, phone numbers and matriculation numbers, and
+              keep faces and documents out of photos. Your request and its
+              photos stay on record.
             </div>
           </div>
           <TextField
@@ -386,6 +423,21 @@ function submit() {
             @blur="form.blur('description')"
             @update:model-value="form.changed('description')"
           />
+          <PhotoUploadField
+            :refreshing="source.isFetching.value"
+            @failed="refreshPhoto"
+            @retry="refreshPhotoLinks"
+            described-by="privacy-hint"
+            v-model="photos"
+            :error="form.errors.photoKeys"
+            @update:model-value="form.errors.photoKeys = ''"
+            :initial-photos="
+              source.data.value?.photos?.filter(
+                (photo) => photo.stage === 'report',
+              )
+            "
+            :disabled="send.isPending.value"
+          />
           <div>
             <div
               class="flex flex-wrap items-center gap-y-2.5 gap-x-4 phone:[&_.button]:w-full"
@@ -394,6 +446,7 @@ function submit() {
                 compact
                 class="compact-button has-request"
                 :pending="send.isPending.value"
+                :disabled="photos.pending"
                 >{{
                   editing ? "Save changes" : "Submit Service Request"
                 }}</SubmitButton

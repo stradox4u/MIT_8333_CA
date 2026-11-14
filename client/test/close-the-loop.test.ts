@@ -224,6 +224,7 @@ test("the edit route reuses the report form, preloads only the Requester’s Sub
   expect(runtime.router.currentRoute.value.path).toBe("/requests/SR-PLUMB-1");
   expect(sent).toEqual([
     {
+      photoKeys: [],
       title: "Faulty light",
       categoryId: "electrical",
       location: data.location,

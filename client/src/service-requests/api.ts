@@ -83,7 +83,19 @@ export interface ProgressNote {
 
 export type TimelineEntry = StatusUpdate | AssignmentChange | ProgressNote;
 
+export interface RequestPhoto {
+  id: string;
+  objectKey: string;
+  stage: "report" | "completion";
+  contentType: string;
+  size: number;
+  attachedAt: string;
+  url: string;
+  expiresAt: string;
+}
+
 export interface ServiceRequestDetails extends ServiceRequestSummary {
+  photos?: RequestPhoto[];
   description: string;
   /** Oldest first. */
   timeline: TimelineEntry[];
@@ -126,6 +138,7 @@ export interface ListFilters {
 export const PAGE_SIZE = 20;
 
 export interface NewServiceRequest {
+  photoKeys?: string[];
   title: string;
   categoryId: string;
   location: string;
@@ -213,10 +226,17 @@ export const unassignOfficer = (reference: string) =>
 export const startWork = (reference: string) =>
   action(reference, "/start", { method: "POST" });
 /** The current officer moves In Progress to Completed, with an optional note. */
-export const completeWork = (reference: string, note: string) =>
+export const completeWork = (
+  reference: string,
+  note: string,
+  photoKeys: string[] = [],
+) =>
   action(reference, "/complete", {
     method: "POST",
-    body: JSON.stringify(note ? { note } : {}),
+    body: JSON.stringify({
+      ...(note ? { note } : {}),
+      ...(photoKeys.length ? { photoKeys } : {}),
+    }),
   });
 
 export const addProgressNote = (reference: string, text: string) =>

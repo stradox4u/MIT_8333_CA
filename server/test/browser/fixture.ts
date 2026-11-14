@@ -45,6 +45,9 @@ export async function startBrowserFixture({
   const { createTestApp } = await import('../support/test-app.js');
   const app = await createTestApp({
     port: apiPort,
+    photoBaseUrl: apiPort
+      ? `http://127.0.0.1:${apiPort}/__test/photos`
+      : undefined,
     config: { appUrl: browserTestEnvironment.APP_URL, cookiesAreSecure: false },
   });
   let administrator:

@@ -7,6 +7,8 @@ import UserRoundCheck from "~icons/lucide/user-round-check";
 import UserRoundPlus from "~icons/lucide/user-round-plus";
 import Wrench from "~icons/lucide/wrench";
 import SubmitButton from "./SubmitButton.vue";
+import PhotoUploadField from "./PhotoUploadField.vue";
+import type { PhotoSelection } from "../service-requests/photos";
 import TextField from "./TextField.vue";
 import { useFields } from "../lib/fields";
 import {
@@ -145,18 +147,27 @@ const start = useRequestAction({
 });
 
 const completing = ref(false);
+const photos = ref<PhotoSelection>({
+  photoKeys: [],
+  pending: false,
+  failed: false,
+});
 const form = useFields(
   { note: "" },
   {
     note: (value) =>
       value.trim().length > 2000 ? "Use 2,000 characters or fewer." : "",
   },
+  ["photoKeys"],
 );
 const complete = useRequestAction({
   reference,
-  run: (note: string) => completeWork(reference(), note),
+  run: (input: { note: string; photoKeys: string[] }) =>
+    completeWork(reference(), input.note, input.photoKeys),
   done: (details) => `${details.reference} is Completed.`,
   report: props.report,
+  validationError: (error) => form.showError(error),
+  requestError: (error) => form.showError(error),
 });
 const formElement = ref<HTMLFormElement | null>(null);
 async function openCompletion() {
@@ -166,8 +177,17 @@ async function openCompletion() {
   formElement.value?.querySelector("textarea")?.focus();
 }
 function submitCompletion() {
-  if (complete.isPending.value || !form.validate()) return;
-  complete.mutate(form.values.note.trim());
+  if (complete.isPending.value || photos.value.pending || !form.validate())
+    return;
+  if (photos.value.failed) {
+    form.formError.value = "A photo didn’t upload. Try it again, or remove it.";
+    return;
+  }
+  form.errors.photoKeys = "";
+  complete.mutate({
+    note: form.values.note.trim(),
+    photoKeys: photos.value.photoKeys,
+  });
 }
 watch(
   () => props.request.status,
@@ -246,6 +266,7 @@ const busy = computed(() => start.isPending.value || complete.isPending.value);
         compact
         type="button"
         class="phone:w-full"
+        :disabled="complete.isPending.value"
         :aria-expanded="completing"
         aria-controls="complete-form"
         @click="openCompletion"
@@ -265,6 +286,7 @@ const busy = computed(() => start.isPending.value || complete.isPending.value);
       >
         <TextField
           v-model="form.values.note"
+          :disabled="complete.isPending.value"
           label="Note for the Requester (optional)"
           name="note"
           multiline
@@ -274,21 +296,36 @@ const busy = computed(() => start.isPending.value || complete.isPending.value);
           @blur="form.blur('note')"
           @update:model-value="form.changed('note')"
         />
+        <PhotoUploadField
+          label="Photos of the finished work"
+          v-model="photos"
+          :error="form.errors.photoKeys"
+          @update:model-value="form.errors.photoKeys = ''"
+          :disabled="complete.isPending.value"
+        />
         <div class="flex flex-wrap items-center gap-x-3.5 gap-y-2.5">
           <SubmitButton
             compact
             class="pr-8"
             :pending="complete.isPending.value"
-            :disabled="busy"
+            :disabled="busy || photos.pending"
             >Mark as Completed</SubmitButton
           ><button
             type="button"
             class="py-2 px-0.5 text-[12px] underline underline-offset-4"
+            :disabled="complete.isPending.value"
             @click="completing = false"
           >
             Back
           </button>
         </div>
+        <p
+          v-if="form.formError.value"
+          class="m-0 text-error text-[11px] leading-relaxed"
+          role="alert"
+        >
+          {{ form.formError.value }}
+        </p>
       </form>
     </div>
     <div

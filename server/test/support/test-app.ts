@@ -60,6 +60,7 @@ export async function createTestApp({
   config = {},
   port = 0,
   database: suppliedDatabase,
+  photoBaseUrl,
 }: {
   /** Settings to override, by `AppConfig` property, for this file's app. */
   config?: Partial<AppConfig>;
@@ -67,6 +68,8 @@ export async function createTestApp({
   port?: number;
   /** Concurrency suites supply an isolated real Postgres database. */
   database?: TestDatabase;
+  /** Browser fixtures need a reachable signed-storage origin. */
+  photoBaseUrl?: string;
 } = {}) {
   const database = suppliedDatabase ?? (await createTestDatabase());
   const mailbox = new InMemoryMailTransport();
@@ -75,7 +78,7 @@ export async function createTestApp({
 
   const photoDisk = new InMemoryDisk({
     signedUrls: {
-      baseUrl: 'http://storage.example.test/__test/photos',
+      baseUrl: photoBaseUrl ?? 'http://storage.example.test/__test/photos',
       keys: ['synthetic-photo-signing-key-for-tests-only'],
     },
   });
@@ -107,6 +110,15 @@ export async function createTestApp({
       .compile();
     app = moduleRef.createNestApplication();
     app.use('/__test/photos', async (req: Request, res: Response) => {
+      if (config.appUrl && req.headers.origin === config.appUrl) {
+        res.setHeader('Access-Control-Allow-Origin', config.appUrl);
+        res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      }
+      if (req.method === 'OPTIONS') {
+        res.status(204).end();
+        return;
+      }
       try {
         if (req.method === 'PUT') {
           await receiveSignedUpload(photoDisk, { req, res });

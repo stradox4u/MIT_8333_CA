@@ -17,6 +17,12 @@ if (!HTMLDialogElement.prototype.showModal) {
   };
 }
 
+// jsdom has no blob URL store; browser journeys exercise actual previews.
+if (!URL.createObjectURL) {
+  URL.createObjectURL = () => "blob:synthetic-photo-preview";
+  URL.revokeObjectURL = () => {};
+}
+
 export const server = setupServer(
   http.get("http://localhost:5173/api/service-requests/summary", () =>
     HttpResponse.json({

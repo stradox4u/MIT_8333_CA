@@ -5,6 +5,7 @@ type Rule<T> = (value: string, values: T) => string;
 export function useFields<T extends Record<string, string>>(
   initial: T,
   rules: Partial<Record<keyof T, Rule<T>>>,
+  additionalFields: readonly string[] = [],
 ) {
   const values = reactive({ ...initial }) as T;
   const errors = reactive<Record<string, string>>({});
@@ -35,7 +36,7 @@ export function useFields<T extends Record<string, string>>(
       const messages: string[] = [];
       for (const issue of error.issues) {
         const field = issue.path.length === 1 ? String(issue.path[0]) : "";
-        if (Object.hasOwn(values, field)) {
+        if (Object.hasOwn(values, field) || additionalFields.includes(field)) {
           errors[field] = issue.message;
           touched.add(field);
         } else messages.push(issue.message);
