@@ -135,7 +135,7 @@ const chips = computed(() =>
   <fieldset
     id="admin-filters"
     :class="expanded ? '' : 'phone:hidden'"
-    class="grid grid-cols-6 laptop:grid-cols-3 tablet:grid-cols-2 phone:grid-cols-1 gap-3 basis-full w-full min-w-0 p-3.5 border border-campus-gray rounded-[11px] bg-campus-surface"
+    class="grid grid-cols-1 not-phone:tablet:grid-cols-2 not-tablet:laptop:grid-cols-3 not-laptop:grid-cols-6 gap-3 basis-full w-full min-w-0 p-3.5 border border-campus-gray rounded-[11px] bg-campus-surface"
   >
     <legend class="sr-only">Filters</legend>
     <div :class="fieldClass">

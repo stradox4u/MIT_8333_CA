@@ -33,7 +33,7 @@ const reportButton =
             :to="`/requests/${item.reference}`"
             :aria-label="`Answer for ${item.reference}`"
             :class="reportButton"
-            class="px-4"
+            class="px-4 phone:w-full"
             >Answer →</RouterLink
           ></template
         >

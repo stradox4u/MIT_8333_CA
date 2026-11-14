@@ -57,6 +57,7 @@ function assigned(details: ServiceRequestDetails, officer: MaintenanceOfficer) {
         }"
         title="Waiting for an Assignment"
         :icon="UserRoundPlus"
+        primary-icon
         intro="Submitted, by Priority, then the longest waiting."
         href="/admin/requests?status=submitted&sort=priority"
         priority
@@ -122,7 +123,9 @@ function assigned(details: ServiceRequestDetails, officer: MaintenanceOfficer) {
       </div>
       <ul class="m-0 p-0 list-none">
         <li
-          v-for="entry in summary.openByCategory"
+          v-for="entry in summary.openByCategory
+            ?.slice()
+            .sort((a, b) => b.count - a.count)"
           :key="entry.category.id"
           class="grid grid-cols-[170px_minmax(0,1fr)] phone:grid-cols-1 items-center gap-x-3 gap-y-1 py-1.5 px-1 rounded-md hover:bg-campus-panel focus-within:bg-campus-panel text-[12px]"
         >

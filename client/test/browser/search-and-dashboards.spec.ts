@@ -129,7 +129,9 @@ test("real API lists retain search, filters, sort and page through shared URLs a
   await expect(admin.getByLabel("Search", { exact: true })).toHaveValue("pipe");
   await admin.getByLabel("Search", { exact: true }).fill("Faulty projector");
   await admin.getByLabel("Search", { exact: true }).press("Enter");
-  await expect(admin).toHaveURL(/search=Faulty\+projector&status=open$/);
+  await expect
+    .poll(() => Object.fromEntries(new URL(admin.url()).searchParams))
+    .toEqual({ search: "Faulty projector", status: "open" });
   await expect(
     admin.getByRole("table").getByRole("link", { name: "Faulty projector" }),
   ).toBeVisible();

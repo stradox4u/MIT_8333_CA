@@ -296,51 +296,59 @@ test("list and dashboard states match the approved responsive layout without ove
         },
       });
     const status = url.searchParams.get("status");
+    const pageSize = Number(url.searchParams.get("pageSize") ?? 20);
+    const total =
+      state === "empty"
+        ? 0
+        : pageSize === 5
+          ? status === "completed"
+            ? 2
+            : status === "submitted"
+              ? 3
+              : 14
+          : 27;
     const rows =
       state === "empty"
         ? []
-        : Array.from(
-            { length: Number(url.searchParams.get("pageSize") ?? 20) },
-            (_, index) => ({
-              reference: `SR-PLUMB-${50 - index}`,
-              title: index
-                ? "Overhead tank overflowing"
-                : "Leaking pipe under the sink",
-              category: categories[1],
-              location: "Hostel B, room 214",
-              status:
-                status === "completed"
-                  ? "completed"
-                  : status === "submitted"
-                    ? "submitted"
-                    : role === "maintenance_officer"
-                      ? "assigned"
-                      : index % 3
-                        ? "in_progress"
-                        : "submitted",
-              ...(index !== 1 || role !== "maintenance_officer"
-                ? { priority: "urgent" }
-                : {}),
-              requester: { id: "ada", name: "Ada Okafor" },
-              submittedAt: "2026-11-12T09:00:00Z",
-              assignment:
-                index % 3 || role === "maintenance_officer"
-                  ? {
-                      officer:
-                        index === 1
-                          ? { id: "another", name: "Tunde Bakare" }
-                          : officer,
-                      assignedAt: "2026-11-12T10:00:00Z",
-                    }
-                  : null,
-            }),
-          );
+        : Array.from({ length: Math.min(pageSize, total) }, (_, index) => ({
+            reference: `SR-PLUMB-${50 - index}`,
+            title: index
+              ? "Overhead tank overflowing"
+              : "Leaking pipe under the sink",
+            category: categories[1],
+            location: "Hostel B, room 214",
+            status:
+              status === "completed"
+                ? "completed"
+                : status === "submitted"
+                  ? "submitted"
+                  : role === "maintenance_officer"
+                    ? "assigned"
+                    : index % 3
+                      ? "in_progress"
+                      : "submitted",
+            ...(index !== 1 || role !== "maintenance_officer"
+              ? { priority: "urgent" }
+              : {}),
+            requester: { id: "ada", name: "Ada Okafor" },
+            submittedAt: "2026-11-12T09:00:00Z",
+            assignment:
+              index % 3 || role === "maintenance_officer"
+                ? {
+                    officer:
+                      index === 1
+                        ? { id: "another", name: "Tunde Bakare" }
+                        : officer,
+                    assignedAt: "2026-11-12T10:00:00Z",
+                  }
+                : null,
+          }));
     return route.fulfill({
       json: {
         items: rows,
         page: 1,
         pageSize: Number(url.searchParams.get("pageSize") ?? 20),
-        total: state === "empty" ? 0 : 27,
+        total,
       },
     });
   });
@@ -409,6 +417,20 @@ test("list and dashboard states match the approved responsive layout without ove
         await expect(
           page.getByLabel("Priority", { exact: true }),
         ).toBeVisible();
+        const statusBox = (await page
+          .getByLabel("Status", { exact: true })
+          .boundingBox())!;
+        const categoryBox = (await page
+          .getByLabel("Request Category", { exact: true })
+          .boundingBox())!;
+        const priorityBox = (await page
+          .getByLabel("Priority", { exact: true })
+          .boundingBox())!;
+        expect(categoryBox.x).toBe(statusBox.x);
+        expect(priorityBox.x).toBe(statusBox.x);
+        expect(categoryBox.y).toBeGreaterThan(statusBox.y);
+        expect(priorityBox.y).toBeGreaterThan(categoryBox.y);
+        expect(statusBox.width).toBeGreaterThan(220);
         await page.getByLabel("Priority", { exact: true }).focus();
         await expect(page.getByLabel("Priority", { exact: true })).toHaveCSS(
           "outline-style",

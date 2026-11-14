@@ -21,6 +21,7 @@ const props = defineProps<{
   href: string;
   linkLabel?: string;
   icon?: Component;
+  primaryIcon?: boolean;
   attention?: boolean;
   answer?: boolean;
   priority?: boolean;
@@ -46,7 +47,13 @@ useExpiredSession(list.error);
       <span
         v-if="icon"
         class="grid place-items-center w-9 h-9 shrink-0 rounded-[10px]"
-        :class="attention ? 'bg-campus-green phone:hidden' : 'bg-campus-panel'"
+        :class="
+          attention
+            ? 'bg-campus-green phone:hidden'
+            : primaryIcon
+              ? 'bg-campus-green'
+              : 'bg-campus-panel'
+        "
         ><component :is="icon" class="w-4.5 h-4.5" aria-hidden="true"
       /></span>
       <div class="min-w-0 flex-1">
@@ -58,6 +65,7 @@ useExpiredSession(list.error);
       <RouterLink
         :to="href"
         class="text-[12px] font-semibold text-campus-navy underline underline-offset-3"
+        :class="answer ? 'phone:basis-full' : ''"
         >{{ linkLabel ?? "View all"
         }}<template v-if="!linkLabel && list.data.value">
           ({{ list.data.value.total }})</template
@@ -122,6 +130,7 @@ useExpiredSession(list.error);
         </div>
         <div
           class="grid justify-items-end gap-1.5 text-[11px] text-campus-muted"
+          :class="answer ? 'phone:justify-items-stretch' : ''"
         >
           <slot name="side" :item="item" />
         </div>
