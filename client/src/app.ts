@@ -19,6 +19,7 @@ import {
 import { api, ApiError } from "./lib/api";
 import PasswordPage from "./pages/PasswordPage.vue";
 import SettingsPage from "./pages/SettingsPage.vue";
+import UsersPage from "./pages/UsersPage.vue";
 import DashboardPage from "./pages/DashboardPage.vue";
 import MyRequestsPage from "./pages/MyRequestsPage.vue";
 import MyAssignmentsPage from "./pages/MyAssignmentsPage.vue";
@@ -105,6 +106,12 @@ export function createClientRuntime(
         name: "my-assignments",
         meta: { requiresUser: true, roles: ["maintenance_officer"] },
         component: MyAssignmentsPage,
+      },
+      {
+        path: "/admin/users",
+        name: "users",
+        meta: { requiresUser: true, roles: ["administrator"] },
+        component: UsersPage,
       },
       {
         path: "/admin/requests",

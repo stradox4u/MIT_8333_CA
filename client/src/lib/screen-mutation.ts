@@ -12,7 +12,11 @@ interface ScreenMutation<TData, TVariables> {
   ) => Promise<TData>;
   onMutate?: (variables: TVariables) => void;
   onSuccess?: (data: TData, variables: TVariables) => void | Promise<void>;
-  onError?: (error: Error, variables: TVariables) => void | Promise<void>;
+  onError?: (
+    error: Error,
+    variables: TVariables,
+    activity: ScreenActivity,
+  ) => void | Promise<void>;
 }
 
 /** A departed screen cannot use a late response to change the active journey. */
@@ -44,7 +48,8 @@ export function useScreenMutation<TData, TVariables = void>(
       if (isCurrent()) return options.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {
-      if (isCurrent()) return options.onError?.(error, variables);
+      if (isCurrent())
+        return options.onError?.(error, variables, { isCurrent });
     },
   });
 }

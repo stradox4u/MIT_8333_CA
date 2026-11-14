@@ -13,6 +13,7 @@ export const ACTIVITY_ACTIONS = [
   'officer_left',
   'details_changed',
   'priority_changed',
+  'request_deleted',
 ] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 

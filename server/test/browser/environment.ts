@@ -2,7 +2,7 @@
 export const browserTestEnvironment = {
   NODE_ENV: 'test',
   PORT: '4174',
-  APP_URL: 'http://127.0.0.1:5173',
+  APP_URL: process.env.BROWSER_APP_URL ?? 'http://127.0.0.1:5173',
   COOKIE_SECURE: 'false',
   DATABASE_URL: 'postgres://test:test@127.0.0.1:5432/test',
   MAIL_TRANSPORT: 'smtp',

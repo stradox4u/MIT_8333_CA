@@ -39,6 +39,10 @@ _Avoid_: Closed, confirmed
 The final Status of a Service Request withdrawn before its work finished, by its Requester or an Administrator.
 _Avoid_: Deleted, rejected
 
+**Deleted Service Request**:
+A Service Request an Administrator has removed from ordinary use because it is a duplicate, irrelevant or otherwise unwanted. Its retained history distinguishes deletion from permanent destruction; cancellation instead records a withdrawal and leaves the request visible.
+_Avoid_: Cancelled, erased
+
 **Request Category**:
 The type of fault a Service Request reports: Electrical, Plumbing, Furniture, Internet and network, Classroom equipment, or Other. Where the fault is belongs in the Service Request's location, not its Request Category.
 _Avoid_: Fault type, request type
