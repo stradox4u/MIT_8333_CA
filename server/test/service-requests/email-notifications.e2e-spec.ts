@@ -7,7 +7,11 @@ import {
   requestInStatus,
   submitServiceRequest,
 } from '../support/service-requests.js';
-import { createTestApp, type TestApp } from '../support/test-app.js';
+import {
+  type Browser,
+  createTestApp,
+  type TestApp,
+} from '../support/test-app.js';
 import {
   createTestDatabase,
   type TestDatabase,
@@ -25,15 +29,23 @@ describe('Email notifications for Service Requests', () => {
   beforeEach(() => app.reset());
   afterAll(() => app.close());
 
+  /** Every mail sent, once the notifications in flight have gone. */
+  const allMail = async () => {
+    await app.notificationsSent();
+    return app.mailbox.mails;
+  };
+
   /** The notifications `email` received: mail naming a Reference, oldest first. */
-  const notificationsTo = (email: string) =>
-    app.mailbox
+  const notificationsTo = async (email: string) => {
+    await app.notificationsSent();
+    return app.mailbox
       .filter({ to: email })
       .filter(({ subject }) => /\bSR-[A-Z]+-\d+\b/.test(subject));
+  };
 
   /** The one notification `email` received about `reference`. */
-  const onlyNotificationTo = (email: string, reference: string) => {
-    const mails = notificationsTo(email);
+  const onlyNotificationTo = async (email: string, reference: string) => {
+    const mails = await notificationsTo(email);
     expect(mails.map(({ subject }) => subject)).toHaveLength(1);
     expect(mails[0].subject).toContain(reference);
     expect(mails[0].link(TRACKING).href).toBe(TRACKING + reference);
@@ -50,13 +62,13 @@ describe('Email notifications for Service Requests', () => {
       const reference = await submitServiceRequest(ada);
 
       for (const admin of ['grace@example.com', 'alan@example.com']) {
-        const mail = onlyNotificationTo(admin, reference);
+        const mail = await onlyNotificationTo(admin, reference);
         expect(mail.subject).toBe(`${reference}: a new Service Request`);
         expect(mail.text).toContain('Leaking tap');
         expect(mail.text).toContain('Block C, ground floor toilets');
         expect(mail.text).toContain('waiting for an Assignment');
       }
-      expect(notificationsTo('ada@example.com')).toEqual([]);
+      expect(await notificationsTo('ada@example.com')).toEqual([]);
     });
 
     it('skips the Administrator who submitted it, and Deactivated, Erased and invited ones', async () => {
@@ -79,14 +91,14 @@ describe('Email notifications for Service Requests', () => {
 
       const reference = await submitServiceRequest(grace);
 
-      onlyNotificationTo('linus@example.com', reference);
+      await onlyNotificationTo('linus@example.com', reference);
       for (const skipped of [
         'grace@example.com',
         'alan@example.com',
         'barbara@example.com',
         'invited@example.com',
       ]) {
-        expect(notificationsTo(skipped)).toEqual([]);
+        expect(await notificationsTo(skipped)).toEqual([]);
       }
     });
   });
@@ -100,7 +112,7 @@ describe('Email notifications for Service Requests', () => {
 
       await assign(work.admin, work.reference, work.officerId);
 
-      const mail = onlyNotificationTo(requester, work.reference);
+      const mail = await onlyNotificationTo(requester, work.reference);
       expect(mail.subject).toBe(`${work.reference} is Assigned`);
       expect(mail.text).toContain('Leaking tap');
     });
@@ -113,9 +125,9 @@ describe('Email notifications for Service Requests', () => {
         .post(`/api/service-requests/${work.reference}/start`)
         .expect(200);
 
-      const mail = onlyNotificationTo(requester, work.reference);
+      const mail = await onlyNotificationTo(requester, work.reference);
       expect(mail.subject).toBe(`${work.reference} is In Progress`);
-      expect(notificationsTo('officer@example.com')).toEqual([]);
+      expect(await notificationsTo('officer@example.com')).toEqual([]);
     });
 
     it('hears when the work is Completed, with the link to answer Fixed or Not fixed', async () => {
@@ -127,7 +139,7 @@ describe('Email notifications for Service Requests', () => {
         .send({ note: 'Replaced the washer.' })
         .expect(200);
 
-      const mail = onlyNotificationTo(requester, work.reference);
+      const mail = await onlyNotificationTo(requester, work.reference);
       expect(mail.subject).toBe(`${work.reference} is Completed`);
       expect(mail.text).toContain('Replaced the washer.');
       expect(mail.text).toContain('Fixed or Not fixed');
@@ -142,9 +154,10 @@ describe('Email notifications for Service Requests', () => {
         .post(`/api/service-requests/${work.reference}/verify`)
         .expect(200);
 
-      const mail = onlyNotificationTo(requester, work.reference);
+      const mail = await onlyNotificationTo(requester, work.reference);
       expect(mail.subject).toBe(`${work.reference} is Verified`);
-      expect(notificationsTo('officer@example.com')).toEqual([]);
+      expect(mail.text).toContain('an Administrator confirmed the fault is fixed');
+      expect(await notificationsTo('officer@example.com')).toEqual([]);
     });
 
     it('hears when the daily job verifies it after 7 days', async () => {
@@ -154,7 +167,7 @@ describe('Email notifications for Service Requests', () => {
 
       await app.runDailyCleanup();
 
-      const mail = onlyNotificationTo(requester, work.reference);
+      const mail = await onlyNotificationTo(requester, work.reference);
       expect(mail.subject).toBe(`${work.reference} is Verified`);
       expect(mail.text).toContain('automatically');
     });
@@ -168,7 +181,7 @@ describe('Email notifications for Service Requests', () => {
         .send({ reason: 'Reported twice.' })
         .expect(200);
 
-      const mail = onlyNotificationTo(requester, work.reference);
+      const mail = await onlyNotificationTo(requester, work.reference);
       expect(mail.subject).toBe(`${work.reference} is Cancelled`);
       expect(mail.text).toContain('Reported twice.');
     });
@@ -186,7 +199,7 @@ describe('Email notifications for Service Requests', () => {
         .send({ reason: 'Fixed itself.' })
         .expect(200);
 
-      expect(app.mailbox.mails).toEqual([]);
+      expect(await allMail()).toEqual([]);
     });
 
     it('isn’t emailed about Progress Notes, Priority or corrected details', async () => {
@@ -206,7 +219,7 @@ describe('Email notifications for Service Requests', () => {
         .send({ location: 'Block C, first floor toilets' })
         .expect(200);
 
-      expect(app.mailbox.mails).toEqual([]);
+      expect(await allMail()).toEqual([]);
     });
 
     it('gets nothing once Deactivated or Erased', async () => {
@@ -226,8 +239,8 @@ describe('Email notifications for Service Requests', () => {
           .expect(200);
       }
 
-      expect(notificationsTo(requester)).toEqual([]);
-      expect(notificationsTo('ada@example.com')).toEqual([]);
+      expect(await notificationsTo(requester)).toEqual([]);
+      expect(await notificationsTo('ada@example.com')).toEqual([]);
     });
   });
 
@@ -244,12 +257,12 @@ describe('Email notifications for Service Requests', () => {
 
       await assign(work.admin, work.reference, work.officerId);
 
-      const mail = onlyNotificationTo(officer, work.reference);
+      const mail = await onlyNotificationTo(officer, work.reference);
       expect(mail.subject).toBe(`${work.reference}: a new Assignment`);
       expect(mail.text).toContain('Leaking tap');
       expect(mail.text).toContain('Block C, ground floor toilets');
       expect(mail.text).toContain('Urgent');
-      expect(notificationsTo('admin@example.com')).toEqual([]);
+      expect(await notificationsTo('admin@example.com')).toEqual([]);
     });
 
     it('hears when it’s reassigned, while the new officer hears they have it', async () => {
@@ -259,16 +272,16 @@ describe('Email notifications for Service Requests', () => {
 
       await assign(work.admin, work.reference, await idOf(ngozi));
 
-      const ended = onlyNotificationTo(officer, work.reference);
+      const ended = await onlyNotificationTo(officer, work.reference);
       expect(ended.subject).toBe(
         `${work.reference}: your Assignment has ended`,
       );
       expect(ended.text).toContain('another Maintenance Officer');
       expect(
-        onlyNotificationTo('ngozi@example.com', work.reference).subject,
+        (await onlyNotificationTo('ngozi@example.com', work.reference)).subject,
       ).toBe(`${work.reference}: a new Assignment`);
       // Still Assigned, so the Requester has no Status Update to hear about.
-      expect(notificationsTo('requester@example.com')).toEqual([]);
+      expect(await notificationsTo('requester@example.com')).toEqual([]);
     });
 
     it('lets the Requester hear when In Progress work is reassigned', async () => {
@@ -279,7 +292,7 @@ describe('Email notifications for Service Requests', () => {
       await assign(work.admin, work.reference, await idOf(ngozi));
 
       expect(
-        onlyNotificationTo('requester@example.com', work.reference).subject,
+        (await onlyNotificationTo('requester@example.com', work.reference)).subject,
       ).toBe(`${work.reference} is Assigned`);
     });
 
@@ -292,19 +305,19 @@ describe('Email notifications for Service Requests', () => {
         .delete(`/api/service-requests/${work.reference}/assignment`)
         .expect(200);
 
-      const ended = onlyNotificationTo(officer, work.reference);
+      const ended = await onlyNotificationTo(officer, work.reference);
       expect(ended.subject).toBe(
         `${work.reference}: your Assignment has ended`,
       );
       expect(ended.text).toContain('unassigned');
       expect(
-        onlyNotificationTo('requester@example.com', work.reference).subject,
+        (await onlyNotificationTo('requester@example.com', work.reference)).subject,
       ).toBe(`${work.reference} is Submitted again`);
-      const queued = onlyNotificationTo('alan@example.com', work.reference);
+      const queued = await onlyNotificationTo('alan@example.com', work.reference);
       expect(queued.subject).toBe(`${work.reference} is Submitted again`);
       expect(queued.text).toContain('unassigned');
       expect(queued.text).toContain('waiting for an Assignment');
-      expect(notificationsTo('admin@example.com')).toEqual([]);
+      expect(await notificationsTo('admin@example.com')).toEqual([]);
     });
 
     it('hears when an Administrator cancels their work, with the reason', async () => {
@@ -316,14 +329,14 @@ describe('Email notifications for Service Requests', () => {
         .send({ reason: 'The block is being demolished.' })
         .expect(200);
 
-      const ended = onlyNotificationTo(officer, work.reference);
+      const ended = await onlyNotificationTo(officer, work.reference);
       expect(ended.subject).toBe(
         `${work.reference}: your Assignment has ended`,
       );
       expect(ended.text).toContain('Cancelled');
       expect(ended.text).toContain('The block is being demolished.');
       expect(
-        onlyNotificationTo('requester@example.com', work.reference).subject,
+        (await onlyNotificationTo('requester@example.com', work.reference)).subject,
       ).toBe(`${work.reference} is Cancelled`);
     });
 
@@ -336,33 +349,43 @@ describe('Email notifications for Service Requests', () => {
         .send({ reason: 'It still drips.' })
         .expect(200);
 
-      const mail = onlyNotificationTo(officer, work.reference);
+      const mail = await onlyNotificationTo(officer, work.reference);
       expect(mail.subject).toBe(`${work.reference}: answered Not fixed`);
       expect(mail.text).toContain('It still drips.');
       expect(mail.text).toContain('Assigned');
-      expect(notificationsTo('requester@example.com')).toEqual([]);
-      expect(notificationsTo('admin@example.com')).toEqual([]);
+      expect(await notificationsTo('requester@example.com')).toEqual([]);
+      expect(await notificationsTo('admin@example.com')).toEqual([]);
     });
 
-    it('is replaced by every active Administrator when Not fixed comes back after they’ve left', async () => {
-      const work = await requestInStatus(app, 'completed');
-      await work.admin
-        .post(`/api/users/${work.officerId}/deactivate`)
-        .expect(200);
-      app.mailbox.clear();
+    it.each([
+      ['deactivated', { path: 'deactivate', body: undefined }],
+      ['demoted', { path: 'role', body: { role: 'staff' } }],
+    ] as const)(
+      'is replaced by every active Administrator when Not fixed comes back after they’re %s',
+      async (_, leaving) => {
+        const work = await requestInStatus(app, 'completed');
+        const left = leaving.body
+          ? work.admin.patch(`/api/users/${work.officerId}/${leaving.path}`)
+          : work.admin.post(`/api/users/${work.officerId}/${leaving.path}`);
+        await left.send(leaving.body).expect(200);
+        app.mailbox.clear();
 
-      await work.requester
-        .post(`/api/service-requests/${work.reference}/not-fixed`)
-        .send({ reason: 'It still drips.' })
-        .expect(200);
+        await work.requester
+          .post(`/api/service-requests/${work.reference}/not-fixed`)
+          .send({ reason: 'It still drips.' })
+          .expect(200);
 
-      const queued = onlyNotificationTo('admin@example.com', work.reference);
-      expect(queued.subject).toBe(`${work.reference} is Submitted again`);
-      expect(queued.text).toContain('Not fixed');
-      expect(queued.text).toContain('It still drips.');
-      expect(notificationsTo(officer)).toEqual([]);
-      expect(notificationsTo('requester@example.com')).toEqual([]);
-    });
+        const queued = await onlyNotificationTo(
+          'admin@example.com',
+          work.reference,
+        );
+        expect(queued.subject).toBe(`${work.reference} is Submitted again`);
+        expect(queued.text).toContain('Not fixed');
+        expect(queued.text).toContain('It still drips.');
+        expect(await notificationsTo(officer)).toEqual([]);
+        expect(await notificationsTo('requester@example.com')).toEqual([]);
+      },
+    );
 
     it('gets one email when they’re also the Requester', async () => {
       const admin = await app.signInAsAdministrator();
@@ -372,7 +395,7 @@ describe('Email notifications for Service Requests', () => {
 
       await assign(admin, reference, await idOf(chinedu));
 
-      const mail = onlyNotificationTo(officer, reference);
+      const mail = await onlyNotificationTo(officer, reference);
       expect(mail.subject).toBe(`${reference}: a new Assignment`);
       expect(mail.text).toContain(`Your Service Request ${reference}`);
     });
@@ -408,10 +431,8 @@ describe('Email notifications for Service Requests', () => {
       return { admin, officer, officerId, open, completed };
     };
 
-    const subjectsTo = (email: string) =>
-      notificationsTo(email)
-        .map(({ subject }) => subject)
-        .sort();
+    const subjectsTo = async (email: string) =>
+      (await notificationsTo(email)).map(({ subject }) => subject).sort();
 
     it('emails the Requester and the other Administrators once per handed-back request', async () => {
       const work = await anOfficerWithWork();
@@ -423,13 +444,13 @@ describe('Email notifications for Service Requests', () => {
       const handedBack = work.open
         .map((reference) => `${reference} is Submitted again`)
         .sort();
-      expect(subjectsTo('ada@example.com')).toEqual(handedBack);
-      expect(subjectsTo('alan@example.com')).toEqual(handedBack);
-      for (const mail of notificationsTo('alan@example.com')) {
+      expect(await subjectsTo('ada@example.com')).toEqual(handedBack);
+      expect(await subjectsTo('alan@example.com')).toEqual(handedBack);
+      for (const mail of await notificationsTo('alan@example.com')) {
         expect(mail.text).toContain('no longer available');
       }
-      expect(subjectsTo('grace@example.com')).toEqual([]);
-      expect(subjectsTo('chinedu@example.com')).toEqual([]);
+      expect(await subjectsTo('grace@example.com')).toEqual([]);
+      expect(await subjectsTo('chinedu@example.com')).toEqual([]);
     });
 
     it('tells a demoted officer each Assignment has ended', async () => {
@@ -440,12 +461,12 @@ describe('Email notifications for Service Requests', () => {
         .send({ role: 'staff' })
         .expect(200);
 
-      expect(subjectsTo('chinedu@example.com')).toEqual(
+      expect(await subjectsTo('chinedu@example.com')).toEqual(
         work.open
           .map((reference) => `${reference}: your Assignment has ended`)
           .sort(),
       );
-      expect(notificationsTo('chinedu@example.com')[0].text).toContain(
+      expect((await notificationsTo('chinedu@example.com'))[0].text).toContain(
         'no longer a Maintenance Officer',
       );
     });
@@ -456,21 +477,22 @@ describe('Email notifications for Service Requests', () => {
       await work.officer.delete('/api/me').expect(204);
 
       for (const admin of ['grace@example.com', 'alan@example.com']) {
-        expect(subjectsTo(admin)).toHaveLength(2);
+        expect(await subjectsTo(admin)).toHaveLength(2);
       }
     });
   });
 
-  describe('a failed send', () => {
+  describe('mail trouble', () => {
     afterEach(() => vi.restoreAllMocks());
 
-    it('is logged, while the change stands and everyone else is emailed', async () => {
+    const permanentFailure = () =>
+      new MailError('Mailbox unavailable', { permanent: true, code: 550 });
+
+    it('logs a failed send, while the change stands and everyone else is emailed', async () => {
       const work = await requestInStatus(app, 'in_progress');
       app.mailbox.clear();
       const logged = vi.spyOn(Logger.prototype, 'error');
-      app.mailbox.failNext(
-        new MailError('Mailbox unavailable', { permanent: true, code: 550 }),
-      );
+      app.mailbox.failNext(permanentFailure());
 
       await work.admin
         .post(`/api/service-requests/${work.reference}/cancel`)
@@ -481,12 +503,60 @@ describe('Email notifications for Service Requests', () => {
         .get(`/api/service-requests/${work.reference}`)
         .expect(200);
       expect(shown.body.status).toBe('cancelled');
-      expect(notificationsTo('officer@example.com')).toEqual([]);
-      onlyNotificationTo('requester@example.com', work.reference);
+      const delivered = [
+        ...(await notificationsTo('officer@example.com')),
+        ...(await notificationsTo('requester@example.com')),
+      ];
+      expect(delivered).toHaveLength(1);
       expect(logged).toHaveBeenCalledWith(
         expect.stringContaining(work.reference),
         expect.any(MailError),
       );
+    });
+
+    it('keeps an officer’s departure when one of its emails fails', async () => {
+      const work = await requestInStatus(app, 'in_progress');
+      await app.signInAsAdministrator('alan@example.com');
+      app.mailbox.clear();
+      app.mailbox.failNext(permanentFailure());
+
+      await work.admin
+        .post(`/api/users/${work.officerId}/deactivate`)
+        .expect(200);
+
+      const shown = await work.admin
+        .get(`/api/service-requests/${work.reference}`)
+        .expect(200);
+      expect(shown.body.status).toBe('submitted');
+      const delivered = [
+        ...(await notificationsTo('requester@example.com')),
+        ...(await notificationsTo('alan@example.com')),
+      ];
+      expect(delivered).toHaveLength(1);
+    });
+
+    it('doesn’t hold up the change’s response while the mail server is slow', async () => {
+      const work = await requestInStatus(app, 'in_progress');
+      app.mailbox.clear();
+      let release = () => {};
+      const stalled = new Promise<void>((resolve) => (release = resolve));
+      const deliver = app.mailbox.send.bind(app.mailbox);
+      vi.spyOn(app.mailbox, 'send').mockImplementation(async (message) => {
+        await stalled;
+        return deliver(message);
+      });
+
+      try {
+        await work.admin
+          .post(`/api/service-requests/${work.reference}/cancel`)
+          .send({ reason: 'Reported twice.' })
+          .timeout(2_000)
+          .expect(200);
+      } finally {
+        release();
+      }
+
+      await onlyNotificationTo('requester@example.com', work.reference);
     });
   });
 });
@@ -526,26 +596,35 @@ describe('Email notifications when a change rolls back', () => {
       .send({ reason: 'Reported twice.' })
       .expect(500);
 
-    expect(app.mailbox.mails).toEqual([]);
+    expect(await allMail()).toEqual([]);
     const shown = await work.admin
       .get(`/api/service-requests/${work.reference}`)
       .expect(200);
     expect(shown.body.status).toBe('in_progress');
   });
 
-  it('sends nothing for an officer’s departure that never commits', async () => {
-    const work = await requestInStatus(app, 'in_progress');
-    await app.signInAsAdministrator('alan@example.com');
-    app.mailbox.clear();
+  it.each([
+    ['deactivated', (admin: Browser, id: string) =>
+      admin.post(`/api/users/${id}/deactivate`)],
+    ['erased', (admin: Browser, id: string) =>
+      admin.post(`/api/users/${id}/erase`)],
+    ['demoted', (admin: Browser, id: string) =>
+      admin.patch(`/api/users/${id}/role`).send({ role: 'staff' })],
+  ] as const)(
+    'sends nothing when an officer being %s never commits',
+    async (_, leave) => {
+      const work = await requestInStatus(app, 'in_progress');
+      await app.signInAsAdministrator('alan@example.com');
+      app.mailbox.clear();
 
-    await work.admin
-      .post(`/api/users/${work.officerId}/deactivate`)
-      .expect(500);
+      await leave(work.admin, work.officerId).expect(500);
 
-    expect(app.mailbox.mails).toEqual([]);
-    const shown = await work.admin
-      .get(`/api/service-requests/${work.reference}`)
-      .expect(200);
-    expect(shown.body.status).toBe('in_progress');
-  });
+      await app.notificationsSent();
+      expect(app.mailbox.mails).toEqual([]);
+      const shown = await work.admin
+        .get(`/api/service-requests/${work.reference}`)
+        .expect(200);
+      expect(shown.body.status).toBe('in_progress');
+    },
+  );
 });
