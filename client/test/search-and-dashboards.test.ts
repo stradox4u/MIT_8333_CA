@@ -578,3 +578,32 @@ test("a lifecycle response arriving after leaving the tracking page refreshes th
   expect(screen.getByRole("link", { name: "Verified 1" })).toBeTruthy();
   runtime.queryClient.clear();
 });
+
+test.each([
+  ["student", "/requests", "Status", "open", "status"],
+  ["maintenance_officer", "/assignments", "Status", "open", "status"],
+  ["administrator", "/admin/requests", "Sort", "priority", "sort"],
+] as const)(
+  "%s combines a pending Search with the next filter change",
+  async (role, path, label, value, key) => {
+    signedIn(role);
+    const queries = withRequests([summary("SR-PLUMB-1", "Leaking pipe")]);
+    const { runtime, user } = open(`${path}?page=2`);
+    const search = await screen.findByRole("searchbox", { name: "Search" });
+    await user.type(search, "Leaking pipe");
+    await user.selectOptions(screen.getByLabelText(label), value);
+    await waitFor(() =>
+      expect(runtime.router.currentRoute.value.query).toEqual({
+        search: "Leaking pipe",
+        [key]: value,
+      }),
+    );
+    expect((search as HTMLInputElement).value).toBe("Leaking pipe");
+    await waitFor(() =>
+      expect(queries.at(-1)?.get("search")).toBe("Leaking pipe"),
+    );
+    expect(queries.at(-1)?.get(key)).toBe(value);
+    expect(queries.at(-1)?.get("page")).toBe("1");
+    runtime.queryClient.clear();
+  },
+);

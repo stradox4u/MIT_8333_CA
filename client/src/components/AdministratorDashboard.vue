@@ -21,7 +21,7 @@ const hints = {
   assigned: "Not started",
   in_progress: "Being worked on",
   completed: "Waiting for the Requester",
-  verified: "Fixed and closed",
+  verified: "Marked as Verified",
   cancelled: "Withdrawn",
 };
 const assigning = ref<ServiceRequestSummary | null>(null);

@@ -16,6 +16,7 @@ import {
   PAGE_SIZE,
   STATUSES,
   serviceRequestsOptions,
+  type ListFilters,
   type Scope,
   type ServiceRequestSummary,
   type StatusFilter,
@@ -41,7 +42,7 @@ const route = useRoute();
 const router = useRouter();
 const me = useQuery(meOptions);
 
-const { filters, update } = useListFilters(() => props.scope);
+const { filters, update: updateUrl } = useListFilters(() => props.scope);
 function filterByStatus(event: Event) {
   update({
     status:
@@ -50,6 +51,10 @@ function filterByStatus(event: Event) {
 }
 const search = ref("");
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+function update(changes: Partial<ListFilters>) {
+  clearTimeout(searchTimer);
+  updateUrl({ search: search.value.trim() || undefined, ...changes });
+}
 watch(
   () => route.fullPath,
   () => {

@@ -18,6 +18,7 @@ useExpiredSession(summary.error);
 <template>
   <LoadFailure
     v-if="isLoadFailure(summary.error.value)"
+    class="py-9.5 px-5.5 border border-campus-gray rounded-xl bg-campus-surface text-center [&_.state-icon]:mt-0 [&_.state-icon]:mx-auto [&_.state-icon]:mb-4 [&_h2]:mb-1.5 [&_p]:max-w-105 [&_p]:mt-0 [&_p]:mx-auto [&_p]:mb-4.5 [&_p]:text-campus-muted [&_p]:text-[12px] [&_p]:leading-[1.65] [&_.button]:w-auto phone:[&_.button]:w-full"
     title="We couldn’t load your dashboard"
     :pending="summary.isFetching.value"
     @retry="summary.refetch()"

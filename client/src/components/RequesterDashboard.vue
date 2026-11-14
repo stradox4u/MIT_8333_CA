@@ -64,7 +64,7 @@ const reportButton =
             value: summary.byStatus.verified,
             href: '/requests?status=verified',
             icon: BadgeCheck,
-            hint: 'Fixed and closed',
+            hint: 'Marked as Verified',
           },
         ]"
       />

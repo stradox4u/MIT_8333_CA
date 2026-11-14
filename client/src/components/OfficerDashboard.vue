@@ -12,7 +12,7 @@ const hints = {
   assigned: "Not started yet",
   in_progress: "You’ve started",
   completed: "Waiting for the Requester",
-  verified: "Fixed and closed",
+  verified: "Marked as Verified",
 };
 </script>
 <template>
