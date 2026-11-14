@@ -41,16 +41,18 @@ export function useRequestAction<Variables>(options: {
   return useScreenMutation({
     // The cache takes the answer even if the page has gone by then.
     mutationFn: async (variables: Variables, activity) => {
+      const queryKey = serviceRequestOptions(options.reference()).queryKey;
+      const previousDetails = queryClient.getQueryData(queryKey);
       const details = await options.run(variables);
       // Cache changes can remove the action component before onSuccess runs.
       if (activity.isCurrent()) {
         options.report(options.done(details, variables));
         options.onDone?.();
       }
-      queryClient.setQueryData(
-        serviceRequestOptions(details.reference).queryKey,
-        details,
-      );
+      if (queryClient.getQueryData(queryKey) === previousDetails)
+        queryClient.setQueryData(queryKey, details);
+      // Another response may be newer; keep it visible while checking the API.
+      else void queryClient.invalidateQueries({ queryKey, refetchType: "all" });
       void queryClient.invalidateQueries({ queryKey: ["service-requests"] });
       void queryClient.invalidateQueries({
         queryKey: maintenanceOfficersOptions.queryKey,

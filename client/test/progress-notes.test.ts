@@ -2,7 +2,15 @@ import { expect, test } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/vue";
 import { http, HttpResponse } from "msw";
 import { server } from "./setup";
-import { api, open, signedIn, summary, type Role } from "./support";
+import {
+  api,
+  details,
+  open,
+  signedIn,
+  summary,
+  withCategories,
+  type Role,
+} from "./support";
 import type {
   ServiceRequestDetails,
   Status,
@@ -298,7 +306,7 @@ test.each([201, 401])(
   "a late note response %s cannot affect another request screen",
   async (status) => {
     signedIn();
-    tracked(detail());
+    const data = tracked(detail());
     let finish!: () => void;
     const second = {
       ...detail(),
@@ -315,7 +323,14 @@ test.each([201, 401])(
           await new Promise<void>((resolve) => {
             finish = resolve;
           });
-          return HttpResponse.json(detail(), { status });
+          if (status === 201)
+            data.timeline.push({
+              type: "progress_note",
+              occurredAt: "2026-11-12T11:00:00.000Z",
+              actor: data.requester,
+              text: "Room open.",
+            });
+          return HttpResponse.json(data, { status });
         },
       ),
     );
@@ -334,6 +349,165 @@ test.each([201, 401])(
     expect(runtime.router.currentRoute.value.path).toBe("/requests/SR-PLUMB-2");
     expect((field as HTMLTextAreaElement).value).toBe("New draft.");
     expect(screen.queryByText("Progress Note added.")).toBeNull();
+    if (status === 201) {
+      let finishRead!: () => void;
+      server.use(
+        http.get(`${api}/service-requests/SR-PLUMB-1`, async () => {
+          await new Promise<void>((resolve) => {
+            finishRead = resolve;
+          });
+          return HttpResponse.json(data);
+        }),
+      );
+      await runtime.router.push("/requests/SR-PLUMB-1");
+      await screen.findByText("Room open.");
+      await waitFor(() => expect(finishRead).toBeTypeOf("function"));
+      finishRead();
+      await waitFor(() => expect(runtime.queryClient.isFetching()).toBe(0));
+    }
+    runtime.queryClient.clear();
+  },
+);
+
+test.each([false, true])(
+  "a delayed note cannot restore Completed after Fixed, including refresh failure: %s",
+  async (refreshFails) => {
+    signedIn();
+    const data = detail("completed");
+    let failRefresh = false;
+    let finish!: () => void;
+    server.use(
+      http.get(`${api}/service-requests/SR-PLUMB-1`, () =>
+        failRefresh
+          ? HttpResponse.json({}, { status: 500 })
+          : HttpResponse.json(data),
+      ),
+      http.post(
+        `${api}/service-requests/SR-PLUMB-1/progress-notes`,
+        async () => {
+          data.timeline.push({
+            type: "progress_note",
+            occurredAt: "2026-11-12T11:00:00.000Z",
+            actor: data.requester,
+            text: "Water is running clearly now.",
+          });
+          const response = HttpResponse.json(data, { status: 201 });
+          await new Promise<void>((resolve) => {
+            finish = resolve;
+          });
+          return response;
+        },
+      ),
+      http.post(`${api}/service-requests/SR-PLUMB-1/verify`, () => {
+        data.status = "verified";
+        return HttpResponse.json(data);
+      }),
+    );
+    const { user, runtime } = open("/requests/SR-PLUMB-1");
+    await user.type(
+      await screen.findByRole("textbox", { name: "Add a Progress Note" }),
+      "Water is running clearly now.",
+    );
+    await user.click(screen.getByRole("button", { name: "Add Progress Note" }));
+    await user.click(screen.getByRole("button", { name: "Fixed" }));
+    await screen.findByText("SR-PLUMB-1 is Verified.");
+    failRefresh = refreshFails;
+    finish();
+    await waitFor(() => expect(runtime.queryClient.isMutating()).toBe(0));
+    await waitFor(() => expect(runtime.queryClient.isFetching()).toBe(0));
+    if (refreshFails) {
+      await screen.findByRole("heading", {
+        name: "We couldn’t load SR-PLUMB-1",
+      });
+      failRefresh = false;
+      await user.click(screen.getByRole("button", { name: "Try again" }));
+      await screen.findByRole("heading", { name: "Leaking tap" });
+    }
+    expect(
+      screen.queryByRole("form", { name: "Add a Progress Note" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Fixed" })).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Leaking tap" }).textContent,
+    ).toContain("Verified");
+    await screen.findByText("Water is running clearly now.");
+    runtime.queryClient.clear();
+  },
+);
+
+test.each(["Priority", "corrections"])(
+  "a delayed %s response cannot discard a newer Progress Note",
+  async (action) => {
+    signedIn("administrator");
+    withCategories();
+    const data = tracked({ ...detail(), priority: "normal" as const });
+    let finish!: () => void;
+    async function delayedResponse() {
+      const response = HttpResponse.json(data);
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      return response;
+    }
+    server.use(
+      http.get(`${api}/maintenance-officers`, () => HttpResponse.json([])),
+      http.put(`${api}/service-requests/SR-PLUMB-1/priority`, () => {
+        data.priority = "high";
+        return delayedResponse();
+      }),
+      http.patch(`${api}/service-requests/SR-PLUMB-1`, () => {
+        data.location = "Room 101";
+        return delayedResponse();
+      }),
+      http.post(`${api}/service-requests/SR-PLUMB-1/progress-notes`, () => {
+        data.timeline.push({
+          type: "progress_note",
+          occurredAt: "2026-11-12T11:00:00.000Z",
+          actor: data.requester,
+          text: "The room is open now.",
+        });
+        return HttpResponse.json(data, { status: 201 });
+      }),
+    );
+    const { user, runtime } = open("/requests/SR-PLUMB-1");
+    await screen.findByRole("heading", { name: "Leaking tap" });
+    if (action === "Priority") {
+      await user.click(screen.getByRole("radio", { name: "High" }));
+      await user.click(screen.getByRole("button", { name: "Set Priority" }));
+    } else {
+      await user.click(
+        screen.getByRole("button", {
+          name: "Correct Request Category or location",
+        }),
+      );
+      const form = screen.getByRole("form", {
+        name: "Correct Request Category or location",
+      });
+      const field = within(form).getByLabelText("Location");
+      await user.clear(field);
+      await user.type(field, "Room 101");
+      await user.click(
+        within(form).getByRole("button", { name: "Save corrections" }),
+      );
+    }
+    await user.type(
+      screen.getByRole("textbox", { name: "Add a Progress Note" }),
+      "The room is open now.",
+    );
+    await user.click(screen.getByRole("button", { name: "Add Progress Note" }));
+    await screen.findByText("Progress Note added.");
+    finish();
+    await waitFor(() => expect(runtime.queryClient.isMutating()).toBe(0));
+    await waitFor(() => expect(runtime.queryClient.isFetching()).toBe(0));
+    expect(
+      screen.getByRole("region", { name: "Timeline" }).textContent,
+    ).toContain("The room is open now.");
+    if (action === "Priority")
+      expect(
+        (screen.getByRole("radio", { name: "High" }) as HTMLInputElement)
+          .checked,
+      ).toBe(true);
+    else expect(details("Location")).toBe("Room 101");
     runtime.queryClient.clear();
   },
 );
