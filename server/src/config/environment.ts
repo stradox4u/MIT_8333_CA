@@ -19,6 +19,21 @@ export const environment = z.object({
   APP_URL: z.url(),
   DATABASE_URL: z.string().min(1),
 
+  S3_BUCKET: z.string().trim().min(1),
+  S3_REGION: z.string().trim().min(1),
+  S3_ACCESS_KEY_ID: z.string().min(1),
+  S3_SECRET_ACCESS_KEY: z.string().min(1),
+  S3_ENDPOINT: z.url().optional(),
+  S3_FORCE_PATH_STYLE: z.stringbool().default(false),
+  S3_KEY_PREFIX: z
+    .string()
+    .max(900)
+    .regex(
+      /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/?$/,
+      'Use relative path segments, such as dev/ or prod/',
+    )
+    .transform((prefix) => prefix.replace(/\/?$/, '/')),
+
   MAIL_TRANSPORT: z.enum(MAIL_TRANSPORT_KINDS).default('smtp'),
   SMTP_URL: z.string().min(1),
   /** Explicit opt-in for trusted plaintext relays such as Docker Mailpit. */

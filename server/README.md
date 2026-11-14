@@ -1,8 +1,7 @@
 # Maintenance API containers
 
 See the [root README](../README.md) for the complete local stack, mail inbox,
-configuration and optional demo accounts. The default Compose stack does not
-require copying an `.env` file.
+configuration and optional demo accounts. The Compose stack requires the S3 settings from `server/.env`.
 
 The Docker build context is this `server/` directory. Its allowlist excludes
 local `.env` files, dependencies, test fixtures and local documentation. Supply
@@ -203,3 +202,64 @@ scope expires when its callback ends. Notification events still emit after commi
 `repository-boundaries.spec.ts` rejects persistence imports in business code,
 including schemas, connection handles, and SQL helpers. Domain types and repository
 method results do not require Drizzle imports.
+
+
+## Photos
+
+The API requires `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`,
+`S3_SECRET_ACCESS_KEY` and `S3_KEY_PREFIX`. Set `S3_KEY_PREFIX=dev/` locally and,
+for example, `prod/` in production; prefixes are configurable relative paths,
+normalized with a trailing slash. No prefix is inferred from `NODE_ENV` (Compose
+runs production Node locally). Keep a deployment's prefix stable once it has
+photos. Local development uses the real bucket too; tests use an in-memory disk.
+`S3_ENDPOINT` and `S3_FORCE_PATH_STYLE` optionally support other S3 stores for
+host-run development; Compose uses the AWS endpoint.
+
+Keep the bucket private with public access blocked. Give the API credentials
+`s3:PutObject`, `s3:GetObject` and `s3:DeleteObject` on its configured prefix;
+server-side copy needs Get on the staging source and Put on the final destination.
+No ListBucket permission is required. Configure bucket CORS to allow the actual
+client origins, with PUT and GET and the `Content-Type` header, for example:
+
+```json
+[
+  {
+    "AllowedOrigins": ["http://localhost:5173", "https://your-app.example"],
+    "AllowedMethods": ["PUT", "GET"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+A signed-in User calls `POST /api/photo-uploads` with `contentType` and
+`contentLength` (JPEG, PNG or WebP, 1 byte–5 MiB). The `201` response contains
+`objectKey`, `url`, `method`, `headers`, and `expiresAt`. PUT the bytes directly to
+that URL with its returned headers within ten minutes; Content-Length is supplied
+by the HTTP client. Treat signed URLs as temporary secrets.
+
+Attach up to three of your own object keys as `photoKeys` on submission, on a Requester's
+Submitted report edit, or on the current officer's completion. On edit, omitted
+`photoKeys` preserves existing report photos; an array replaces them and `[]`
+removes them. An Administrator cannot edit someone else's photos. Each completion
+accepts up to three new photos and retains earlier completion evidence after Not
+fixed. Attachment and the request mutation commit together; invalid, missing,
+expired, reused or another uploader's keys return `400` on `photoKeys`.
+
+The server copies staging objects within S3, then checks the immutable result's
+size and Content-Type with HEAD. The API never receives photo bytes. This
+keeps bulk transfer out of the API and prevents a replayed upload from changing
+attached bytes. Temporary storage failures return `503` so the action can be
+retried. Failed mutations leave known keys for cleanup.
+
+Authorized request details include `photos` (omitted when empty), each with
+`id`, `objectKey`, `stage`, `contentType`, `size`, `attachedAt`, `url` and `expiresAt`.
+Download URLs last fifteen minutes; fetch details again to refresh them. Anyone
+holding a URL can use it until expiry. Lists and CSV do not include photo links.
+The daily job removes uploads left unattached for 24 hours, gives removed report
+photos a fresh 24-hour window, and removes old staging objects while retaining
+attached copies. Cleanup only touches the configured prefix, retries storage
+failures on the next run, and retains photos when a User is erased. Apply the new
+photos migration before starting this version. WebSocket notifications remain
+out of scope.

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PRIORITIES } from './service-request.types.js';
 import { status } from './service-request.schemas.js';
+import { photoResponse } from '../photos/photo.schemas.js';
 
 /**
  * What the Service Request routes answer: the one definition of each shape.
@@ -111,6 +112,13 @@ const timelineEntry = z.discriminatedUnion('type', [
 
 /** A Service Request's page as the server holds it. */
 const details = summary.extend({
+  photos: z
+    .array(photoResponse)
+    .optional()
+    .meta({
+      description:
+        'Attached Photos, oldest first; omitted when empty. Download URLs expire after 15 minutes; fetch details again to refresh.',
+    }),
   description: z.string(),
   timeline: z.array(timelineEntry).meta({ description: 'Oldest first' }),
 });

@@ -29,6 +29,12 @@ services:
       PORT: "3000"
       APP_URL: "http://localhost:${CLIENT_PORT:-5173}"
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/mit8333
+      S3_BUCKET: "${S3_BUCKET:?Set S3_BUCKET in server/.env}"
+      S3_REGION: "${S3_REGION:?Set S3_REGION in server/.env}"
+      S3_ACCESS_KEY_ID: "${S3_ACCESS_KEY_ID:?Set S3_ACCESS_KEY_ID in server/.env}"
+      S3_SECRET_ACCESS_KEY: "${S3_SECRET_ACCESS_KEY:?Set S3_SECRET_ACCESS_KEY in server/.env}"
+      S3_KEY_PREFIX: "${S3_KEY_PREFIX:?Set S3_KEY_PREFIX in server/.env}"
+      S3_FORCE_PATH_STYLE: "${S3_FORCE_PATH_STYLE:-false}"
       SMTP_URL: smtp://mailpit:1025
       SMTP_STARTTLS: opportunistic
       MAIL_FROM: "MIT 8333 Maintenance <no-reply@example.com>"

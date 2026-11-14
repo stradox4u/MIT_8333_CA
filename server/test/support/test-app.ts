@@ -1,3 +1,10 @@
+import {
+  InMemoryDisk,
+  STORAGE_MODULE_OPTIONS,
+  receiveSignedUpload,
+  serveSignedUrl,
+} from '@nestjs/storage';
+import type { Request, Response } from 'express';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -66,9 +73,18 @@ export async function createTestApp({
   const clock = new TestClock();
   const google = new FakeGoogle(() => clock.now());
 
+  const photoDisk = new InMemoryDisk({
+    signedUrls: {
+      baseUrl: 'http://storage.example.test/__test/photos',
+      keys: ['synthetic-photo-signing-key-for-tests-only'],
+    },
+  });
+
   let app: INestApplication | undefined;
   try {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(STORAGE_MODULE_OPTIONS)
+      .useValue({ default: 'photos', disks: { photos: photoDisk } })
       .overrideProvider(DATABASE)
       .useValue(database.db)
       .overrideProvider(MailTransport)
@@ -90,6 +106,24 @@ export async function createTestApp({
       })
       .compile();
     app = moduleRef.createNestApplication();
+    app.use('/__test/photos', async (req: Request, res: Response) => {
+      try {
+        if (req.method === 'PUT') {
+          await receiveSignedUpload(photoDisk, { req, res });
+          res.status(200).end();
+        } else {
+          const file = await serveSignedUrl(photoDisk, { req, res });
+          if (file) file.getStream().pipe(res);
+          else res.end();
+        }
+      } catch (error) {
+        const status =
+          error && typeof error === 'object' && 'getStatus' in error
+            ? (error as { getStatus(): number }).getStatus()
+            : 500;
+        res.status(status).end();
+      }
+    });
     configureApp(app);
     // Listen once: otherwise supertest opens a new port for every request.
     await app.listen(port, '127.0.0.1');
@@ -245,6 +279,7 @@ export async function createTestApp({
 
   return {
     mailbox,
+    photoDisk,
     clock,
     googleFetch: app.get(GoogleFetch),
     googleCallbackFor,
@@ -269,6 +304,7 @@ export async function createTestApp({
     async reset() {
       await notificationsSent();
       mailbox.clear();
+      photoDisk.clear();
       clock.reset();
       google.reset();
       await database.reset();

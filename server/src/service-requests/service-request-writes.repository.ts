@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PhotosRepository } from '../photos/photos.repository.js';
 import { and, asc, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { InjectDatabase, type Database } from '../database/database.js';
 import { transactionConnection } from '../database/transaction.repository.js';
@@ -29,7 +30,10 @@ import type {
 /** Atomic persistence operations; callers never receive a connection or query builder. */
 @Injectable()
 export class ServiceRequestWritesRepository {
-  constructor(@InjectDatabase() private readonly db: Database) {}
+  readonly photos: PhotosRepository;
+  constructor(@InjectDatabase() private readonly db: Database) {
+    this.photos = new PhotosRepository(db);
+  }
 
   transaction<T>(
     work: (store: ServiceRequestWritesRepository) => Promise<T>,

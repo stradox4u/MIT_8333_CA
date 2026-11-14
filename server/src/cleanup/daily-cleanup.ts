@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SessionService } from '@nestjs/authentication';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Clock } from '../clock.js';
+import { Photos } from '../photos/photos.js';
 import { RateLimitCounters } from '../rate-limiting/rate-limit-counters.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { ServiceRequestLifecycle } from '../service-requests/service-request-lifecycle.js';
@@ -19,6 +20,7 @@ export class DailyCleanup {
     private readonly sessions: SessionService,
     private readonly clock: Clock,
     private readonly serviceRequests: ServiceRequestLifecycle,
+    private readonly photos: Photos,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
@@ -34,6 +36,7 @@ export class DailyCleanup {
 
     await this.counters.deleteExpired();
     const verified = await this.serviceRequests.verifyOverdue();
+    await this.photos.cleanup();
 
     this.logger.log(`Deleted ${abandoned.length} abandoned Pending Sign-ups`);
     this.logger.log(

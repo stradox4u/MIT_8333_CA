@@ -5,6 +5,10 @@ Shared terminology for the client and server is defined in the
 
 ## Run the whole application locally
 
+Copy `server/.env.example` to `server/.env` and set the five required S3 values
+for your private bucket, including `S3_KEY_PREFIX=dev/`. Production uses its own
+configured prefix, for example `prod/`; the API never chooses it from `NODE_ENV`.
+See [photo storage setup](server/README.md#photos) for bucket access and CORS.
 With Docker Desktop running, run these commands from the repository root:
 
 ```sh
@@ -96,7 +100,7 @@ Override `CLIENT_PORT`, `POSTGRES_PORT`, `MAILPIT_PORT` or `MAILPIT_SMTP_PORT`
 when a default port is occupied. For example:
 
 ```sh
-CLIENT_PORT=5180 MAILPIT_PORT=8026 docker compose up --build -d
+CLIENT_PORT=5180 MAILPIT_PORT=8026 docker compose --env-file server/.env up --build -d
 ```
 
 The application origin and emailed links follow `CLIENT_PORT`. Update the
