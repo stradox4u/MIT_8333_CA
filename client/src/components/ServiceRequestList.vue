@@ -139,7 +139,7 @@ const outlineButton =
 const skeleton =
   "block h-3 rounded-md [background:linear-gradient(90deg,var(--color-campus-panel),#e7eded,var(--color-campus-panel))] bg-size-[200%_100%] animate-shimmer motion-reduce:animate-none";
 const reference =
-  "font-[ui-monospace,SFMono-Regular,Menlo,Consolas,monospace] font-semibold leading-[1.3] text-[12px] tracking-[0.02em] whitespace-nowrap";
+  "font-mono font-semibold leading-[1.3] text-[12px] tracking-[0.02em] whitespace-nowrap";
 const readOnlyTag =
   "inline-flex items-center gap-1 py-0.5 px-1.75 rounded text-[10px] font-[550] whitespace-nowrap shadow-[0_0_0_1px_var(--color-campus-control)_inset]";
 </script>
