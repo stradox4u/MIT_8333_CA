@@ -73,9 +73,10 @@ services:
   migrate:
     build:
       context: ./server
-      target: migrate
+      target: application
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/mit8333
+    command: ["npm", "run", "db:migrate"]
     depends_on:
       postgres:
         condition: service_healthy

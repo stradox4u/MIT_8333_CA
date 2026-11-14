@@ -57,6 +57,7 @@ export class AppConfig {
     return {
       transport: this.read('MAIL_TRANSPORT'),
       smtpUrl: this.read('SMTP_URL'),
+      brevoApiKey: this.read('BREVO_API_KEY'),
       startTls: this.read('SMTP_STARTTLS'),
       from: this.read('MAIL_FROM'),
     };

@@ -50,6 +50,37 @@ describe('the environment', () => {
     });
   });
 
+  it('configures Brevo without SMTP credentials', () => {
+    const { SMTP_URL: _, ...settings } = REQUIRED;
+    expect(
+      environment.parse({
+        ...settings,
+        MAIL_TRANSPORT: 'brevo',
+        BREVO_API_KEY: 'test-api-key',
+      }),
+    ).toMatchObject({ MAIL_TRANSPORT: 'brevo', BREVO_API_KEY: 'test-api-key' });
+  });
+
+  it.each([undefined, '', '   '])(
+    'requires an API key for Brevo (%j)',
+    (key) => {
+      const result = environment.safeParse({
+        ...REQUIRED,
+        MAIL_TRANSPORT: 'brevo',
+        BREVO_API_KEY: key,
+      });
+      expect(result.success).toBe(false);
+      if (!result.success)
+        expect(result.error.issues[0].path).toEqual(['BREVO_API_KEY']);
+    },
+  );
+
+  it('allows an unused blank API key for local SMTP', () => {
+    expect(
+      environment.safeParse({ ...REQUIRED, BREVO_API_KEY: '' }).success,
+    ).toBe(true);
+  });
+
   it.each(Object.keys(REQUIRED))('refuses to start without %s', (name) => {
     const { [name]: _, ...missing } = REQUIRED as Record<string, string>;
 
