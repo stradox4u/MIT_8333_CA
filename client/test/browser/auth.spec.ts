@@ -54,7 +54,7 @@ async function signup(page: Page, request: APIRequestContext) {
   await consumeLink(page, request);
   await finishSignup(page);
   await expect(
-    page.getByRole("heading", { name: "Your campus workspace" }),
+    page.getByRole("heading", { name: /^Welcome back,/ }),
   ).toBeVisible();
 }
 
@@ -159,7 +159,7 @@ test("password changes require fresh proof when stale and revoke other sessions"
       .getByRole("button", { name: "Sign in", exact: true })
       .click();
     await expect(
-      otherPage.getByRole("heading", { name: "Your campus workspace" }),
+      otherPage.getByRole("heading", { name: /^Welcome back,/ }),
     ).toBeVisible();
   }
   try {
@@ -284,7 +284,7 @@ test("invited maintenance users skip Finish sign-up after authenticating", async
   ).toBeVisible();
   await consumeLink(page, request);
   await expect(
-    page.getByRole("heading", { name: "Your campus workspace" }),
+    page.getByRole("heading", { name: /^Welcome back,/ }),
   ).toBeVisible();
   await expect(
     page.getByText("Maintenance Officer · MIT 8333 UNIVERSITY"),

@@ -1,4 +1,4 @@
-import { keepPreviousData, queryOptions } from "@tanstack/vue-query";
+import { queryOptions } from "@tanstack/vue-query";
 import { api } from "../lib/api";
 
 /** Service Request data from the API (server/docs/service-requests.md). */
@@ -112,6 +112,14 @@ export interface Page<Item> {
 /** A Status, or `open`: Submitted, Assigned or In Progress. */
 export type StatusFilter = Status | "open";
 export interface ListFilters {
+  search?: string;
+  category?: string;
+  priority?: Priority;
+  officerId?: string;
+  submittedFrom?: string;
+  submittedTo?: string;
+  sort?: "newest" | "priority";
+  pageSize?: number;
   status?: StatusFilter;
   page: number;
 }
@@ -137,16 +145,21 @@ export function serviceRequestsOptions(scope: Scope, filters: ListFilters) {
     queryKey: ["service-requests", scope, filters] as const,
     queryFn: ({ signal }) => {
       const query = new URLSearchParams({ scope });
-      // Left out rather than sent empty.
-      if (filters.status) query.set("status", filters.status);
+      for (const [field, value] of Object.entries(filters)) {
+        if (
+          field !== "page" &&
+          field !== "pageSize" &&
+          value !== undefined &&
+          value !== ""
+        )
+          query.set(field, String(value));
+      }
       query.set("page", String(filters.page));
-      query.set("pageSize", String(PAGE_SIZE));
+      query.set("pageSize", String(filters.pageSize ?? PAGE_SIZE));
       return api<Page<ServiceRequestSummary>>(`/service-requests?${query}`, {
         signal,
       });
     },
-    // Paging and filtering keep the previous rows until the next page arrives.
-    placeholderData: keepPreviousData,
   });
 }
 
@@ -228,5 +241,19 @@ export function submitServiceRequest(body: NewServiceRequest) {
   return api<{ reference: string }>("/service-requests", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export interface DashboardSummary {
+  byStatus: Record<Status, number>;
+  openByCategory?: { category: RequestCategory; count: number }[];
+}
+export function serviceRequestsSummaryOptions(scope: Scope) {
+  return queryOptions({
+    queryKey: ["service-requests-summary", scope] as const,
+    queryFn: ({ signal }) =>
+      api<DashboardSummary>(`/service-requests/summary?scope=${scope}`, {
+        signal,
+      }),
   });
 }

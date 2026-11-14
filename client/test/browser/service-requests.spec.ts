@@ -31,7 +31,7 @@ async function signUpAsStudent(page: Page, request: APIRequestContext) {
     .getByRole("button", { name: "Finish sign-up", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Your campus workspace" }),
+    page.getByRole("heading", { name: /^Welcome back,/ }),
   ).toBeVisible();
 }
 

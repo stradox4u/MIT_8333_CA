@@ -67,7 +67,7 @@ test.each<[string, Role]>([
   signedIn(role);
   withRequests([]);
   const { runtime } = open(path);
-  await screen.findByRole("heading", { name: "Your campus workspace" });
+  await screen.findByRole("heading", { name: /^Welcome back,/ });
   await waitFor(() =>
     expect(runtime.router.currentRoute.value.path).toBe("/dashboard"),
   );
@@ -267,7 +267,7 @@ test("the picker shows the server's officerId refusal and a conflict inside it, 
   withRequests([
     { ...summary("SR-ELEC-1", "Sparking socket"), priority: "normal" },
   ]);
-  const officerReads = withOfficers();
+  withOfficers();
   let answer: "invalid" | "conflict" = "invalid";
   server.use(
     http.put(`${api}/service-requests/SR-ELEC-1/assignment`, () =>
@@ -310,7 +310,7 @@ test("the picker shows the server's officerId refusal and a conflict inside it, 
     "Tunde Bakare is no longer an active Maintenance Officer. Choose someone else.",
   );
   expect(refusal.id).toBeTruthy();
-  await waitFor(() => expect(officerReads.reads()).toBe(2));
+  expect((within(dialog).getByRole("radio", { name: /Tunde Bakare/ }) as HTMLInputElement).checked).toBe(false);
   answer = "conflict";
   await user.click(
     within(dialog).getByRole("radio", { name: /Blessing Okoro/ }),

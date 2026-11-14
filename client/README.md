@@ -31,8 +31,12 @@ requires explicit confirmation; opening its URL does not consume it. Passwords
 stay in component memory, and link tokens are removed from the displayed URL.
 Navigation hints expire after 15 minutes and never authorize a sensitive action.
 
-The dashboard is a minimal Role-aware destination for completed accounts.
-Service Request dashboard features are outside this authentication slice.
+Dashboard summaries and short lists follow each Role: Students and Staff see their
+own requests and Completed answers, Maintenance Officers see current Assignments
+by Priority, and Administrators see campus queues and Open category counts.
+List search, filters, sort and page live in shareable URLs; pagination stays on
+the API. Recent requests are ordered by newest submission, and submitted-date
+filters include whole UTC days.
 
 ## Checks
 

@@ -23,7 +23,7 @@ test("workspace navigation keeps the preview's responsive breakpoints", async ({
 }) => {
   await page.goto("/dashboard");
   await expect(
-    page.getByRole("heading", { name: "Your campus workspace" }),
+    page.getByRole("heading", { name: /^Welcome back,/ }),
   ).toBeVisible();
   for (const width of [1280, 1060, 1024, 1023, 901, 900, 600, 440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
@@ -232,4 +232,198 @@ test("Progress Note controls preserve the preview through validation, pending an
   await expect(button).toBeEnabled();
   await expect(field).toHaveValue("Room is open after noon.");
   await capture("failure");
+});
+
+test("list and dashboard states match the approved responsive layout without overflow", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const categories = [
+    { id: "electrical", name: "Electrical", code: "ELEC" },
+    { id: "plumbing", name: "Plumbing", code: "PLUMB" },
+    { id: "furniture", name: "Furniture", code: "FURN" },
+    { id: "network", name: "Internet and network", code: "NET" },
+    { id: "classroom_equipment", name: "Classroom equipment", code: "CLASS" },
+    { id: "other", name: "Other", code: "OTHER" },
+  ];
+  let role = "student";
+  let state = "populated";
+  let release!: () => void;
+  let pending = Promise.resolve();
+  const officer = {
+    id: "88888888-8888-4888-8888-888888888888",
+    name: "Chinedu Eze",
+  };
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/auth/me"))
+      return route.fulfill({ json: { ...user, id: officer.id, role } });
+    if (url.pathname.endsWith("/request-categories"))
+      return route.fulfill({ json: categories });
+    if (url.pathname.endsWith("/maintenance-officers"))
+      return route.fulfill({ json: [{ ...officer, openAssignments: 3 }] });
+    if (state === "loading") await pending;
+    if (state === "error") return route.fulfill({ status: 500, json: {} });
+    if (url.pathname.endsWith("/summary"))
+      return route.fulfill({
+        json: {
+          byStatus:
+            state === "empty"
+              ? {
+                  submitted: 0,
+                  assigned: 0,
+                  in_progress: 0,
+                  completed: 0,
+                  verified: 0,
+                  cancelled: 0,
+                }
+              : {
+                  submitted: 3,
+                  assigned: 7,
+                  in_progress: 7,
+                  completed: 2,
+                  verified: 130,
+                  cancelled: 11,
+                },
+          ...(role === "administrator"
+            ? {
+                openByCategory: categories.map((category, index) => ({
+                  category,
+                  count: state === "empty" ? 0 : [3, 6, 3, 0, 4, 1][index],
+                })),
+              }
+            : {}),
+        },
+      });
+    const status = url.searchParams.get("status");
+    const rows =
+      state === "empty"
+        ? []
+        : Array.from(
+            { length: Number(url.searchParams.get("pageSize") ?? 20) },
+            (_, index) => ({
+              reference: `SR-PLUMB-${50 - index}`,
+              title: index
+                ? "Overhead tank overflowing"
+                : "Leaking pipe under the sink",
+              category: categories[1],
+              location: "Hostel B, room 214",
+              status:
+                status === "completed"
+                  ? "completed"
+                  : status === "submitted"
+                    ? "submitted"
+                    : role === "maintenance_officer"
+                      ? "assigned"
+                      : index % 3
+                        ? "in_progress"
+                        : "submitted",
+              ...(index !== 1 || role !== "maintenance_officer"
+                ? { priority: "urgent" }
+                : {}),
+              requester: { id: "ada", name: "Ada Okafor" },
+              submittedAt: "2026-11-12T09:00:00Z",
+              assignment:
+                index % 3 || role === "maintenance_officer"
+                  ? {
+                      officer:
+                        index === 1
+                          ? { id: "another", name: "Tunde Bakare" }
+                          : officer,
+                      assignedAt: "2026-11-12T10:00:00Z",
+                    }
+                  : null,
+            }),
+          );
+    return route.fulfill({
+      json: {
+        items: rows,
+        page: 1,
+        pageSize: Number(url.searchParams.get("pageSize") ?? 20),
+        total: state === "empty" ? 0 : 27,
+      },
+    });
+  });
+  for (const [name, nextRole, path] of [
+    ["my-requests", "student", "/requests"],
+    ["my-assignments", "maintenance_officer", "/assignments"],
+    ["management", "administrator", "/admin/requests"],
+    ["dashboard-student", "student", "/dashboard"],
+    ["dashboard-staff", "staff", "/dashboard"],
+    ["dashboard-maintenance_officer", "maintenance_officer", "/dashboard"],
+    ["dashboard-administrator", "administrator", "/dashboard"],
+  ]) {
+    role = nextRole!;
+    for (const nextState of ["populated", "empty", "error", "loading"]) {
+      state = nextState;
+      pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.goto(path!);
+      if (state === "loading")
+        await expect(
+          page.getByText(
+            name!.startsWith("dashboard")
+              ? "Loading your dashboard…"
+              : "Loading Service Requests…",
+            { exact: true },
+          ),
+        ).toBeVisible();
+      else if (state === "error")
+        await expect(
+          page.getByRole("heading", { name: /We couldn’t load/ }).first(),
+        ).toBeVisible();
+      else if (state === "populated")
+        await expect(
+          name!.startsWith("dashboard")
+            ? page.getByRole("list").first()
+            : page.getByRole("table"),
+        ).toBeVisible();
+      else
+        await expect(
+          page
+            .getByText(
+              /Nothing reported yet|No Assignments yet|No Service Requests yet|No current Assignments|Nothing is waiting|You haven’t reported any faults yet/,
+            )
+            .first(),
+        ).toBeVisible();
+      for (const [size, width, height] of [
+        ["desktop", 1280, 900],
+        ["mobile", 390, 844],
+        ["small-phone", 320, 844],
+      ] as const) {
+        await page.setViewportSize({ width, height });
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth),
+        ).toBeLessThanOrEqual(width);
+        await page.screenshot({
+          path: `/private/tmp/mit8333-sr5-evidence/after/${name}-${state}-${size}.png`,
+          fullPage: true,
+        });
+      }
+      if (state === "populated" && name === "management") {
+        await page
+          .getByRole("button", { name: "Filters", exact: true })
+          .click();
+        await expect(
+          page.getByLabel("Priority", { exact: true }),
+        ).toBeVisible();
+        await page.getByLabel("Priority", { exact: true }).focus();
+        await expect(page.getByLabel("Priority", { exact: true })).toHaveCSS(
+          "outline-style",
+          "solid",
+        );
+        await page.screenshot({
+          path: "/private/tmp/mit8333-sr5-evidence/after/management-filters-focus-320.png",
+          fullPage: true,
+        });
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth),
+        ).toBeLessThanOrEqual(320);
+      }
+      release();
+      if (state === "loading") await page.waitForLoadState("networkidle");
+    }
+  }
 });
