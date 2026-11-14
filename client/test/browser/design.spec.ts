@@ -406,7 +406,7 @@ test("list and dashboard states match the approved responsive layout without ove
           await page.evaluate(() => document.documentElement.scrollWidth),
         ).toBeLessThanOrEqual(width);
         await page.screenshot({
-          path: `/private/tmp/mit8333-sr5-evidence/after/${name}-${state}-${size}.png`,
+          path: `test-results/search-and-dashboards/${name}-${state}-${size}.png`,
           fullPage: true,
         });
       }
@@ -437,7 +437,7 @@ test("list and dashboard states match the approved responsive layout without ove
           "solid",
         );
         await page.screenshot({
-          path: "/private/tmp/mit8333-sr5-evidence/after/management-filters-focus-320.png",
+          path: "test-results/search-and-dashboards/management-filters-focus-320.png",
           fullPage: true,
         });
         expect(
