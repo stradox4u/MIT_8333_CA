@@ -13,6 +13,7 @@ import StatusChip from "../components/StatusChip.vue";
 import PriorityTag from "../components/PriorityTag.vue";
 import CategoryTag from "../components/CategoryTag.vue";
 import ProgressNoteForm from "../components/ProgressNoteForm.vue";
+import RequestPhotoGallery from "../components/RequestPhotoGallery.vue";
 import StatusTimeline from "../components/StatusTimeline.vue";
 import { useUiStore } from "../stores/ui";
 import { meOptions } from "../auth/identity";
@@ -46,6 +47,15 @@ const request = useQuery(
   computed(() => serviceRequestOptions(reference.value)),
 );
 useExpiredSession(request.error);
+
+// One automatic refresh per photo per visit bounds failures from renewed links.
+const refreshedPhotos = new Set<string>();
+watch(reference, () => refreshedPhotos.clear());
+function refreshPhoto(photoId: string) {
+  if (refreshedPhotos.has(photoId)) return;
+  refreshedPhotos.add(photoId);
+  if (!request.isFetching.value) void request.refetch();
+}
 
 /** The submitted notice shows once, on the page for the Reference just submitted. */
 const justSubmitted = ref(false);
@@ -417,6 +427,7 @@ const cancellation = computed(() => {
             >
           </p>
           <NextStepPanel
+            :key="reference"
             v-else-if="viewer"
             :request="request.data.value"
             :viewer="viewer"
@@ -454,6 +465,22 @@ const cancellation = computed(() => {
             >
               {{ request.data.value.description }}
             </p>
+            <RequestPhotoGallery
+              :key="`${reference}-report`"
+              :photos="request.data.value.photos ?? []"
+              stage="report"
+              :refreshing="request.isFetching.value"
+              @failed="refreshPhoto"
+              @retry="request.refetch()"
+            />
+            <RequestPhotoGallery
+              :key="`${reference}-completion`"
+              :photos="request.data.value.photos ?? []"
+              stage="completion"
+              :refreshing="request.isFetching.value"
+              @failed="refreshPhoto"
+              @retry="request.refetch()"
+            />
           </section>
           <section
             class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 phone:px-3.75"
