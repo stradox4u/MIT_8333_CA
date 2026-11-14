@@ -31,6 +31,7 @@ describe('API documentation', () => {
         '/api/request-categories',
         '/api/service-requests',
         '/api/service-requests/summary',
+        '/api/service-requests/export.csv',
         '/api/service-requests/{reference}',
         '/api/service-requests/{reference}/assignment',
         '/api/service-requests/{reference}/start',
@@ -191,6 +192,39 @@ describe('API documentation', () => {
         expect.objectContaining({ name: 'pageSize', in: 'query' }),
       ]),
     );
+  });
+
+  it('documents the Administrator CSV download, shared filters and ignored pagination', () => {
+    const operation = document.paths['/api/service-requests/export.csv'].get;
+    expect(operation.responses['200'].content).toEqual({
+      'text/csv': { schema: { type: 'string' } },
+    });
+    expect(operation.responses['200'].description).toContain(
+      'pagination is validated but ignored',
+    );
+    expect(operation.responses['403'].description).toContain('Administrators');
+    const scope = operation.parameters.find(
+      (parameter: { name: string }) => parameter.name === 'scope',
+    );
+    expect(scope).toMatchObject({
+      required: false,
+      schema: { default: 'all', enum: ['all'] },
+    });
+    expect(
+      operation.parameters.map((parameter: { name: string }) => parameter.name),
+    ).toEqual([
+      'scope',
+      'status',
+      'search',
+      'category',
+      'priority',
+      'officerId',
+      'submittedFrom',
+      'submittedTo',
+      'sort',
+      'page',
+      'pageSize',
+    ]);
   });
 
   it('documents summary counts, zero categories and query permissions', () => {

@@ -140,3 +140,28 @@ count }]`, with all six categories in display order, including zeros. These
 counts cover Open requests in the selected scope; an Administrator's requested
 summary never counts other Requesters' requests. Historical Assignments count a
 request once. This slice needs no migration, new configuration or dependency.
+
+## CSV export
+
+`GET /api/service-requests/export.csv` is for Administrators only and downloads
+`service-requests.csv`. It uses the same filters and stable ordering as the
+Administrator list, with `scope=all` optional and implied. Other scopes return
+`400`. Valid `page` and `pageSize` values are accepted and ignored: the download
+includes **every** matching request, even beyond the list's 100-row page limit.
+Invalid, repeated and unknown query parameters still return `400`.
+
+The exact columns are Reference, title, Request Category, location, Priority,
+Status, Requester, current officer, Submitted, Completed and Verified. Categories,
+Priority and Status use their display labels; people use their display names,
+including "Erased user". Dates are UTC ISO 8601 timestamps; absent dates and
+officers are empty. Completed reflects the current completion, clearing after
+Not fixed and updating when the work is completed again. No emails, internal IDs,
+descriptions, notes or other metadata are exported.
+
+The CSV is UTF-8 without a BOM, uses CRLF record endings and doubles quotes inside
+quoted comma, quote or newline cells. To prevent spreadsheet formulas, any cell
+starting with `=`, `+`, `-` or `@` after whitespace, or beginning with a tab, CR or
+LF, gains a leading apostrophe before CSV quoting. That apostrophe is part of the
+downloaded text. Empty results return the header alone. Responses use
+`Content-Type: text/csv; charset=utf-8`, an attachment filename and
+`Cache-Control: no-store`. No migration, configuration or dependency is needed.
