@@ -748,3 +748,210 @@ test("refreshing expired edit previews preserves dirty fields and selected repor
   expect(sent).toHaveProperty("title", "New details still here");
   runtime.queryClient.clear();
 });
+
+test.each([
+  { mode: "edit", failure: "503" },
+  { mode: "edit", failure: "network" },
+  { mode: "completion", failure: "503" },
+  { mode: "completion", failure: "network" },
+])(
+  "a transient $failure photo refresh preserves the $mode draft and its selected keys",
+  async ({ mode, failure }) => {
+    if (mode === "completion")
+      signedIn("maintenance_officer", {
+        id: "chinedu",
+        firstName: "Chinedu",
+        lastName: "Eze",
+      });
+    else signedIn();
+    withCategories();
+    const data: ServiceRequestDetails = {
+      ...detail([
+        reportPhoto,
+        {
+          ...reportPhoto,
+          id: "photo-2",
+          objectKey: "issued/second",
+          url: "https://storage.example.test/second",
+        },
+      ]),
+      status: mode === "completion" ? "in_progress" : "submitted",
+      assignment: {
+        officer: { id: "chinedu", name: "Chinedu Eze" },
+        assignedAt: "2026-11-14T08:00:00Z",
+      },
+    };
+    let reads = 0;
+    let sent: Record<string, unknown> | undefined;
+    server.use(
+      http.get(`${api}/service-requests/SR-PLUMB-1`, () => {
+        reads++;
+        return reads === 2
+          ? failure === "network"
+            ? HttpResponse.error()
+            : HttpResponse.json(
+                { message: "Storage unavailable" },
+                { status: 503 },
+              )
+          : HttpResponse.json({
+              ...data,
+              photos: data.photos!.map((photo) => ({
+                ...photo,
+                url: `https://storage.example.test/${photo.id}?signature=${reads}`,
+              })),
+            });
+      }),
+      http.post(`${api}/photo-uploads`, () =>
+        HttpResponse.json(
+          {
+            objectKey: "issued/new",
+            url: "https://storage.example.test/new",
+            method: "PUT",
+            headers: { "Content-Type": "image/png" },
+            expiresAt: "2026-11-14T10:00:00Z",
+          },
+          { status: 201 },
+        ),
+      ),
+      http.put(
+        "https://storage.example.test/new",
+        () => new HttpResponse(null, { headers: cors }),
+      ),
+      http.patch(`${api}/service-requests/SR-PLUMB-1`, async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(data);
+      }),
+      http.post(
+        `${api}/service-requests/SR-PLUMB-1/complete`,
+        async ({ request }) => {
+          sent = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ ...data, status: "completed" });
+        },
+      ),
+    );
+    const { user, runtime } = open(
+      mode === "edit" ? "/requests/SR-PLUMB-1/edit" : "/requests/SR-PLUMB-1",
+    );
+    if (mode === "completion")
+      await user.click(await screen.findByRole("button", { name: "Complete" }));
+    const text = await screen.findByLabelText(
+      mode === "edit" ? "Title" : "Note for the Requester (optional)",
+    );
+    await user.clear(text);
+    await user.type(text, "Keep my latest changes");
+    if (mode === "edit")
+      await user.click(
+        screen.getByRole("button", { name: "Remove Report photo 1" }),
+      );
+    await user.upload(
+      screen.getByLabelText("Add photos"),
+      new File(["png"], "new.png", { type: "image/png" }),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByText("Uploaded")).toHaveLength(
+        mode === "edit" ? 2 : 1,
+      ),
+    );
+    await fireEvent.error(
+      screen.getByAltText(
+        mode === "edit" ? "Report photo 2 preview" : "Report photo 1",
+      ),
+    );
+    await screen.findByText(
+      "Photo links couldn’t refresh. Your changes are still here. Try again.",
+    );
+    expect(
+      screen.getByLabelText(
+        mode === "edit" ? "Title" : "Note for the Requester (optional)",
+      ),
+    ).toHaveProperty("value", "Keep my latest changes");
+    expect(screen.getByText("new.png")).toBeTruthy();
+    if (mode === "edit")
+      expect(
+        screen.queryByRole("button", { name: "Remove Report photo 1" }),
+      ).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Refresh photo links" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByText(
+          "Photo links couldn’t refresh. Your changes are still here. Try again.",
+        ),
+      ).toBeNull(),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: mode === "edit" ? "Save changes" : "Mark as Completed",
+      }),
+    );
+    await waitFor(() =>
+      expect(sent?.photoKeys).toEqual(
+        mode === "edit" ? ["issued/second", "issued/new"] : ["issued/new"],
+      ),
+    );
+    expect(sent).toHaveProperty(
+      mode === "edit" ? "title" : "note",
+      "Keep my latest changes",
+    );
+    runtime.queryClient.clear();
+  },
+);
+
+test.each([
+  ["edit", 403],
+  ["edit", 404],
+  ["completion", 403],
+  ["completion", 404],
+] as const)(
+  "%s removes cached actions after an authoritative %s photo refresh denial",
+  async (mode, status) => {
+    if (mode === "completion")
+      signedIn("maintenance_officer", {
+        id: "chinedu",
+        firstName: "Chinedu",
+        lastName: "Eze",
+      });
+    else signedIn();
+    withCategories();
+    let reads = 0;
+    const data = {
+      ...detail([reportPhoto]),
+      status: mode === "completion" ? "in_progress" : "submitted",
+      assignment: {
+        officer: { id: "chinedu", name: "Chinedu Eze" },
+        assignedAt: "2026-11-14T08:00:00Z",
+      },
+    };
+    server.use(
+      http.get(`${api}/service-requests/SR-PLUMB-1`, () =>
+        ++reads === 1
+          ? HttpResponse.json(data)
+          : new HttpResponse(null, { status }),
+      ),
+    );
+    const { user, runtime } = open(
+      mode === "edit" ? "/requests/SR-PLUMB-1/edit" : "/requests/SR-PLUMB-1",
+    );
+    if (mode === "completion")
+      await user.click(await screen.findByRole("button", { name: "Complete" }));
+    await screen.findByLabelText("Add photos");
+    await fireEvent.error(
+      screen.getByAltText(
+        mode === "edit" ? "Report photo 1 preview" : "Report photo 1",
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.queryByLabelText("Add photos")).toBeNull(),
+    );
+    expect(
+      screen.queryByRole("button", {
+        name: mode === "edit" ? "Save changes" : "Mark as Completed",
+      }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "Open Report photo 1 in a new tab" }),
+    ).toBeNull();
+    runtime.queryClient.clear();
+  },
+);

@@ -11,6 +11,8 @@ import TextField from "../components/TextField.vue";
 import SubmitButton from "../components/SubmitButton.vue";
 import StatusChip from "../components/StatusChip.vue";
 import { ApiError } from "../lib/api";
+import { usePhotoLinks } from "../service-requests/photo-links";
+import PageNotice from "../components/PageNotice.vue";
 import { lengthRule, useFields } from "../lib/fields";
 import { useAuthNavigation } from "../auth/navigation";
 import { isExpiredSession, useExpiredSession } from "../lib/expired-session";
@@ -42,13 +44,14 @@ const source = useQuery(
   })),
 );
 useExpiredSession(source.error);
-const refreshedPhotos = new Set<string>();
-function refreshPhoto(photoId: string) {
-  if (refreshedPhotos.has(photoId)) return;
-  refreshedPhotos.add(photoId);
-  if (!source.isFetching.value) void source.refetch();
-}
-
+const {
+  refreshFailed,
+  refresh: refreshPhotoLinks,
+  failed: refreshPhoto,
+} = usePhotoLinks(
+  computed(() => props.reference ?? ""),
+  source,
+);
 const allowed = computed(
   () =>
     source.data.value?.status === "submitted" &&
@@ -229,7 +232,7 @@ function submit() {
       Loading request details…
     </p>
     <section
-      v-else-if="editing && source.error.value"
+      v-else-if="editing && source.error.value && !refreshFailed"
       class="p-6 border border-campus-gray rounded-[13px] bg-campus-surface"
     >
       <h1
@@ -260,6 +263,11 @@ function submit() {
       </p>
     </section>
     <template v-else>
+      <PageNotice
+        v-if="refreshFailed"
+        kind="error"
+        message="Photo links couldn’t refresh. Your changes are still here. Try again."
+      />
       <div class="flex flex-wrap items-end justify-between gap-4.5 mb-5.5">
         <div class="min-w-0">
           <p
@@ -418,7 +426,7 @@ function submit() {
           <PhotoUploadField
             :refreshing="source.isFetching.value"
             @failed="refreshPhoto"
-            @retry="source.refetch()"
+            @retry="refreshPhotoLinks"
             described-by="privacy-hint"
             v-model="photos"
             :error="form.errors.photoKeys"

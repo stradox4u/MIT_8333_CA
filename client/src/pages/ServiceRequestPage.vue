@@ -19,6 +19,7 @@ import { useUiStore } from "../stores/ui";
 import { meOptions } from "../auth/identity";
 import { isLoadFailure, useExpiredSession } from "../lib/expired-session";
 import { ApiError } from "../lib/api";
+import { usePhotoLinks } from "../service-requests/photo-links";
 import LoadFailure from "../components/LoadFailure.vue";
 import CircleHelp from "~icons/lucide/circle-help";
 import NextStepPanel from "../components/NextStepPanel.vue";
@@ -47,15 +48,11 @@ const request = useQuery(
   computed(() => serviceRequestOptions(reference.value)),
 );
 useExpiredSession(request.error);
-
-// One automatic refresh per photo per visit bounds failures from renewed links.
-const refreshedPhotos = new Set<string>();
-watch(reference, () => refreshedPhotos.clear());
-function refreshPhoto(photoId: string) {
-  if (refreshedPhotos.has(photoId)) return;
-  refreshedPhotos.add(photoId);
-  if (!request.isFetching.value) void request.refetch();
-}
+const {
+  refreshFailed,
+  refresh: refreshPhotoLinks,
+  failed: refreshPhoto,
+} = usePhotoLinks(reference, request);
 
 /** The submitted notice shows once, on the page for the Reference just submitted. */
 const justSubmitted = ref(false);
@@ -250,7 +247,7 @@ const cancellation = computed(() => {
       >
     </section>
     <LoadFailure
-      v-else-if="isLoadFailure(request.error.value)"
+      v-else-if="isLoadFailure(request.error.value) && !refreshFailed"
       class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 phone:px-3.75 [&_.state-icon]:mb-4.5 [&_.intro]:mb-5 phone:[&_.button]:w-full"
       :title="`We couldn’t load ${reference}`"
       :level="1"
@@ -265,6 +262,11 @@ const cancellation = computed(() => {
       Loading {{ reference }}…
     </p>
     <template v-else-if="request.data.value">
+      <PageNotice
+        v-if="refreshFailed"
+        kind="error"
+        message="Photo links couldn’t refresh. Your changes are still here. Try again."
+      />
       <section
         class="mb-4.5 border border-campus-gray p-6 rounded-[13px] bg-campus-surface shadow-none phone:py-4.75 sr-head pt-6 px-6.5 pb-5 [&_h1]:mb-3.5 [&_h1]:text-[27px] phone:px-3.75 phone:[&_h1]:text-[23px]"
         aria-labelledby="sr-title"
@@ -471,7 +473,7 @@ const cancellation = computed(() => {
               stage="report"
               :refreshing="request.isFetching.value"
               @failed="refreshPhoto"
-              @retry="request.refetch()"
+              @retry="refreshPhotoLinks"
             />
             <RequestPhotoGallery
               :key="`${reference}-completion`"
@@ -479,7 +481,7 @@ const cancellation = computed(() => {
               stage="completion"
               :refreshing="request.isFetching.value"
               @failed="refreshPhoto"
-              @retry="request.refetch()"
+              @retry="refreshPhotoLinks"
             />
           </section>
           <section

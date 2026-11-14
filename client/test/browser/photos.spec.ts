@@ -56,6 +56,15 @@ async function capture(page: Page, name: string) {
     ["small-phone", 320, 844],
   ] as const) {
     await page.setViewportSize({ width, height });
+    await page.evaluate(async () => {
+      window.scrollTo(0, 0);
+      await Promise.all(
+        Array.from(document.images, (image) => image.decode().catch(() => {})),
+      );
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve()),
+      );
+    });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(width);
@@ -262,6 +271,7 @@ test("photo controls retain the approved palette and fit phones through upload f
     }
     if (path.endsWith("/SR-PLUMB-1")) {
       reads++;
+      if (reads === 2) return route.fulfill({ status: 503, json: {} });
       return route.fulfill({
         json: {
           ...details,
@@ -332,6 +342,11 @@ test("photo controls retain the approved palette and fit phones through upload f
     page.getByRole("button", { name: "Refresh photo links" }),
   ).toBeEnabled();
   expect(reads).toBe(2);
+  await expect(
+    page.getByText(
+      "Photo links couldn’t refresh. Your changes are still here. Try again.",
+    ),
+  ).toBeVisible();
   await capture(page, "expired-links");
   failImages = false;
   await page.getByRole("button", { name: "Refresh photo links" }).click();
