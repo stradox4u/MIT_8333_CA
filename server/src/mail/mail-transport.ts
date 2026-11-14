@@ -1,4 +1,5 @@
 import { MailTransport, SmtpTransport } from '@nestjs/mail';
+import { BrevoTransport } from './brevo-transport.js';
 
 export const SMTP_STARTTLS_MODES = ['required', 'opportunistic'] as const;
 
@@ -8,21 +9,18 @@ export const SMTP_STARTTLS_MODES = ['required', 'opportunistic'] as const;
  */
 export interface MailSettings {
   transport: MailTransportKind;
-  smtpUrl: string;
+  smtpUrl?: string;
+  brevoApiKey?: string;
   /** Omitted keeps the SMTP transport's secure host-dependent defaults. */
   startTls?: (typeof SMTP_STARTTLS_MODES)[number];
   from: string;
 }
 
-/**
- * Every mail provider the app can use, by `MAIL_TRANSPORT` value. Mailpit
- * (dev) and Brevo (production) both speak SMTP, so switching between them is
- * only `SMTP_URL`. Adding an HTTP-API provider (Resend, Postmark, SES,
- * SendGrid) is one entry here; the config schema reads its names from this.
- */
+/** Mailpit uses SMTP locally; Brevo uses HTTPS in production. */
 const TRANSPORTS = {
   smtp: (mail: MailSettings) =>
     new SmtpTransport({ url: mail.smtpUrl, startTls: mail.startTls }),
+  brevo: (mail: MailSettings) => new BrevoTransport(mail.brevoApiKey ?? ''),
 } satisfies Record<string, (mail: MailSettings) => MailTransport>;
 
 export type MailTransportKind = keyof typeof TRANSPORTS;

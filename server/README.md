@@ -75,6 +75,17 @@ Supply the normal API variables from [.env.example](./.env.example), including
 full API configuration. Each deployment resets demo accounts to the configured
 password and Roles, while preserving existing demo requests and their history.
 
+For production email, set `MAIL_TRANSPORT=brevo`, `BREVO_API_KEY` to a Brevo
+API key (not an SMTP key), and `MAIL_FROM` to a verified Brevo sender, for
+example `MIT 8333 Maintenance <maintenance@your-domain.example>`. Redeploy
+after updating the variables. `SMTP_URL` and `SMTP_STARTTLS` are unused by
+this transport and may be removed from Railway. Local Mailpit still uses SMTP.
+
+Brevo sends through [its transactional HTTPS API](https://developers.brevo.com/reference/send-transac-email),
+so it works on Railway plans that block outbound SMTP. The adapter supports
+plain text, HTML, To/Cc/Bcc, one reply-to address, custom headers and file
+attachments; it rejects inline attachments and messages without a To recipient.
+
 For host development, run `npm run build` before `npm run db:migrate`,
 `npm run db:seed`, or the combined `npm run predeploy` command.
 
@@ -208,7 +219,7 @@ Nobody is emailed about their own change, and Deactivated or Erased Users get
 nothing. Someone with two parts in one change gets one email. A departure sends one
 email per handed-back request per recipient. A rolled-back change sends nothing; a
 failed send is logged and the change stands. After commit, the lifecycle emits
-an in-process event; its singleton listener sends in the background so SMTP cannot
+an in-process event; its singleton listener sends in the background so delivery cannot
 hold up the response. Shutdown drains scheduled notifications.
 A crash before delivery loses that email: there is no outbox. The first-party
 `@nestjs/event-emitter` dependency is required; no migration or new configuration
