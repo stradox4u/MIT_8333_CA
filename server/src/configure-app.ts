@@ -4,8 +4,10 @@ import type { Express } from 'express';
 import { AppConfig } from './config/app-config.js';
 import { createValidationPipe } from './validation.js';
 
-/** App-wide HTTP settings, shared by `main.ts` and the tests. */
+/** App-wide HTTP and lifecycle settings, shared by `main.ts` and the tests. */
 export function configureApp(app: INestApplication) {
+  // Drain committed notifications before database and mail connections close.
+  app.enableShutdownHooks(['SIGINT', 'SIGTERM']);
   const config = app.get(AppConfig);
   // Netlify forwards `/api/*` here (ADR-0005), so every route lives under it.
   app.setGlobalPrefix('api');
