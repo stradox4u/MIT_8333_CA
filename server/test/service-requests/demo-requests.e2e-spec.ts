@@ -32,7 +32,7 @@ describe('Demo Service Requests', () => {
       const listed = await browser
         .get('/api/service-requests?scope=requested')
         .expect(200);
-      expect(listed.body.total).toBe(6);
+      expect(listed.body.total).toBe(role === 'student' ? 9 : 8);
       expect(
         listed.body.items
           .map((request: { status: string }) => request.status)
@@ -42,13 +42,22 @@ describe('Demo Service Requests', () => {
         'cancelled',
         'completed',
         'in_progress',
-        'submitted',
+        ...Array<string>(role === 'student' ? 4 : 3).fill('submitted'),
         'verified',
       ]);
     }
     const admin = await signIn('administrator');
     const all = await admin.get('/api/service-requests?scope=all').expect(200);
-    expect(all.body.total).toBe(12);
+    expect(all.body.total).toBe(17);
+    const submitted = await admin
+      .get('/api/service-requests?scope=all&status=submitted')
+      .expect(200);
+    expect(submitted.body.total).toBe(7);
+    expect(
+      submitted.body.items.every(
+        (request: { assignment: unknown }) => request.assignment === null,
+      ),
+    ).toBe(true);
     const officer = await signIn('officer');
     const work = await officer
       .get('/api/service-requests?scope=assigned&status=open')
@@ -94,7 +103,18 @@ describe('Demo Service Requests', () => {
     const before = await admin
       .get('/api/service-requests?scope=all')
       .expect(200);
-    const reference = before.body.items[0].reference;
+    const extra = before.body.items.find((request: { title: string }) =>
+      request.title.includes('(extra '),
+    );
+    expect(extra).toBeDefined();
+    const reference = extra.reference;
+    await admin
+      .post(`/api/service-requests/${reference}/cancel`)
+      .send({ reason: 'No longer needed in this demonstration.' })
+      .expect(200);
+    const changed = await admin
+      .get('/api/service-requests?scope=all')
+      .expect(200);
     const details = await admin
       .get(`/api/service-requests/${reference}`)
       .expect(200);
@@ -102,7 +122,7 @@ describe('Demo Service Requests', () => {
     const after = await admin
       .get('/api/service-requests?scope=all')
       .expect(200);
-    expect(after.body).toEqual(before.body);
+    expect(after.body).toEqual(changed.body);
     expect(
       (await admin.get(`/api/service-requests/${reference}`).expect(200)).body,
     ).toEqual(details.body);

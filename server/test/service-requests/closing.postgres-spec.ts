@@ -203,13 +203,13 @@ describe('Closing Service Requests concurrently (Postgres)', () => {
     const shown = await admin
       .get('/api/service-requests?scope=all')
       .expect(200);
-    expect(shown.body.total).toBe(12);
+    expect(shown.body.total).toBe(17);
     expect(
       new Set(
         shown.body.items.map(
           (request: { reference: string }) => request.reference,
         ),
       ).size,
-    ).toBe(12);
+    ).toBe(17);
   });
 });

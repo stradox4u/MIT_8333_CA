@@ -22,8 +22,9 @@
     "test:postgres": "vitest run --config ./vitest.config.postgres.ts",
     "test:browser": "vitest --watch --config ./vitest.config.browser.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:seed": "node dist/seed.js"
+    "db:migrate": "node dist/database/migrate.js",
+    "db:seed": "node dist/seed.js",
+    "predeploy": "npm run db:migrate && npm run db:seed"
   },
   "dependencies": {
     "@nestjs/authentication": "^0.1.5",
