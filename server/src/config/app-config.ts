@@ -5,12 +5,13 @@ import type { Environment } from './environment.js';
 
 /**
  * The app's configuration, typed and named for what it's used for. Every
- * setting is read here, through `@nestjs/config`. Three places read the
+ * setting is read here, through `@nestjs/config`. Four places read the
  * environment directly, because they run before or outside the app's config:
  * - `AppConfigModule`: whether to load `.env`, before `ConfigService` exists;
  * - `observeIsConfigured`: whether to register Observe, which
  *   `ConditionalModule` decides before dependency injection;
  * - `drizzle.config.ts`: drizzle-kit runs outside Nest.
+ * - `database/migrate.ts`: the migration command runs outside Nest.
  */
 @Injectable()
 export class AppConfig {

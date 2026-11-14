@@ -318,7 +318,7 @@ export class ServiceRequestWritesRepository {
   /** The owner lock protects the seed slot across concurrent and nested lifecycle work. */
   async seedSlot(
     requesterId: string,
-    status: ServiceRequestStatus,
+    slot: string,
     work: (store: ServiceRequestWritesRepository, key: string) => Promise<void>,
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
@@ -327,7 +327,7 @@ export class ServiceRequestWritesRepository {
         .from(users)
         .where(eq(users.id, requesterId))
         .for('update');
-      const key = `${requesterId}:${status}`;
+      const key = `${requesterId}:${slot}`;
       const existing = await tx
         .select({ id: serviceRequests.id })
         .from(serviceRequests)

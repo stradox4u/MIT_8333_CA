@@ -36,10 +36,18 @@ export class DemoServiceRequests {
     const officerId = account('officer');
     for (const role of ['student', 'staff'] as const) {
       const requesterId = account(role);
-      for (const [index, status] of SERVICE_REQUEST_STATUSES.entries()) {
+      const statuses = [
+        ...SERVICE_REQUEST_STATUSES,
+        ...Array.from(
+          { length: role === 'student' ? 3 : 2 },
+          () => 'submitted' as const,
+        ),
+      ];
+      for (const [index, status] of statuses.entries()) {
+        const extra = index - SERVICE_REQUEST_STATUSES.length + 1;
         await this.writes.seedSlot(
           requesterId,
-          status,
+          extra > 0 ? `submitted-extra-${extra}` : status,
           async (store, demoKey) => {
             let at = this.clock.now() - (index + 1) * 60 * 60 * 1000;
             // Demo history emails nobody.
@@ -51,7 +59,7 @@ export class DemoServiceRequests {
             );
             const submitted = await lifecycle.submit({
               requesterId,
-              title: `Demo plumbing fault: ${STATUS_NAMES[status]}`,
+              title: `Demo plumbing fault: ${STATUS_NAMES[status]}${extra > 0 ? ` (extra ${extra})` : ''}`,
               categoryId: 'plumbing',
               location: `${role === 'student' ? 'Student residence' : 'Staff office'}, ground floor`,
               description:

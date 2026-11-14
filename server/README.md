@@ -11,8 +11,8 @@ configuration at runtime; no credentials are build arguments or image inputs.
 
 | Target    | Purpose                                                                               | Default command      |
 | --------- | ------------------------------------------------------------------------------------- | -------------------- |
-| `runtime` | Compiled Nest API on port 3000, Node 24, production dependencies, nonroot `node` user | `node dist/main.js`  |
-| `migrate` | One-shot Drizzle migrations, with drizzle-kit and the checked-in SQL/config           | `npm run db:migrate` |
+| `runtime` | Compiled Nest API and database commands, Node 24, production dependencies, nonroot `node` user | `node dist/main.js`  |
+| `migrate` | Same application image with a one-shot migration command for local Compose                  | `npm run db:migrate` |
 
 Build either image independently from the repository root:
 
@@ -21,8 +21,10 @@ docker build --target runtime -t mit8333-api ./server
 docker build --target migrate -t mit8333-migrate ./server
 ```
 
-Run the migrator after PostgreSQL is healthy and require its successful exit
-before starting the API. It needs `DATABASE_URL` for that database. The runtime
+Both images include the checked-in SQL and Drizzle's runtime migrator; neither
+connects to the database during the build. Run the migrator after PostgreSQL is
+healthy and require its successful exit before starting the API. It needs only
+`DATABASE_URL` for that database. The runtime
 needs the settings described in [.env.example](./.env.example); the root Compose
 file supplies local container addresses and HTTP cookie settings automatically.
 
@@ -41,15 +43,40 @@ The API already listens on all interfaces. The existing public
 `fetch` for container readiness; it is an HTTP check, not a database health probe.
 Compose separately waits for PostgreSQL health and successful migrations.
 
-No demo accounts are created automatically. When explicitly configured,
-`npm run db:seed` is available in the runtime image after migrations; see the
-root instructions for supplying the demo password and invoking it.
+Local Compose runs migrations automatically; demo seeding remains an explicit
+`npm run db:seed` in the runtime image. See the root instructions for supplying
+the demo password and invoking it.
 
-The seed also creates twelve demonstration Service Requests: one in every
-Status for Student and Staff, with current work and Assignment history for the
+The seed also creates seventeen demonstration Service Requests: one in every
+Status for Student and Staff, plus five additional Submitted requests (three
+for Student and two for Staff), with current work and Assignment history for the
 officer and all requests visible to the Administrator. Reruns preserve existing
 demo requests and their history; a private unique seed key prevents duplicates.
 New demo requests include a Progress Note before work begins.
+
+## Railway deployment
+
+Set the API service's Root Directory to `/server` and build with its Dockerfile
+(the default final target is `runtime`). Set **Pre-deploy Command** to:
+
+```sh
+npm run predeploy
+```
+
+This runs `db:migrate` followed by `db:seed`; a failure stops the command and
+blocks deployment. Railway runs it after building the image, with access to the
+service variables and private network. Keep the start command as
+`node dist/main.js`, and remove any database commands from build-command overrides.
+See [Railway's pre-deploy documentation](https://docs.railway.com/deployments/pre-deploy-command).
+
+Supply the normal API variables from [.env.example](./.env.example), including
+`DATABASE_URL` pointing to Railway's private Postgres address and a valid
+`DEMO_ACCOUNTS_PASSWORD`. The seed boots the application context and needs the
+full API configuration. Each deployment resets demo accounts to the configured
+password and Roles, while preserving existing demo requests and their history.
+
+For host development, run `npm run build` before `npm run db:migrate`,
+`npm run db:seed`, or the combined `npm run predeploy` command.
 
 ## Closing Service Requests
 
@@ -202,7 +229,6 @@ scope expires when its callback ends. Notification events still emit after commi
 `repository-boundaries.spec.ts` rejects persistence imports in business code,
 including schemas, connection handles, and SQL helpers. Domain types and repository
 method results do not require Drizzle imports.
-
 
 ## Photos
 
