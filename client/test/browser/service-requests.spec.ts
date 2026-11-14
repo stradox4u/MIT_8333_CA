@@ -5,7 +5,7 @@ import {
   type Page,
 } from "@playwright/test";
 
-const controls = "http://127.0.0.1:4175";
+const controls = process.env.BROWSER_CONTROLS_URL ?? "http://127.0.0.1:4175";
 const email = "ada@example.test";
 
 /** Signs up as a Student through a Sign-in Link, landing on the dashboard. */
