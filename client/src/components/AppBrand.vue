@@ -1,7 +1,7 @@
 <template>
   <div class="flex items-center gap-2.5" aria-label="MIT 8333 University">
     <span
-      class="grid place-items-center w-9 h-10 border-[1.5px] border-campus-navy rounded-[3px_3px_15px_15px] bg-campus-green [font:700_25px_Georgia,serif]"
+      class="grid place-items-center w-9 h-10 border-[1.5px] border-campus-navy rounded-[3px_3px_15px_15px] bg-campus-green font-serif text-[25px] font-bold leading-none"
       aria-hidden="true"
       >M</span
     ><span

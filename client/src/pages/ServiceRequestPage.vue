@@ -274,7 +274,7 @@ const cancellation = computed(() => {
       >
         <div class="flex flex-wrap items-center gap-y-2 gap-x-2.5 mb-2.5">
           <span
-            class="font-[ui-monospace,SFMono-Regular,Menlo,Consolas,monospace] font-semibold leading-[1.3] tracking-[0.02em] whitespace-nowrap text-[13px]"
+            class="font-mono font-semibold leading-[1.3] tracking-[0.02em] whitespace-nowrap text-[13px]"
             >{{ request.data.value.reference }}</span
           ><StatusChip
             :status="request.data.value.status"

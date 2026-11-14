@@ -3,6 +3,16 @@
 Vue authentication client using Vite, TypeScript, Pinia, Vue Router, TanStack
 Query, Tailwind CSS and unplugin-icons. Node 24.15 or newer is required.
 
+## Fonts
+
+Inter (general text), Source Serif 4 (logo) and Roboto Mono (request references)
+are downloaded from Google Fonts and checked into `src/assets/fonts/`, with
+variable weights and `font-display: swap`. Vite emits the WOFF2 files into the
+production assets and serves them from the client's own origin; neither visitors
+nor builds fetch fonts from Google or a font CDN. Font declarations have no
+`local()` sources, so installed copies do not override the bundled fonts.
+Licenses ship in `public/fonts/`; source links are beside the font files.
+
 ## Local development
 
 To run the client with hot reload alongside the API, Postgres and Mailpit, use
