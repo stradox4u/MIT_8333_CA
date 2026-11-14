@@ -1,5 +1,16 @@
+import { repositoryTransaction } from '../database/transaction.repository.js';
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  sql,
+} from 'drizzle-orm';
 import { Clock } from '../clock.js';
 import { InjectDatabase, type Database } from '../database/database.js';
 import {
@@ -9,8 +20,8 @@ import {
   signInLinks,
   users,
 } from '../database/schema.js';
-import { activeWithRole } from './active-users.js';
-import { displayName } from './display-name.js';
+import { activeWithRole } from './active-users.repository.helpers.js';
+import { displayName } from './display-name.repository.helpers.js';
 import { type AfterCommit, OfficerDepartures } from './officer-departures.js';
 import type { LastAdministrator, NotFound, UserErased } from './refusals.js';
 import type { User } from './user.js';
@@ -77,6 +88,46 @@ export class UsersRepository {
     private readonly officerDepartures: OfficerDepartures,
   ) {}
 
+  async activeAdministratorIds(): Promise<string[]> {
+    const rows = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(activeAdministrator);
+    return rows.map(({ id }) => id);
+  }
+
+  async reachableRecipients(
+    ids: string[],
+  ): Promise<Map<string, { email: string; firstName: string }>> {
+    if (!ids.length) return new Map();
+    const rows = await this.db
+      .select({ id: users.id, email: users.email, firstName: users.firstName })
+      .from(users)
+      .where(
+        and(
+          inArray(users.id, ids),
+          isNotNull(users.email),
+          isNull(users.deactivatedAt),
+          isNull(users.erasedAt),
+        ),
+      );
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        { email: row.email!, firstName: row.firstName ?? 'there' },
+      ]),
+    );
+  }
+
+  findDemoAccounts(
+    emails: string[],
+  ): Promise<{ id: string; email: string | null; role: RoleId | null }[]> {
+    return this.db
+      .select({ id: users.id, email: users.email, role: users.roleId })
+      .from(users)
+      .where(inArray(users.email, emails));
+  }
+
   async findById(id: string): Promise<User | null> {
     const [user] = await this.db
       .select(userColumns)
@@ -130,30 +181,33 @@ export class UsersRepository {
     | LastAdministrator
   > {
     let handedBack: AfterCommit | undefined;
-    const deactivated = await this.db.transaction(async (tx) => {
-      const changed = await tx
-        .update(users)
-        .set({ deactivatedAt: this.now() })
-        .where(
-          and(
-            eq(users.id, id),
-            isNotNull(users.roleId),
-            isNull(users.deactivatedAt),
-            isNull(users.erasedAt),
-            this.notTheLastActiveAdministrator(id),
-          ),
-        )
-        .returning({ id: users.id });
-      if (changed.length === 0) {
-        return false;
-      }
-      handedBack = await this.officerDepartures.handBackAssignmentsOf(
-        tx,
-        id,
-        actorId,
-      );
-      return true;
-    });
+    const deactivated = await repositoryTransaction(
+      this.db,
+      async (tx, scope) => {
+        const changed = await tx
+          .update(users)
+          .set({ deactivatedAt: this.now() })
+          .where(
+            and(
+              eq(users.id, id),
+              isNotNull(users.roleId),
+              isNull(users.deactivatedAt),
+              isNull(users.erasedAt),
+              this.notTheLastActiveAdministrator(id),
+            ),
+          )
+          .returning({ id: users.id });
+        if (changed.length === 0) {
+          return false;
+        }
+        handedBack = await this.officerDepartures.handBackAssignmentsOf(
+          scope,
+          id,
+          actorId,
+        );
+        return true;
+      },
+    );
     handedBack?.();
     if (deactivated) {
       return 'deactivated';
@@ -178,7 +232,7 @@ export class UsersRepository {
     actorId: string,
   ): Promise<'erased' | 'already_erased' | NotFound | LastAdministrator> {
     let handedBack: AfterCommit | undefined;
-    const outcome = await this.db.transaction(async (tx) => {
+    const outcome = await repositoryTransaction(this.db, async (tx, scope) => {
       const [target] = await tx
         .select({
           email: users.email,
@@ -213,7 +267,7 @@ export class UsersRepository {
       }
       await tx.delete(googleIdentities).where(eq(googleIdentities.userId, id));
       handedBack = await this.officerDepartures.handBackAssignmentsOf(
-        tx,
+        scope,
         id,
         actorId,
       );
@@ -348,7 +402,7 @@ export class UsersRepository {
     actorId: string,
   ): Promise<'changed' | UserErased | NotFound | LastAdministrator> {
     let handedBack: AfterCommit | undefined;
-    const changed = await this.db.transaction(async (tx) => {
+    const changed = await repositoryTransaction(this.db, async (tx, scope) => {
       const updated = await tx
         .update(users)
         .set({ roleId })
@@ -368,7 +422,7 @@ export class UsersRepository {
       }
       if (roleId !== 'maintenance_officer') {
         handedBack = await this.officerDepartures.handBackAssignmentsOf(
-          tx,
+          scope,
           id,
           actorId,
         );

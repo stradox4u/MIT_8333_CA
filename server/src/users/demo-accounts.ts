@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PasswordHasher } from '@nestjs/authentication';
 import { newPassword } from '../auth/auth.schemas.js';
 import type { AppConfig } from '../config/app-config.js';
-import type { RoleId } from '../database/schema.js';
+import type { RoleId } from './user.types.js';
 import { UsersRepository } from './users.repository.js';
 
 const DEMO_USERS: {

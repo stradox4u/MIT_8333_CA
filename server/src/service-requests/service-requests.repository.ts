@@ -26,8 +26,8 @@ import {
   statusUpdates,
   users,
 } from '../database/schema.js';
-import { displayName } from '../users/display-name.js';
-import { requestCategoryColumns } from './request-categories.js';
+import { displayName } from '../users/display-name.repository.helpers.js';
+import { requestCategoryColumns } from './request-categories.repository.js';
 import type { NotFound } from './refusals.js';
 import type { ServiceRequestAccess } from './service-request.policy.js';
 import type {
@@ -39,6 +39,7 @@ import type {
 import type { z } from 'zod';
 import type { listQuery, StatusFilter } from './service-request.schemas.js';
 import { buildTimeline } from './timeline.js';
+import type { NotificationRequest } from './service-request.types.js';
 
 const requesters = alias(users, 'requester');
 const currentAssignments = alias(assignments, 'current_assignment');
@@ -111,6 +112,26 @@ const literalSearch = (search: string) =>
 @Injectable()
 export class ServiceRequestsRepository {
   constructor(@InjectDatabase() private readonly db: Database) {}
+
+  async notificationDetails(
+    reference: string,
+  ): Promise<NotificationRequest | null> {
+    const [request] = await this.db
+      .select({
+        reference: serviceRequests.reference,
+        title: serviceRequests.title,
+        location: serviceRequests.location,
+        category: requestCategories.name,
+        priority: serviceRequests.priority,
+      })
+      .from(serviceRequests)
+      .innerJoin(
+        requestCategories,
+        eq(requestCategories.id, serviceRequests.categoryId),
+      )
+      .where(eq(serviceRequests.reference, reference));
+    return request ?? null;
+  }
 
   /** Who is connected to a Service Request, for the policy to decide on. */
   async findAccess(

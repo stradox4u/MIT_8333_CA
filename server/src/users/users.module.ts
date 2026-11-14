@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ActivityLog } from './activity-log.js';
+import { ActivityLogRepository } from './activity-log.repository.js';
 import { ActivityLogController } from './activity-log.controller.js';
 import { DemoAccounts } from './demo-accounts.js';
 import { Invitations } from './invitations.js';
@@ -20,9 +20,9 @@ import { UsersRepository } from './users.repository.js';
     Invitations,
     UserManagementPolicy,
     UserErasure,
-    ActivityLog,
+    ActivityLogRepository,
     DemoAccounts,
   ],
-  exports: [UsersRepository, UserErasure, ActivityLog],
+  exports: [UsersRepository, UserErasure, ActivityLogRepository],
 })
 export class UsersModule {}

@@ -1,3 +1,4 @@
+import { RateLimitCountersRepository } from './rate-limit-counters.repository.js';
 import { createTestDatabase } from '../../test/support/test-database.js';
 import { Clock } from '../clock.js';
 import { RateLimitCounters } from './rate-limit-counters.js';
@@ -22,7 +23,10 @@ describe('RateLimitCounters', () => {
   beforeEach(async () => {
     await database.reset();
     clock = new TestClock();
-    counters = new RateLimitCounters(database.db, clock);
+    counters = new RateLimitCounters(
+      new RateLimitCountersRepository(database.db),
+      clock,
+    );
   });
   afterAll(() => database.close());
 

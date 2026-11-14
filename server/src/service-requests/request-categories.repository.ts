@@ -14,7 +14,7 @@ export const requestCategoryColumns = {
 
 /** The six Request Categories: reference data, inserted by a migration. */
 @Injectable()
-export class RequestCategories {
+export class RequestCategoriesRepository {
   constructor(@InjectDatabase() private readonly db: Database) {}
 
   /** In their display order, Other last. */

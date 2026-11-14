@@ -7,13 +7,13 @@ import {
   serviceRequests,
   users,
 } from '../database/schema.js';
-import { activeWithRole } from '../users/active-users.js';
-import { displayName } from '../users/display-name.js';
+import { activeWithRole } from '../users/active-users.repository.helpers.js';
+import { displayName } from '../users/display-name.repository.helpers.js';
 import type { MaintenanceOfficer } from './service-request.responses.js';
 
 /** The Maintenance Officers an Administrator can give requests to. */
 @Injectable()
-export class MaintenanceOfficers {
+export class MaintenanceOfficersRepository {
   constructor(@InjectDatabase() private readonly db: Database) {}
 
   /**

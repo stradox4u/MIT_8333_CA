@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PRIORITIES } from '../database/schema.js';
+import { PRIORITIES } from './service-request.types.js';
 import { status } from './service-request.schemas.js';
 
 /**

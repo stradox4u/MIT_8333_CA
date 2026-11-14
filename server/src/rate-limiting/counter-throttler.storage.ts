@@ -7,7 +7,7 @@ import type { RateLimitCounters } from './rate-limit-counters.js';
  * passes durations in milliseconds and wants the answers in seconds (they
  * become `Retry-After` and `X-RateLimit-Reset`).
  */
-export class DrizzleThrottlerStorage implements ThrottlerStorage {
+export class CounterThrottlerStorage implements ThrottlerStorage {
   constructor(private readonly counters: RateLimitCounters) {}
 
   async increment(

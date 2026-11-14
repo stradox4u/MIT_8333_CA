@@ -11,7 +11,7 @@ import {
 import { CurrentUser, SessionService } from '@nestjs/authentication';
 import { Can } from '@nestjs/authorization';
 import { z } from 'zod';
-import { ActivityLog } from './activity-log.js';
+import { ActivityLogRepository } from './activity-log.repository.js';
 import { refuseIf } from './refusals.js';
 import { Invitations } from './invitations.js';
 import type { User } from './user.js';
@@ -40,7 +40,7 @@ export class UsersController {
     private readonly invitations: Invitations,
     private readonly sessions: SessionService,
     private readonly erasure: UserErasure,
-    private readonly activityLog: ActivityLog,
+    private readonly activityLog: ActivityLogRepository,
   ) {}
 
   @Get()

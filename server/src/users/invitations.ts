@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Mailer } from '@nestjs/mail';
 import { AppConfig } from '../config/app-config.js';
-import type { RoleId } from '../database/schema.js';
+import type { RoleId } from './user.types.js';
 import { UsersRepository } from './users.repository.js';
 
 /**

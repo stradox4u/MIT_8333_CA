@@ -1,4 +1,4 @@
-import type { Database } from '../database/database.js';
+import type { RepositoryTransaction } from '../persistence/transaction.js';
 
 /** What to do once the User change commits, such as sending its emails. */
 export type AfterCommit = () => void;
@@ -15,7 +15,7 @@ export abstract class OfficerDepartures {
    * Call the answer only after that transaction commits.
    */
   abstract handBackAssignmentsOf(
-    db: Database,
+    transaction: RepositoryTransaction,
     officerId: string,
     actorId: string,
   ): Promise<AfterCommit>;

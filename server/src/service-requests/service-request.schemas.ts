@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PRIORITIES, SERVICE_REQUEST_STATUSES } from '../database/schema.js';
+import { PRIORITIES, SERVICE_REQUEST_STATUSES } from './service-request.types.js';
 import { userId } from '../users/user.schemas.js';
 
 /** Zod pieces for Service Request data (docs/service-requests.md, Validation). */

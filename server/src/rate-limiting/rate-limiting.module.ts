@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppConfig } from '../config/app-config.js';
 import { normalizeEmail } from '../users/users.repository.js';
-import { DrizzleThrottlerStorage } from './drizzle-throttler.storage.js';
+import { CounterThrottlerStorage } from './counter-throttler.storage.js';
 import {
   RateLimitCounters,
   RateLimitCountersModule,
@@ -26,7 +26,7 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000;
       imports: [RateLimitCountersModule],
       inject: [RateLimitCounters, AppConfig],
       useFactory: (counters: RateLimitCounters, config: AppConfig) => ({
-        storage: new DrizzleThrottlerStorage(counters),
+        storage: new CounterThrottlerStorage(counters),
         errorMessage: 'Too many attempts. Try again later.',
         throttlers: [
           {

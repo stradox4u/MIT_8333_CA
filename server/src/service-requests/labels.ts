@@ -1,4 +1,4 @@
-import type { Priority, ServiceRequestStatus } from '../database/schema.js';
+import type { Priority, ServiceRequestStatus } from './service-request.types.js';
 
 /** How people see each Status, as GLOSSARY.md names them. */
 export const STATUS_LABELS: Record<ServiceRequestStatus, string> = {

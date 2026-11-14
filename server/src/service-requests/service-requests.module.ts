@@ -1,8 +1,10 @@
+import { ServiceRequestWritesRepository } from './service-request-writes.repository.js';
+import { UsersModule } from '../users/users.module.js';
 import { Global, Module } from '@nestjs/common';
 import { OfficerDepartures } from '../users/officer-departures.js';
-import { MaintenanceOfficers } from './maintenance-officers.js';
+import { MaintenanceOfficersRepository } from './maintenance-officers.repository.js';
 import { MaintenanceOfficersController } from './maintenance-officers.controller.js';
-import { RequestCategories } from './request-categories.js';
+import { RequestCategoriesRepository } from './request-categories.repository.js';
 import { RequestCategoriesController } from './request-categories.controller.js';
 import { ServiceRequestLifecycle } from './service-request-lifecycle.js';
 import { ServiceRequestNotifications } from './service-request-notifications.js';
@@ -21,17 +23,19 @@ import { DemoServiceRequests } from './demo-service-requests.js';
  */
 @Global()
 @Module({
+  imports: [UsersModule],
   controllers: [
     RequestCategoriesController,
     ServiceRequestsController,
     MaintenanceOfficersController,
   ],
   providers: [
-    RequestCategories,
+    ServiceRequestWritesRepository,
+    RequestCategoriesRepository,
     ServiceRequestsRepository,
     ServiceRequestLifecycle,
     ServiceRequestNotifications,
-    MaintenanceOfficers,
+    MaintenanceOfficersRepository,
     ServiceRequestPolicy,
     DemoServiceRequests,
     { provide: OfficerDepartures, useExisting: ServiceRequestLifecycle },

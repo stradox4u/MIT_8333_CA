@@ -2,14 +2,14 @@ import { Controller, Get } from '@nestjs/common';
 import { Can } from '@nestjs/authorization';
 import { ApiOkResponse } from '@nestjs/swagger';
 import { z } from 'zod';
-import { MaintenanceOfficers } from './maintenance-officers.js';
+import { MaintenanceOfficersRepository } from './maintenance-officers.repository.js';
 import { maintenanceOfficerResponse } from './service-request.responses.js';
 import { ServiceRequestPolicy } from './service-request.policy.js';
 
 @Can(ServiceRequestPolicy, 'manage')
 @Controller('maintenance-officers')
 export class MaintenanceOfficersController {
-  constructor(private readonly officers: MaintenanceOfficers) {}
+  constructor(private readonly officers: MaintenanceOfficersRepository) {}
 
   /** Active officers with their counts of Open Assignments, for assigning. */
   @Get()

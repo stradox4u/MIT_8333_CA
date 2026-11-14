@@ -1,7 +1,7 @@
 import type {
   AssignmentEndReason,
   ServiceRequestStatus,
-} from '../database/schema.js';
+} from './service-request.types.js';
 
 export const SERVICE_REQUESTS_COMMITTED = 'service-requests.committed';
 

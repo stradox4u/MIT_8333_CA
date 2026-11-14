@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import type { ServiceRequestStatus } from '../database/schema.js';
+import type { ServiceRequestStatus } from './service-request.types.js';
 import { invalidInput } from '../validation.js';
 
 // The outcomes that refuse an action on a Service Request. Repositories name

@@ -7,6 +7,12 @@
 - Include only details a reviewer needs to assess the change; link to supporting context when useful.
 - Expand only when explicitly requested or necessary to explain a material risk, migration, or breaking change.
 
+## Database access
+
+- Put all application database reads, writes, and SQL/ORM operations in repository implementations. Business logic calls repository methods and retains business decisions.
+- Keep repository interfaces ORM-independent: use domain data and opaque transaction scopes, never database connections, query builders, schema objects, or ORM transaction types.
+- Keep changes across repositories atomic, and publish side effects only after commit. Third-party authentication storage adapters count as repository implementations.
+
 ## Client styling
 
 - For every client UI change, use Tailwind utilities and shared theme tokens in Vue components. Reserve shared CSS for theme definitions, base styles, and complex effects.
