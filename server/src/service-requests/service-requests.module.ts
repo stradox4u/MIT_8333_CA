@@ -5,6 +5,7 @@ import { MaintenanceOfficersController } from './maintenance-officers.controller
 import { RequestCategories } from './request-categories.js';
 import { RequestCategoriesController } from './request-categories.controller.js';
 import { ServiceRequestLifecycle } from './service-request-lifecycle.js';
+import { ServiceRequestNotifications } from './service-request-notifications.js';
 import { ServiceRequestPolicy } from './service-request.policy.js';
 import { ServiceRequestsController } from './service-requests.controller.js';
 import { ServiceRequestsRepository } from './service-requests.repository.js';
@@ -29,6 +30,7 @@ import { DemoServiceRequests } from './demo-service-requests.js';
     RequestCategories,
     ServiceRequestsRepository,
     ServiceRequestLifecycle,
+    ServiceRequestNotifications,
     MaintenanceOfficers,
     ServiceRequestPolicy,
     DemoServiceRequests,

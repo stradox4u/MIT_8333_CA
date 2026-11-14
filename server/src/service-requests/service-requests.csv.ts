@@ -1,23 +1,9 @@
+import { PRIORITY_LABELS, STATUS_LABELS } from './labels.js';
 import type { ServiceRequestSummary } from './service-request.responses.js';
 
 type ReportRow = ServiceRequestSummary & {
   completedAt: Date | null;
   verifiedAt: Date | null;
-};
-
-const priorities = {
-  low: 'Low',
-  normal: 'Normal',
-  high: 'High',
-  urgent: 'Urgent',
-};
-const statuses = {
-  submitted: 'Submitted',
-  assigned: 'Assigned',
-  in_progress: 'In Progress',
-  completed: 'Completed',
-  verified: 'Verified',
-  cancelled: 'Cancelled',
 };
 
 /** Prefix formula-like cells before CSV quoting so spreadsheet apps keep text. */
@@ -48,8 +34,8 @@ export function serviceRequestsCsv(rows: ReportRow[]) {
       row.title,
       row.category.name,
       row.location,
-      priorities[row.priority],
-      statuses[row.status],
+      PRIORITY_LABELS[row.priority],
+      STATUS_LABELS[row.status],
       row.requester.name,
       row.assignment?.officer.name ?? '',
       row.submittedAt.toISOString(),

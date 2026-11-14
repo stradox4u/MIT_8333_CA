@@ -57,7 +57,12 @@ export class DemoServiceRequests {
             .where(eq(serviceRequests.demoKey, demoKey));
           if (existing) return;
           let at = this.clock.now() - (index + 1) * 60 * 60 * 1000;
-          const lifecycle = new ServiceRequestLifecycle(tx, { now: () => at });
+          // Demo history emails nobody.
+          const lifecycle = new ServiceRequestLifecycle(
+            tx,
+            { now: () => at },
+            { send: async () => {} },
+          );
           const submitted = await lifecycle.submit({
             requesterId,
             title: `Demo plumbing fault: ${STATUS_NAMES[status]}`,

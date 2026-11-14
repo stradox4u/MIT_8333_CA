@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { Clock } from '../clock.js';
 import { InjectDatabase, type Database } from '../database/database.js';
@@ -17,7 +17,10 @@ import {
 } from '../database/schema.js';
 import { recordActivity } from '../users/activity-log.js';
 import { activeWithRole } from '../users/active-users.js';
-import type { OfficerDepartures } from '../users/officer-departures.js';
+import type {
+  AfterCommit,
+  OfficerDepartures,
+} from '../users/officer-departures.js';
 import {
   type NotAnActiveOfficer,
   type NotAllowed,
@@ -27,6 +30,10 @@ import {
   type WrongStatus,
   wrongStatus,
 } from './refusals.js';
+import {
+  type ServiceRequestChange,
+  ServiceRequestNotifications,
+} from './service-request-notifications.js';
 
 /** What a Requester gives when they submit a Service Request. */
 export interface NewServiceRequest {
@@ -42,6 +49,7 @@ export type DetailsEdits = Partial<Omit<NewServiceRequest, 'requesterId'>>;
 /** A Service Request locked for a change, with its current Assignment. */
 interface Locked {
   id: string;
+  reference: string;
   requesterId: string;
   status: ServiceRequestStatus;
   completedAt: Date | null;
@@ -66,6 +74,8 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
   constructor(
     @InjectDatabase() private readonly db: Database,
     private readonly clock: Clock,
+    @Inject(ServiceRequestNotifications)
+    private readonly notifications: Pick<ServiceRequestNotifications, 'send'>,
   ) {}
 
   /**
@@ -77,7 +87,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
   async submit(
     request: NewServiceRequest,
   ): Promise<{ reference: string } | UnknownCategory> {
-    return this.db.transaction(async (tx) => {
+    return this.change(async (tx, changed) => {
       // UPDATE … RETURNING takes a row lock on the category until this
       // transaction ends. A simultaneous submission in the same category
       // waits on that lock, then increments the committed number, so no two
@@ -116,6 +126,12 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
         action: 'status_changed',
         details: { from: null, to: 'submitted' },
       });
+      changed.push({
+        reference,
+        requesterId: request.requesterId,
+        actorId: request.requesterId,
+        moved: { from: null, to: 'submitted' },
+      });
       return { reference };
     });
   }
@@ -131,7 +147,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
   ): Promise<
     'assigned' | 'unchanged' | NotFound | NotAnActiveOfficer | WrongStatus
   > {
-    return this.db.transaction(async (tx) => {
+    return this.change(async (tx, changed) => {
       const officer = await this.lockActiveOfficer(tx, officerId);
       const request = await this.lock(tx, reference);
       if (!request) {
@@ -174,6 +190,14 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
           ...moved,
         },
       });
+      changed.push(
+        this.news(request, actorId, moved, {
+          assignedTo: officerId,
+          ...(previous && {
+            ended: { officerId: previous.officerId, why: 'reassigned' },
+          }),
+        }),
+      );
       return 'assigned';
     });
   }
@@ -183,7 +207,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     reference: string,
     actorId: string,
   ): Promise<'unassigned' | NotFound | WrongStatus> {
-    return this.db.transaction(async (tx) => {
+    return this.change(async (tx, changed) => {
       const request = await this.lock(tx, reference);
       if (!request) {
         return 'not_found';
@@ -191,12 +215,14 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       if (!request.assignment || !HELD.includes(request.status)) {
         return wrongStatus(request.status);
       }
-      await this.handBack(
-        tx,
-        request,
-        request.assignment,
-        'unassigned',
-        actorId,
+      changed.push(
+        await this.handBack(
+          tx,
+          request,
+          request.assignment,
+          'unassigned',
+          actorId,
+        ),
       );
       return 'unassigned';
     });
@@ -207,7 +233,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     reference: string,
     officerId: string,
   ): Promise<'started' | NotFound | NotCurrentOfficer | WrongStatus> {
-    return this.db.transaction(async (tx) => {
+    return this.change(async (tx, changed) => {
       const officer = await this.lockActiveOfficer(tx, officerId);
       const request = await this.lock(tx, reference);
       if (!request) {
@@ -219,7 +245,9 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       if (request.status !== 'assigned') {
         return wrongStatus(request.status);
       }
-      await this.changeStatus(tx, request, 'in_progress', officerId);
+      changed.push(
+        await this.changeStatus(tx, request, 'in_progress', officerId),
+      );
       return 'started';
     });
   }
@@ -234,7 +262,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     officerId: string,
     note: string | null,
   ): Promise<'completed' | NotFound | NotCurrentOfficer | WrongStatus> {
-    return this.db.transaction(async (tx) => {
+    return this.change(async (tx, changed) => {
       const officer = await this.lockActiveOfficer(tx, officerId);
       const request = await this.lock(tx, reference);
       if (!request) {
@@ -246,7 +274,9 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       if (request.status !== 'in_progress') {
         return wrongStatus(request.status);
       }
-      await this.changeStatus(tx, request, 'completed', officerId, { note });
+      changed.push(
+        await this.changeStatus(tx, request, 'completed', officerId, { note }),
+      );
       return 'completed';
     });
   }
@@ -256,7 +286,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     reference: string,
     actorId: string,
   ): Promise<'verified' | NotFound | NotAllowed | WrongStatus> {
-    return this.db.transaction(async (tx) => {
+    return this.change(async (tx, changed) => {
       const actor = await this.lockActor(tx, actorId);
       const request = await this.lock(tx, reference);
       if (!request) return 'not_found';
@@ -266,7 +296,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       )
         return 'not_allowed';
       if (request.status !== 'completed') return wrongStatus(request.status);
-      await this.changeStatus(tx, request, 'verified', actorId);
+      changed.push(await this.changeStatus(tx, request, 'verified', actorId));
       return 'verified';
     });
   }
@@ -286,7 +316,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       .orderBy(asc(serviceRequests.id));
     let verified = 0;
     for (const { reference } of due) {
-      const changed = await this.db.transaction(async (tx) => {
+      const overdue = await this.change(async (tx, changed) => {
         const request = await this.lock(tx, reference);
         if (
           !request ||
@@ -295,10 +325,10 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
           request.completedAt > cutoff
         )
           return false;
-        await this.changeStatus(tx, request, 'verified', null);
+        changed.push(await this.changeStatus(tx, request, 'verified', null));
         return true;
       });
-      if (changed) verified++;
+      if (overdue) verified++;
     }
     return verified;
   }
@@ -309,7 +339,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     actorId: string,
     reason: string,
   ): Promise<'returned' | NotFound | NotAllowed | WrongStatus> {
-    return this.db.transaction(async (tx) => {
+    return this.change(async (tx, changed) => {
       const actor = await this.lockActor(tx, actorId);
       const request = await this.lock(tx, reference);
       if (!request) return 'not_found';
@@ -335,13 +365,16 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
           this.now(),
         );
       }
-      await this.changeStatus(
-        tx,
-        request,
-        officer ? 'assigned' : 'submitted',
-        actorId,
-        { reason },
-      );
+      changed.push({
+        ...(await this.changeStatus(
+          tx,
+          request,
+          officer ? 'assigned' : 'submitted',
+          actorId,
+          { reason },
+        )),
+        ...(officer && { returnedTo: officer.id }),
+      });
       return 'returned';
     });
   }
@@ -352,7 +385,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     actorId: string,
     reason: string,
   ): Promise<'cancelled' | NotFound | NotAllowed | WrongStatus> {
-    return this.db.transaction(async (tx) => {
+    return this.change(async (tx, changed) => {
       const actor = await this.lockActor(tx, actorId);
       const request = await this.lock(tx, reference);
       if (!request) return 'not_found';
@@ -374,7 +407,14 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
           actorId,
           this.now(),
         );
-      await this.changeStatus(tx, request, 'cancelled', actorId, { reason });
+      changed.push({
+        ...(await this.changeStatus(tx, request, 'cancelled', actorId, {
+          reason,
+        })),
+        ...(request.assignment && {
+          ended: { officerId: request.assignment.officerId, why: 'cancelled' },
+        }),
+      });
       return 'cancelled';
     });
   }
@@ -515,13 +555,15 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
    * An officer is leaving (`OfficerDepartures`): each request they hold
    * that's Assigned or In Progress goes back to Submitted, in `db`, the
    * transaction changing the User. That transaction has already locked the
-   * officer's row; the requests come second, as when assigning.
+   * officer's row; the requests come second, as when assigning. Answers
+   * the emails to send once it commits.
    */
   async handBackAssignmentsOf(
     db: Database,
     officerId: string,
     actorId: string,
-  ): Promise<void> {
+  ): Promise<AfterCommit> {
+    const changed: ServiceRequestChange[] = [];
     const candidates = await db
       .select({
         reference: serviceRequests.reference,
@@ -546,14 +588,30 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       ) {
         continue;
       }
-      await this.handBack(
-        db,
-        request,
-        request.assignment,
-        'officer_left',
-        actorId,
+      changed.push(
+        await this.handBack(
+          db,
+          request,
+          request.assignment,
+          'officer_left',
+          actorId,
+        ),
       );
     }
+    return () => this.notifications.send(changed);
+  }
+
+  /**
+   * Runs a change in one transaction, collecting what it changed, and emails
+   * about it only once that commits. A rolled-back change sends nothing.
+   */
+  private async change<T>(
+    work: (tx: Database, changed: ServiceRequestChange[]) => Promise<T>,
+  ): Promise<T> {
+    const changed: ServiceRequestChange[] = [];
+    const outcome = await this.db.transaction((tx) => work(tx, changed));
+    await this.notifications.send(changed);
+    return outcome;
   }
 
   /** Locks the officer first so actor foreign keys cannot reverse departure's lock order. */
@@ -594,6 +652,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     const [request] = await db
       .select({
         id: serviceRequests.id,
+        reference: serviceRequests.reference,
         requesterId: serviceRequests.requesterId,
         status: serviceRequests.status,
         completedAt: serviceRequests.completedAt,
@@ -624,7 +683,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     to: ServiceRequestStatus,
     actorId: string | null,
     details: { note?: string | null; reason?: string | null } = {},
-  ) {
+  ): Promise<ServiceRequestChange> {
     const at = this.now();
     const moved = await this.moveTo(db, request, to, {
       actorId,
@@ -636,6 +695,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       action: 'status_changed',
       details: moved,
     });
+    return this.news(request, actorId, moved && { ...moved, ...details });
   }
 
   /**
@@ -648,7 +708,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     assignment: NonNullable<Locked['assignment']>,
     reason: Extract<AssignmentEndReason, 'unassigned' | 'officer_left'>,
     actorId: string,
-  ) {
+  ): Promise<ServiceRequestChange> {
     const at = this.now();
     await this.endAssignment(db, assignment.id, reason, actorId, at);
     const moved = await this.moveTo(db, request, 'submitted', {
@@ -660,6 +720,9 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       actorId,
       action: reason,
       details: { officerId: assignment.officerId, ...moved },
+    });
+    return this.news(request, actorId, moved, {
+      ended: { officerId: assignment.officerId, why: reason },
     });
   }
 
@@ -723,6 +786,22 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
       occurredAt: change.at,
     });
     return { from: request.status, to };
+  }
+
+  /** What a change did to `request`, for its emails once it commits. */
+  private news(
+    request: Locked,
+    actorId: string | null,
+    moved: ServiceRequestChange['moved'],
+    assignments: Pick<ServiceRequestChange, 'assignedTo' | 'ended'> = {},
+  ): ServiceRequestChange {
+    return {
+      reference: request.reference,
+      requesterId: request.requesterId,
+      actorId,
+      ...(moved && { moved }),
+      ...assignments,
+    };
   }
 
   /** The action's Activity Log entry, naming the request. */
