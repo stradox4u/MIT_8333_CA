@@ -159,3 +159,25 @@ export type ServiceRequestPage = z.input<
 export type ServiceRequestDetails = z.input<typeof details>;
 /** An active Maintenance Officer, with their count of Open Assignments. */
 export type MaintenanceOfficer = z.input<typeof maintenanceOfficerResponse>;
+
+/** Dashboard counts include all Statuses and, for Administrators, all categories. */
+export const serviceRequestCountsResponse = z.object({
+  byStatus: z.object({
+    submitted: z.int().min(0),
+    assigned: z.int().min(0),
+    in_progress: z.int().min(0),
+    completed: z.int().min(0),
+    verified: z.int().min(0),
+    cancelled: z.int().min(0),
+  }),
+  openByCategory: z
+    .array(
+      z.object({ category: requestCategoryResponse, count: z.int().min(0) }),
+    )
+    .optional()
+    .meta({
+      description:
+        'Administrators only; Open counts in this scope, including zero categories, in category display order',
+    }),
+});
+export type ServiceRequestCounts = z.input<typeof serviceRequestCountsResponse>;

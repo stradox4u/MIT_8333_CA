@@ -97,3 +97,46 @@ docker stop mit8333-test-postgres
 ```
 
 Ordinary `npm test` and `npm run test:e2e` continue to use their existing fixtures.
+
+## Search, filters and dashboard counts
+
+`GET /api/service-requests` requires `scope=requested|assigned|all` and returns
+`{ items, page, pageSize, total }`. `total` counts all matching requests in that
+scope before pagination, including when the requested page is empty. Defaults
+are `page=1`, `pageSize=20` (maximum 100) and `sort=newest`.
+
+All scopes accept `search` and `status`. Search trims whitespace, accepts up to
+200 characters and matches a case-insensitive literal substring of Reference or
+title; `%`, `_` and backslashes have no special meaning. Empty search has no
+effect. Status accepts `submitted`, `assigned`, `in_progress`, `completed`,
+`verified`, `cancelled`, or `open` (Submitted, Assigned and In Progress).
+
+Administrators using `scope=all` also search location and the Requester's display
+name, including "Erased user". This scope accepts `category` (one of the six
+category IDs), `priority=low|normal|high|urgent`, `officerId` (current officer UUID),
+`submittedFrom`, `submittedTo` and `sort=priority`. Submitted boundaries are
+inclusive UTC days in `YYYY-MM-DD` format, years 0001–9999; either boundary can
+stand alone. Filters combine with AND. Unknown keys, repeated values, malformed
+values, reversed dates and filters unsupported by the scope return `400`.
+
+`newest` orders Submitted time descending, then internal ID descending.
+`priority` orders Urgent, High, Normal, Low, then Submitted time ascending (longest
+waiting first), then ID ascending. IDs break timestamp ties for stable pages.
+
+The officer dashboard uses the constrained exception
+`scope=assigned&officerId=<own UUID>&status=open&sort=priority`: the own-officer
+filter restricts results to current Assignments, where Priority is visible.
+Another officer's UUID is forbidden (`403`); Priority ordering without this
+current-assignment restriction is invalid (`400`). Ordinary `scope=assigned`
+continues to include every request the officer has ever held, newest first.
+`scope=requested` accepts only search, Status, newest ordering and pagination.
+Existing Role checks and per-row Priority redaction apply to every list.
+
+`GET /api/service-requests/summary?scope=...` uses the same scope permissions and
+accepts no list filters. It returns `{ byStatus: { submitted, assigned,
+in_progress, completed, verified, cancelled } }`, with zero for absent Statuses.
+Administrators also receive `openByCategory: [{ category: { id, name, code },
+count }]`, with all six categories in display order, including zeros. These
+counts cover Open requests in the selected scope; an Administrator's requested
+summary never counts other Requesters' requests. Historical Assignments count a
+request once. This slice needs no migration, new configuration or dependency.

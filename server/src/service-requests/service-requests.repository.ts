@@ -1,10 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, exists, inArray, isNull } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  gte,
+  ilike,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { alias, type SelectedFields } from 'drizzle-orm/pg-core';
 import { InjectDatabase, type Database } from '../database/database.js';
 import {
   assignments,
   OPEN_STATUSES,
+  SERVICE_REQUEST_STATUSES,
   progressNotes,
   requestCategories,
   serviceRequests,
@@ -17,10 +32,12 @@ import type { NotFound } from './refusals.js';
 import type { ServiceRequestAccess } from './service-request.policy.js';
 import type {
   Person,
+  ServiceRequestCounts,
   ServiceRequestDetails,
   ServiceRequestPage,
 } from './service-request.responses.js';
-import type { StatusFilter } from './service-request.schemas.js';
+import type { z } from 'zod';
+import type { listQuery, StatusFilter } from './service-request.schemas.js';
 import { buildTimeline } from './timeline.js';
 
 const requesters = alias(users, 'requester');
@@ -87,6 +104,10 @@ function hasStatus(filter: StatusFilter) {
     : eq(serviceRequests.status, filter);
 }
 
+/** Search text is a literal substring, never a LIKE pattern. */
+const literalSearch = (search: string) =>
+  `%${search.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
+
 @Injectable()
 export class ServiceRequestsRepository {
   constructor(@InjectDatabase() private readonly db: Database) {}
@@ -133,24 +154,138 @@ export class ServiceRequestsRepository {
     return { ...details, timeline: await this.timeline(id) };
   }
 
-  /** One page of a list of Service Requests, newest first. */
+  /** One filtered page, with a stable order and the matching total. */
   async list(
     scope: ListScope,
-    filters: { status?: StatusFilter; page: number; pageSize: number },
+    filters: Omit<z.infer<typeof listQuery>, 'scope'>,
   ): Promise<ServiceRequestPage> {
     const { page, pageSize } = filters;
     const matching = and(
       this.inScope(scope),
       filters.status ? hasStatus(filters.status) : undefined,
+      filters.search
+        ? or(
+            ilike(serviceRequests.reference, literalSearch(filters.search)),
+            ilike(serviceRequests.title, literalSearch(filters.search)),
+            'all' in scope
+              ? ilike(serviceRequests.location, literalSearch(filters.search))
+              : undefined,
+            'all' in scope
+              ? exists(
+                  this.db
+                    .select({ id: requesters.id })
+                    .from(requesters)
+                    .where(
+                      and(
+                        eq(requesters.id, serviceRequests.requesterId),
+                        ilike(
+                          displayName(requesters),
+                          literalSearch(filters.search),
+                        ),
+                      ),
+                    ),
+                )
+              : undefined,
+          )
+        : undefined,
+      filters.category
+        ? eq(serviceRequests.categoryId, filters.category)
+        : undefined,
+      filters.priority
+        ? eq(serviceRequests.priority, filters.priority)
+        : undefined,
+      filters.officerId
+        ? exists(
+            this.db
+              .select({ id: assignments.id })
+              .from(assignments)
+              .where(
+                and(
+                  eq(assignments.serviceRequestId, serviceRequests.id),
+                  eq(assignments.officerId, filters.officerId),
+                  isNull(assignments.endedAt),
+                ),
+              ),
+          )
+        : undefined,
+      filters.submittedFrom
+        ? gte(
+            serviceRequests.submittedAt,
+            new Date(`${filters.submittedFrom}T00:00:00.000Z`),
+          )
+        : undefined,
+      filters.submittedTo
+        ? lt(
+            serviceRequests.submittedAt,
+            sql`(${filters.submittedTo + 'T00:00:00.000Z'}::timestamptz + interval '24 hours')`,
+          )
+        : undefined,
     );
     const rows = await this.selectSummaries()
       .where(matching)
       // The id breaks ties, so pages never overlap.
-      .orderBy(desc(serviceRequests.submittedAt), desc(serviceRequests.id))
+      .orderBy(
+        ...(filters.sort === 'priority'
+          ? [
+              desc(
+                sql`case ${serviceRequests.priority} when 'urgent' then 4 when 'high' then 3 when 'normal' then 2 when 'low' then 1 end`,
+              ),
+            ]
+          : []),
+        filters.sort === 'priority'
+          ? asc(serviceRequests.submittedAt)
+          : desc(serviceRequests.submittedAt),
+        filters.sort === 'priority'
+          ? asc(serviceRequests.id)
+          : desc(serviceRequests.id),
+      )
       .limit(pageSize)
       .offset((page - 1) * pageSize);
     const total = await this.db.$count(serviceRequests, matching);
     return { items: rows.map(withAssignment), page, pageSize, total };
+  }
+
+  /** Counts only requests in the authorized scope; no list filter or page applies. */
+  async summary(
+    scope: ListScope,
+    includeCategories: boolean,
+  ): Promise<ServiceRequestCounts> {
+    const rows = await this.db
+      .select({
+        status: serviceRequests.status,
+        categoryId: serviceRequests.categoryId,
+        count: count(),
+      })
+      .from(serviceRequests)
+      .where(this.inScope(scope))
+      .groupBy(serviceRequests.status, serviceRequests.categoryId);
+    const byStatus = Object.fromEntries(
+      SERVICE_REQUEST_STATUSES.map((status) => [status, 0]),
+    ) as ServiceRequestCounts['byStatus'];
+    const openByCategory = new Map<string, number>();
+    for (const row of rows) {
+      byStatus[row.status] += row.count;
+      if (
+        OPEN_STATUSES.includes(row.status as (typeof OPEN_STATUSES)[number])
+      ) {
+        openByCategory.set(
+          row.categoryId,
+          (openByCategory.get(row.categoryId) ?? 0) + row.count,
+        );
+      }
+    }
+    if (!includeCategories) return { byStatus };
+    const categories = await this.db
+      .select(requestCategoryColumns)
+      .from(requestCategories)
+      .orderBy(asc(requestCategories.sortOrder));
+    return {
+      byStatus,
+      openByCategory: categories.map((category) => ({
+        category,
+        count: openByCategory.get(category.id) ?? 0,
+      })),
+    };
   }
 
   /** A list's scope as a condition. */
