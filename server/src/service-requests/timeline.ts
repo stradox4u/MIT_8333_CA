@@ -1,7 +1,7 @@
 import type {
   AssignmentEndReason,
   ServiceRequestStatus,
-} from '../database/schema.js';
+} from './service-request.types.js';
 import type { Person, TimelineEntry } from './service-request.responses.js';
 
 /** A Status Update as stored, with its actor's name. */

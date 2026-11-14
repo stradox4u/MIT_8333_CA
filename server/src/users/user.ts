@@ -1,4 +1,4 @@
-import type { RoleId } from '../database/schema.js';
+import type { RoleId } from './user.types.js';
 
 /**
  * A User as the rest of the app sees it. The password hash never leaves

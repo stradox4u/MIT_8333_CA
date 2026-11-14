@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ROLE_IDS } from '../database/schema.js';
+import { ROLE_IDS } from './user.types.js';
 
 /** Zod pieces for User data, shared by every route that takes them. */
 

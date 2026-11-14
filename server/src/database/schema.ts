@@ -1,3 +1,10 @@
+import { type AssignmentEndReason } from '../service-requests/service-request.types.js';
+import {
+  type ServiceRequestStatus,
+  type Priority,
+} from '../service-requests/service-request.types.js';
+import { type ActivityAction } from '../users/activity-log.types.js';
+import { type RoleId } from '../users/user.types.js';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -14,13 +21,7 @@ import {
 
 const instant = () => timestamp({ withTimezone: true, mode: 'date' });
 
-export const ROLE_IDS = [
-  'student',
-  'staff',
-  'maintenance_officer',
-  'administrator',
-] as const;
-export type RoleId = (typeof ROLE_IDS)[number];
+export { ROLE_IDS, type RoleId } from '../users/user.types.js';
 
 /** Reference data: the four Roles, inserted by a migration. */
 export const roles = pgTable('roles', {
@@ -111,23 +112,10 @@ export const rateLimits = pgTable(
   (table) => [index().on(table.windowEndsAt)],
 );
 
-export const ACTIVITY_ACTIONS = [
-  // On Users:
-  'invited',
-  'role_changed',
-  'deactivated',
-  'reactivated',
-  'erased',
-  // On Service Requests:
-  'status_changed',
-  'assigned',
-  'reassigned',
-  'unassigned',
-  'officer_left',
-  'details_changed',
-  'priority_changed',
-] as const;
-export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
+export {
+  ACTIVITY_ACTIONS,
+  type ActivityAction,
+} from '../users/activity-log.types.js';
 
 /**
  * The Activity Log: significant actions taken on Users and Service Requests
@@ -188,25 +176,13 @@ export const requestCategories = pgTable('request_categories', {
   sortOrder: integer().notNull(),
 });
 
-export const SERVICE_REQUEST_STATUSES = [
-  'submitted',
-  'assigned',
-  'in_progress',
-  'completed',
-  'verified',
-  'cancelled',
-] as const;
-export type ServiceRequestStatus = (typeof SERVICE_REQUEST_STATUSES)[number];
-
-/** Open: the work on it hasn't finished (GLOSSARY.md). */
-export const OPEN_STATUSES: ServiceRequestStatus[] = [
-  'submitted',
-  'assigned',
-  'in_progress',
-];
-
-export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
-export type Priority = (typeof PRIORITIES)[number];
+export {
+  SERVICE_REQUEST_STATUSES,
+  OPEN_STATUSES,
+  PRIORITIES,
+  type ServiceRequestStatus,
+  type Priority,
+} from '../service-requests/service-request.types.js';
 
 /** Service Requests: faults on campus, reported by their Requesters (GLOSSARY.md). */
 export const serviceRequests = pgTable(
@@ -254,15 +230,10 @@ const timelineId = () =>
     .primaryKey()
     .default(sql`nextval('timeline_sequence')`);
 
-export const ASSIGNMENT_END_REASONS = [
-  'reassigned',
-  'unassigned',
-  'not_fixed',
-  'cancelled',
-  /** The officer was demoted, deactivated or erased. */
-  'officer_left',
-] as const;
-export type AssignmentEndReason = (typeof ASSIGNMENT_END_REASONS)[number];
+export {
+  ASSIGNMENT_END_REASONS,
+  type AssignmentEndReason,
+} from '../service-requests/service-request.types.js';
 
 /**
  * Assignments: an Administrator giving a Service Request to a Maintenance

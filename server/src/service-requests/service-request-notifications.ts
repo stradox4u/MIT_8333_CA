@@ -6,27 +6,14 @@ import {
   SERVICE_REQUESTS_COMMITTED,
   type ServiceRequestChange,
 } from './service-request-events.js';
-import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { AppConfig } from '../config/app-config.js';
-import { InjectDatabase, type Database } from '../database/database.js';
-import {
-  type Priority,
-  type ServiceRequestStatus,
-  requestCategories,
-  serviceRequests,
-  users,
-} from '../database/schema.js';
-import { activeWithRole } from '../users/active-users.js';
+import { UsersRepository } from '../users/users.repository.js';
+import { ServiceRequestsRepository } from './service-requests.repository.js';
+import type {
+  NotificationRequest as Described,
+  ServiceRequestStatus,
+} from './service-request.types.js';
 import { PRIORITY_LABELS, STATUS_LABELS } from './labels.js';
-
-/** The request as its emails describe it, read once the change commits. */
-interface Described {
-  reference: string;
-  title: string;
-  location: string;
-  category: string;
-  priority: Priority;
-}
 
 /** One thing to tell one User; a User's notices about a change share one email. */
 interface Notice {
@@ -52,7 +39,8 @@ export class ServiceRequestNotifications {
   private readonly pending = new Set<Promise<void>>();
 
   constructor(
-    @InjectDatabase() private readonly db: Database,
+    private readonly requests: ServiceRequestsRepository,
+    private readonly users: UsersRepository,
     private readonly mailer: Mailer,
     private readonly config: AppConfig,
   ) {}
@@ -109,7 +97,9 @@ export class ServiceRequestNotifications {
 
   /** One email per recipient, leaving out the actor and anyone unreachable. */
   private async compose(change: ServiceRequestChange): Promise<Mail[]> {
-    const request = await this.describe(change.reference);
+    const request = await this.requests.notificationDetails(change.reference);
+    if (!request)
+      throw new Error(`Missing notification request ${change.reference}`);
     const notices = [
       ...forOfficers(change, request),
       ...forRequester(change, request),
@@ -119,7 +109,7 @@ export class ServiceRequestNotifications {
       return [];
     }
     const ids = [...new Set(notices.map(({ recipientId }) => recipientId))];
-    const recipients = await this.reachable(ids);
+    const recipients = await this.users.reachableRecipients(ids);
     const link = new URL(`/requests/${change.reference}`, this.config.appUrl)
       .href;
     return ids.flatMap((id) => {
@@ -149,10 +139,7 @@ export class ServiceRequestNotifications {
     if (moved?.to !== 'submitted') {
       return [];
     }
-    const admins = await this.db
-      .select({ id: users.id })
-      .from(users)
-      .where(activeWithRole('administrator'));
+    const admins = await this.users.activeAdministratorIds();
     const { reference, title, location, category } = request;
     const notice =
       moved.from === null
@@ -167,50 +154,7 @@ export class ServiceRequestNotifications {
               'It’s waiting for an Assignment.' +
               quoted('The reason given', moved.reason),
           };
-    return admins.map(({ id }) => ({ recipientId: id, ...notice }));
-  }
-
-  private async describe(reference: string): Promise<Described> {
-    const [request] = await this.db
-      .select({
-        reference: serviceRequests.reference,
-        title: serviceRequests.title,
-        location: serviceRequests.location,
-        category: requestCategories.name,
-        priority: serviceRequests.priority,
-      })
-      .from(serviceRequests)
-      .innerJoin(
-        requestCategories,
-        eq(requestCategories.id, serviceRequests.categoryId),
-      )
-      .where(eq(serviceRequests.reference, reference));
-    return request;
-  }
-
-  /** Those of `ids` who can get email: neither Deactivated nor Erased. */
-  private async reachable(ids: string[]) {
-    const rows = await this.db
-      .select({
-        id: users.id,
-        email: users.email,
-        firstName: users.firstName,
-      })
-      .from(users)
-      .where(
-        and(
-          inArray(users.id, ids),
-          isNotNull(users.email),
-          isNull(users.deactivatedAt),
-          isNull(users.erasedAt),
-        ),
-      );
-    return new Map(
-      rows.map((row) => [
-        row.id,
-        { email: row.email!, firstName: row.firstName ?? 'there' },
-      ]),
-    );
+    return admins.map((id) => ({ recipientId: id, ...notice }));
   }
 }
 

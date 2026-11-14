@@ -6,7 +6,6 @@ import {
 } from '@nestjs/authentication';
 import { Clock } from '../clock.js';
 import { AppConfig } from '../config/app-config.js';
-import { DATABASE, type Database } from '../database/database.js';
 import { AccountController } from './account.controller.js';
 import { AccountPolicy } from './account.policy.js';
 import { AuthController } from './auth.controller.js';
@@ -30,6 +29,10 @@ import { SignInLinks } from './sign-in-links.handler.js';
 import { RateLimitCountersModule } from '../rate-limiting/rate-limit-counters.js';
 import { UsersModule } from '../users/users.module.js';
 import './authentication-types.js';
+
+const AuthenticationStorageRegistration = Symbol(
+  'AuthenticationStorageRegistration',
+);
 
 @Module({
   imports: [
@@ -93,11 +96,11 @@ import './authentication-types.js';
     SignInLinks,
     GoogleAccounts,
     GoogleCallbackFilter,
+    DrizzleAuthStore,
     {
-      provide: DrizzleAuthStore,
-      inject: [DATABASE, AuthenticationStorage],
-      useFactory: (db: Database, storage: AuthenticationStorage) => {
-        const store = new DrizzleAuthStore(db);
+      provide: AuthenticationStorageRegistration,
+      inject: [DrizzleAuthStore, AuthenticationStorage],
+      useFactory: (store: DrizzleAuthStore, storage: AuthenticationStorage) => {
         storage.registerSource({
           sessions: store,
           magicLinks: store,

@@ -187,3 +187,20 @@ hold up the response. Shutdown drains scheduled notifications.
 A crash before delivery loses that email: there is no outbox. The first-party
 `@nestjs/event-emitter` dependency is required; no migration or new configuration
 is needed.
+
+## Persistence interfaces
+
+Business modules use repositories and ORM-independent domain values. Queries,
+row mapping, SQL helpers, and connection-bound transactions stay in repository
+implementations; schema and connection registration remain database infrastructure.
+The authentication package's storage adapter is also a persistence implementation.
+
+Lifecycle decisions remain in `ServiceRequestLifecycle`. Its repository supplies
+transaction-scoped operations, preserving actor-before-request locking and atomic
+Status Updates, Assignments, and Activity Log writes. User departures pass an opaque
+repository transaction scope; only repositories can resolve its connection, and the
+scope expires when its callback ends. Notification events still emit after commit.
+
+`repository-boundaries.spec.ts` rejects persistence imports in business code,
+including schemas, connection handles, and SQL helpers. Domain types and repository
+method results do not require Drizzle imports.

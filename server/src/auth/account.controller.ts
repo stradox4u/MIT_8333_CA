@@ -12,7 +12,7 @@ import {
 } from '@nestjs/authentication';
 import { Can } from '@nestjs/authorization';
 import { z } from 'zod';
-import { ActivityLog } from '../users/activity-log.js';
+import { ActivityLogRepository } from '../users/activity-log.repository.js';
 import { UserErasure } from '../users/user-erasure.js';
 import type { User } from '../users/user.js';
 import { AccountPolicy } from './account.policy.js';
@@ -27,7 +27,7 @@ export class AccountController {
   constructor(
     private readonly freshAuthentication: FreshAuthentication,
     private readonly erasure: UserErasure,
-    private readonly activityLog: ActivityLog,
+    private readonly activityLog: ActivityLogRepository,
   ) {}
 
   /** Erases the User's own account (ADR-0002), after fresh authentication. */

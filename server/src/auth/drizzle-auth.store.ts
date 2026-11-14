@@ -1,3 +1,5 @@
+import { Injectable, Optional } from '@nestjs/common';
+import { InjectDatabase } from '../database/database.js';
 import type {
   MagicLinkRecord,
   MagicLinkStore,
@@ -24,14 +26,15 @@ export interface DrizzleAuthStoreOptions {
  * sign-ins in progress. Each method follows the rule documented on its
  * interface; `authenticationStoreContract()` checks them (see the spec).
  */
+@Injectable()
 export class DrizzleAuthStore
   implements SessionStore, MagicLinkStore, OidcStateStore
 {
   private readonly maxPending: number;
 
   constructor(
-    private readonly db: Database,
-    { maxPending = 10_000 }: DrizzleAuthStoreOptions = {},
+    @InjectDatabase() private readonly db: Database,
+    @Optional() { maxPending = 10_000 }: DrizzleAuthStoreOptions = {},
   ) {
     this.maxPending = maxPending;
   }
