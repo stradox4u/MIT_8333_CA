@@ -12,6 +12,7 @@ import WorkspaceLayout from "../layouts/WorkspaceLayout.vue";
 import StatusChip from "../components/StatusChip.vue";
 import PriorityTag from "../components/PriorityTag.vue";
 import CategoryTag from "../components/CategoryTag.vue";
+import ProgressNoteForm from "../components/ProgressNoteForm.vue";
 import StatusTimeline from "../components/StatusTimeline.vue";
 import { useUiStore } from "../stores/ui";
 import { meOptions } from "../auth/identity";
@@ -84,6 +85,21 @@ const viewer = computed(() => {
   // Officers see requests they held before: read only.
   if (user.role === "maintenance_officer") return "former";
   return null;
+});
+const canAddNote = computed(() => {
+  const data = request.data.value;
+  const user = me.data.value;
+  return (
+    !!data &&
+    !!user &&
+    ["submitted", "assigned", "in_progress", "completed"].includes(
+      data.status,
+    ) &&
+    (data.requester.id === user.id ||
+      user.role === "administrator" ||
+      (user.role === "maintenance_officer" &&
+        data.assignment?.officer.id === user.id))
+  );
 });
 const back = computed(() =>
   viewer.value === "admin"
@@ -458,7 +474,7 @@ const cancellation = computed(() => {
                   Timeline
                 </h2>
                 <p class="m-0 text-campus-muted text-[12px] leading-[1.65]">
-                  Status Updates and Assignments, oldest first.
+                  Status Updates, Assignments and Progress Notes, oldest first.
                 </p>
               </div>
             </div>
@@ -467,6 +483,24 @@ const cancellation = computed(() => {
               :requester="request.data.value.requester"
               :viewer-id="me.data.value?.id"
             />
+            <ProgressNoteForm
+              v-if="canAddNote"
+              :key="reference"
+              :reference="reference"
+              :is-requester="
+                request.data.value.requester.id === me.data.value?.id
+              "
+              :report="report"
+            />
+            <p
+              v-else-if="
+                ['verified', 'cancelled'].includes(request.data.value.status)
+              "
+              class="mt-1 mb-0 pt-4.5 border-t border-campus-panel text-campus-muted text-[11px] leading-[1.65]"
+            >
+              Progress Notes are closed because this Service Request is
+              {{ statusNames[request.data.value.status] }}.
+            </p>
           </section>
         </div>
       </div>

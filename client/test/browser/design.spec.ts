@@ -148,3 +148,88 @@ test("pagination keeps its active-page styling and phone layout", async ({
     pagination.getByRole("link", { name: "Page 3", exact: true }),
   ).toBeHidden();
 });
+
+test("Progress Note controls preserve the preview through validation, pending and failure states", async ({
+  page,
+}) => {
+  const details: ServiceRequestDetails = {
+    reference: "SR-PLUMB-1",
+    title: "Leaking pipe under the sink",
+    category: { id: "plumbing", name: "Plumbing", code: "PLUMB" },
+    location: "Hostel B, room 214",
+    status: "assigned",
+    requester: { id: "ada", name: "Ada Okafor" },
+    submittedAt: "2026-11-12T10:00:00.000Z",
+    assignment: {
+      officer: { id: "chinedu", name: "Chinedu Eze" },
+      assignedAt: "2026-11-12T11:00:00.000Z",
+    },
+    description: "Water drips from the pipe.",
+    timeline: [
+      {
+        type: "progress_note",
+        actor: { id: "ada", name: "Ada Okafor" },
+        occurredAt: "2026-11-12T12:00:00.000Z",
+        text: "<b>Room open</b>\n" + "x".repeat(2000),
+      },
+    ],
+  };
+  await page.route("**/api/service-requests/SR-PLUMB-1", (route) =>
+    route.fulfill({ json: details }),
+  );
+  let finish!: () => void;
+  await page.route(
+    "**/api/service-requests/SR-PLUMB-1/progress-notes",
+    async (route) => {
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      await route.fulfill({ status: 500, json: {} });
+    },
+  );
+  await page.goto("/requests/SR-PLUMB-1");
+  const field = page.getByRole("textbox", { name: "Add a Progress Note" });
+  const form = page.getByRole("form", { name: "Add a Progress Note" });
+  const button = form.getByRole("button", { name: "Add Progress Note" });
+  async function capture(state: string) {
+    for (const [label, width, height] of [
+      ["desktop", 1280, 900],
+      ["mobile", 390, 844],
+      ["small-phone", 320, 844],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(width);
+      await page.screenshot({
+        path: `test-results/progress-notes/${state}-${label}.png`,
+        fullPage: true,
+      });
+    }
+  }
+  await expect(field).toHaveCSS("min-height", "92px");
+  await expect(field).toHaveCSS("background-color", "rgb(241, 244, 244)");
+  await capture("ready");
+  await field.focus();
+  await field.blur();
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  await capture("validation");
+  await field.fill("Room is open after noon.");
+  await button.click();
+  await expect(button).toHaveAttribute("aria-busy", "true");
+  await expect(button).toBeDisabled();
+  await expect(field).toBeDisabled();
+  const spinner = button.locator(".animate-spin");
+  await expect(spinner).toBeVisible();
+  const [spinnerBox, buttonBox] = await Promise.all([
+    spinner.boundingBox(),
+    button.boundingBox(),
+  ]);
+  expect(spinnerBox!.x).toBeGreaterThan(buttonBox!.x + buttonBox!.width / 2);
+  await capture("pending");
+  finish();
+  await expect(form.getByRole("alert")).toBeVisible();
+  await expect(button).toBeEnabled();
+  await expect(field).toHaveValue("Room is open after noon.");
+  await capture("failure");
+});

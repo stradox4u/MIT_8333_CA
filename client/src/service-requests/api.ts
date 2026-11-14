@@ -74,7 +74,14 @@ export interface AssignmentChange {
   statusUpdate: { fromStatus: Status; toStatus: Status } | null;
 }
 
-export type TimelineEntry = StatusUpdate | AssignmentChange;
+export interface ProgressNote {
+  type: "progress_note";
+  occurredAt: string;
+  actor: Person;
+  text: string;
+}
+
+export type TimelineEntry = StatusUpdate | AssignmentChange | ProgressNote;
 
 export interface ServiceRequestDetails extends ServiceRequestSummary {
   description: string;
@@ -186,6 +193,12 @@ export const completeWork = (reference: string, note: string) =>
   action(reference, "/complete", {
     method: "POST",
     body: JSON.stringify(note ? { note } : {}),
+  });
+
+export const addProgressNote = (reference: string, text: string) =>
+  action(reference, "/progress-notes", {
+    method: "POST",
+    body: JSON.stringify({ text }),
   });
 
 export const verifyRequest = (reference: string) =>
