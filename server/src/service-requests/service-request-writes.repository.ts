@@ -45,7 +45,7 @@ export class ServiceRequestWritesRepository {
 
   async submit(
     request: NewServiceRequest,
-    at: Date,
+    now: () => Date,
   ): Promise<{ reference: string } | 'unknown_category'> {
     const [category] = await this.db
       .update(requestCategories)
@@ -57,19 +57,18 @@ export class ServiceRequestWritesRepository {
       });
     if (!category) return 'unknown_category';
     const reference = `SR-${category.code}-${category.number}`;
+    const at = now();
     const [created] = await this.db
       .insert(serviceRequests)
       .values({ ...request, reference, status: 'submitted', submittedAt: at })
       .returning({ id: serviceRequests.id });
-    await this.db
-      .insert(statusUpdates)
-      .values({
-        serviceRequestId: created.id,
-        actorId: request.requesterId,
-        fromStatus: null,
-        toStatus: 'submitted',
-        occurredAt: at,
-      });
+    await this.db.insert(statusUpdates).values({
+      serviceRequestId: created.id,
+      actorId: request.requesterId,
+      fromStatus: null,
+      toStatus: 'submitted',
+      occurredAt: at,
+    });
     await this.record(
       {
         serviceRequestId: created.id,
@@ -279,18 +278,16 @@ export class ServiceRequestWritesRepository {
           (to === 'assigned' || to === 'submitted') && { completedAt: null }),
       })
       .where(eq(serviceRequests.id, id));
-    await this.db
-      .insert(statusUpdates)
-      .values({
-        serviceRequestId: id,
-        actorId: change.actorId,
-        fromStatus: from,
-        toStatus: to,
-        assignmentId: change.assignmentId,
-        note: change.note,
-        reason: change.reason,
-        occurredAt: change.at,
-      });
+    await this.db.insert(statusUpdates).values({
+      serviceRequestId: id,
+      actorId: change.actorId,
+      fromStatus: from,
+      toStatus: to,
+      assignmentId: change.assignmentId,
+      note: change.note,
+      reason: change.reason,
+      occurredAt: change.at,
+    });
   }
 
   record(entry: ActivityEntry, at: Date): Promise<void> {

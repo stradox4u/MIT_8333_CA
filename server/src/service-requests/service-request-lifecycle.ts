@@ -65,7 +65,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
     request: NewServiceRequest,
   ): Promise<{ reference: string } | UnknownCategory> {
     return this.change(async (store, changed) => {
-      const submitted = await store.submit(request, this.now());
+      const submitted = await store.submit(request, () => this.now());
       if (typeof submitted === 'string') return submitted;
       const { reference } = submitted;
       changed.push({

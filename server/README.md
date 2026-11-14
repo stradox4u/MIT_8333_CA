@@ -190,10 +190,9 @@ is needed.
 
 ## Persistence interfaces
 
-Business modules use repositories and ORM-independent domain values. Queries,
-row mapping, SQL helpers, and connection-bound transactions stay in repository
-implementations; schema and connection registration remain database infrastructure.
-The authentication package's storage adapter is also a persistence implementation.
+The [repository access rules](../AGENTS.md#database-access) apply to all server
+modules. Repository implementations contain queries, row mapping, and SQL helpers;
+schema and connection registration remain database infrastructure.
 
 Lifecycle decisions remain in `ServiceRequestLifecycle`. Its repository supplies
 transaction-scoped operations, preserving actor-before-request locking and atomic
