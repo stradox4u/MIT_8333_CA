@@ -96,7 +96,7 @@ export const listQuery = z
       ])
       .optional(),
     priority: z.enum(PRIORITIES).optional(),
-    officerId: userId.optional().meta({
+    officerId: userId.toLowerCase().optional().meta({
       description:
         'Current officer UUID. scope=all, or scope=assigned with your own UUID to restrict to current Assignments.',
     }),

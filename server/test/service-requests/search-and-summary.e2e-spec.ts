@@ -200,6 +200,31 @@ describe('Searching and summarising Service Requests', () => {
     await list(ada, 'requested', { sort: 'priority' }).expect(400);
   });
 
+  it('accepts an uppercase own-officer UUID while rejecting another officer’s UUID', async () => {
+    const requester = await app.signUp('requester@example.com');
+    const admin = await app.signInAsAdministrator();
+    const officer = await app.signInAsMaintenanceOfficer();
+    const other = await app.signInAsMaintenanceOfficer('other@example.com');
+    const officerId = await idOf(officer);
+    const otherId = await idOf(other);
+    const own = await submitServiceRequest(requester);
+    const foreign = await submitServiceRequest(requester);
+    await assign(admin, own, officerId);
+    await assign(admin, foreign, otherId);
+
+    const query = { status: 'open', sort: 'priority' };
+    const current = await list(officer, 'assigned', {
+      ...query,
+      officerId: officerId.toUpperCase(),
+    }).expect(200);
+    expect(references(current.body)).toEqual([own]);
+    expect(current.body.total).toBe(1);
+    expect(current.body.items[0]).toHaveProperty('priority', 'normal');
+    for (const officerId of [otherId, otherId.toUpperCase()]) {
+      await list(officer, 'assigned', { ...query, officerId }).expect(403);
+    }
+  });
+
   it('counts every Status within the authorized scope and includes zero Open category counts for Administrators', async () => {
     const ada = await app.signUp('ada@example.com');
     const other = await app.signUp('other@example.com');
