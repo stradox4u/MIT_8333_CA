@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthorizationModule } from '@nestjs/authorization';
 import { ConditionalModule } from '@nestjs/config';
 import { DrizzleModule } from '@nestjs/drizzle';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { MailModule } from '@nestjs/mail';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { AuthModule } from './auth/auth.module.js';
@@ -33,6 +34,7 @@ import { ServiceRequestsModule } from './service-requests/service-requests.modul
       observeIsConfigured,
     ),
     ClockModule,
+    EventEmitterModule.forRoot(),
     DrizzleModule.forRootAsync({
       inject: [AppConfig],
       useFactory: (config: AppConfig) => ({

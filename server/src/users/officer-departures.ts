@@ -1,7 +1,7 @@
 import type { Database } from '../database/database.js';
 
 /** What to do once the User change commits, such as sending its emails. */
-export type AfterCommit = () => Promise<void>;
+export type AfterCommit = () => void;
 
 /**
  * Runs officer departures inside the User change's transaction so their

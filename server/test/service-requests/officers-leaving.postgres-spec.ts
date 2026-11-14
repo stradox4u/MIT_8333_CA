@@ -52,6 +52,8 @@ describe('Concurrent Service Request work (Postgres)', () => {
           .post(`/api/service-requests/${reference}/start`)
           .expect(200);
       }
+      await app.notificationsSent();
+      app.mailbox.clear();
 
       const barrier = await database.pool.connect();
       const pending: Promise<unknown>[] = [];
@@ -67,6 +69,7 @@ describe('Concurrent Service Request work (Postgres)', () => {
           .then((response) => response);
         pending.push(erased);
         await database.waitForBlockedTransactions(2);
+        expect(app.mailbox.mails).toEqual([]);
         await barrier.query('select pg_advisory_unlock(8333, 3)');
         expect((await worked).status).toBe(200);
         expect((await erased).status).toBe(200);
@@ -75,6 +78,20 @@ describe('Concurrent Service Request work (Postgres)', () => {
         barrier.release();
         await Promise.allSettled(pending);
       }
+
+      await app.notificationsSent();
+      expect(
+        app.mailbox
+          .filter({ to: 'requester@example.com' })
+          .map(({ subject }) => subject)
+          .sort(),
+      ).toEqual(
+        (action === 'start'
+          ? [`${reference} is In Progress`, `${reference} is Submitted again`]
+          : [`${reference} is Completed`]
+        ).sort(),
+      );
+      expect(app.mailbox.filter({ to: 'officer@example.com' })).toEqual([]);
 
       const shown = await admin
         .get(`/api/service-requests/${reference}`)

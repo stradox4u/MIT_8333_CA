@@ -15,6 +15,7 @@ describe('Progress Notes', () => {
       'submitted',
     );
     const before = await admin.get('/api/activity-log').expect(200);
+    await app.notificationsSent();
     app.mailbox.clear();
     app.clock.advance(60_000);
 

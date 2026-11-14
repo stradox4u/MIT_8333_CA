@@ -275,6 +275,7 @@ export async function createTestApp({
     },
     async close() {
       try {
+        await notificationsSent();
         await app.close();
       } finally {
         await database.close();

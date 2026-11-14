@@ -1,3 +1,4 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Injectable } from '@nestjs/common';
 import { eq, inArray } from 'drizzle-orm';
 import { Clock } from '../clock.js';
@@ -61,7 +62,7 @@ export class DemoServiceRequests {
           const lifecycle = new ServiceRequestLifecycle(
             tx,
             { now: () => at },
-            { send: async () => {} },
+            new EventEmitter2(),
           );
           const submitted = await lifecycle.submit({
             requesterId,

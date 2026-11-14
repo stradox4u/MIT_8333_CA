@@ -154,7 +154,7 @@ export class UsersRepository {
       );
       return true;
     });
-    await handedBack?.();
+    handedBack?.();
     if (deactivated) {
       return 'deactivated';
     }
@@ -219,7 +219,7 @@ export class UsersRepository {
       );
       return 'erased' as const;
     });
-    await handedBack?.();
+    handedBack?.();
     return outcome;
   }
 
@@ -375,7 +375,7 @@ export class UsersRepository {
       }
       return true;
     });
-    await handedBack?.();
+    handedBack?.();
     if (changed) {
       return 'changed';
     }

@@ -181,5 +181,9 @@ links to `APP_URL/requests/<Reference>`.
 Nobody is emailed about their own change, and Deactivated or Erased Users get
 nothing. Someone with two parts in one change gets one email. A departure sends one
 email per handed-back request per recipient. A rolled-back change sends nothing; a
-failed send is logged and the change stands. A crash between commit and send loses
-that email: there is no outbox. No migration, configuration or dependency is needed.
+failed send is logged and the change stands. After commit, the lifecycle emits
+an in-process event; its singleton listener sends in the background so SMTP cannot
+hold up the response. Shutdown drains scheduled notifications.
+A crash before delivery loses that email: there is no outbox. The first-party
+`@nestjs/event-emitter` dependency is required; no migration or new configuration
+is needed.

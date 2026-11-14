@@ -1,4 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { and, asc, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { Clock } from '../clock.js';
 import { InjectDatabase, type Database } from '../database/database.js';
@@ -32,8 +33,8 @@ import {
 } from './refusals.js';
 import {
   type ServiceRequestChange,
-  ServiceRequestNotifications,
-} from './service-request-notifications.js';
+  SERVICE_REQUESTS_COMMITTED,
+} from './service-request-events.js';
 
 /** What a Requester gives when they submit a Service Request. */
 export interface NewServiceRequest {
@@ -74,8 +75,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
   constructor(
     @InjectDatabase() private readonly db: Database,
     private readonly clock: Clock,
-    @Inject(ServiceRequestNotifications)
-    private readonly notifications: Pick<ServiceRequestNotifications, 'send'>,
+    private readonly events: EventEmitter2,
   ) {}
 
   /**
@@ -598,7 +598,9 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
         ),
       );
     }
-    return () => this.notifications.send(changed);
+    return () => {
+      this.events.emit(SERVICE_REQUESTS_COMMITTED, changed);
+    };
   }
 
   /**
@@ -610,7 +612,7 @@ export class ServiceRequestLifecycle implements OfficerDepartures {
   ): Promise<T> {
     const changed: ServiceRequestChange[] = [];
     const outcome = await this.db.transaction((tx) => work(tx, changed));
-    await this.notifications.send(changed);
+    if (changed.length) this.events.emit(SERVICE_REQUESTS_COMMITTED, changed);
     return outcome;
   }
 

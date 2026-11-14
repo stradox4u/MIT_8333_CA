@@ -1,42 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Mailer } from '@nestjs/mail';
+import { OnEvent } from '@nestjs/event-emitter';
+import { setImmediate as nextTurn } from 'node:timers/promises';
+import {
+  SERVICE_REQUESTS_COMMITTED,
+  type ServiceRequestChange,
+} from './service-request-events.js';
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { AppConfig } from '../config/app-config.js';
 import { InjectDatabase, type Database } from '../database/database.js';
 import {
-  type AssignmentEndReason,
   type Priority,
+  type ServiceRequestStatus,
   requestCategories,
   serviceRequests,
-  type ServiceRequestStatus,
   users,
 } from '../database/schema.js';
 import { activeWithRole } from '../users/active-users.js';
 import { PRIORITY_LABELS, STATUS_LABELS } from './labels.js';
-
-/** What one committed change did to one Service Request, for its emails. */
-export interface ServiceRequestChange {
-  reference: string;
-  requesterId: string;
-  /** Who made the change; `null` for the daily job. Never emailed about it. */
-  actorId: string | null;
-  /** The Status Update it recorded, if any, with its note or reason. */
-  moved?: {
-    from: ServiceRequestStatus | null;
-    to: ServiceRequestStatus;
-    note?: string | null;
-    reason?: string | null;
-  };
-  /** The officer it gave an Assignment. */
-  assignedTo?: string;
-  /** The officer whose Assignment on Open work it ended, and why. */
-  ended?: {
-    officerId: string;
-    why: Exclude<AssignmentEndReason, 'not_fixed'>;
-  };
-  /** The officer a Not fixed answer returned the work to. */
-  returnedTo?: string;
-}
 
 /** The request as its emails describe it, read once the change commits. */
 interface Described {
@@ -68,6 +49,7 @@ interface Mail {
 @Injectable()
 export class ServiceRequestNotifications {
   private readonly logger = new Logger(ServiceRequestNotifications.name);
+  private readonly pending = new Set<Promise<void>>();
 
   constructor(
     @InjectDatabase() private readonly db: Database,
@@ -75,8 +57,30 @@ export class ServiceRequestNotifications {
     private readonly config: AppConfig,
   ) {}
 
-  /** Emails everyone the committed `changes` concern. Never throws. */
-  async send(changes: readonly ServiceRequestChange[]): Promise<void> {
+  /** Drains committed notifications before shutdown or a test fixture reset. */
+  async settled(): Promise<void> {
+    while (this.pending.size) await Promise.all(this.pending);
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.settled();
+  }
+
+  /** Starts delivery after commit without making the HTTP response wait for SMTP. */
+  @OnEvent(SERVICE_REQUESTS_COMMITTED)
+  onCommitted(changes: readonly ServiceRequestChange[]): void {
+    const delivery = nextTurn()
+      .then(() => this.deliver(changes))
+      .catch((error: unknown) => {
+        this.logger.error('Couldn’t deliver Service Request emails', error);
+      });
+    this.pending.add(delivery);
+    void delivery.then(() => this.pending.delete(delivery));
+  }
+
+  private async deliver(
+    changes: readonly ServiceRequestChange[],
+  ): Promise<void> {
     for (const change of changes) {
       let mails: Mail[];
       try {
