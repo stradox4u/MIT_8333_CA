@@ -32,7 +32,10 @@ function pageFrom(value: unknown) {
 }
 
 /** Only supported, valid filters cross the HTTP boundary; URLs keep the same canonical values. */
-function read(query: LocationQuery, scope: Scope): ListFilters {
+export function readListFilters(
+  query: LocationQuery,
+  scope: Scope,
+): ListFilters {
   const result: ListFilters = { page: pageFrom(query.page) };
   const status = scalar(query.status);
   if (["open", ...STATUSES].includes(status))
@@ -78,7 +81,7 @@ export function useListFilters(scope: () => Scope) {
   const route = useRoute();
   const router = useRouter();
   const path = route.path;
-  const filters = computed(() => read(route.query, scope()));
+  const filters = computed(() => readListFilters(route.query, scope()));
   watch(
     () => route.fullPath,
     () => {

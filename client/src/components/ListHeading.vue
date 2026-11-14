@@ -1,6 +1,10 @@
 <script setup lang="ts">
 /** A list page's eyebrow, title and introduction, as the previews set them. */
 defineProps<{ eyebrow: string; title: string; intro: string }>();
+defineSlots<{
+  /** Page actions, aligned to the heading's end. */
+  default?(): unknown;
+}>();
 </script>
 <template>
   <div class="flex flex-wrap items-end justify-between gap-4.5 mb-5.5">
@@ -15,5 +19,6 @@ defineProps<{ eyebrow: string; title: string; intro: string }>();
         {{ intro }}
       </p>
     </div>
+    <slot />
   </div>
 </template>

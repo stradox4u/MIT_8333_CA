@@ -140,20 +140,31 @@ export const requestCategoriesOptions = queryOptions({
   staleTime: Infinity,
 });
 
+/** The list filters as query parameters, leaving pagination to the caller. */
+function filterParams(filters: ListFilters, query = new URLSearchParams()) {
+  for (const [field, value] of Object.entries(filters)) {
+    if (
+      field !== "page" &&
+      field !== "pageSize" &&
+      value !== undefined &&
+      value !== ""
+    )
+      query.set(field, String(value));
+  }
+  return query;
+}
+
+/** Every request matching the filters as CSV (Administrators); a same-origin link, so the session cookie goes with it. */
+export function exportCsvHref(filters: ListFilters) {
+  const query = filterParams(filters).toString();
+  return `/api/service-requests/export.csv${query ? `?${query}` : ""}`;
+}
+
 export function serviceRequestsOptions(scope: Scope, filters: ListFilters) {
   return queryOptions({
     queryKey: ["service-requests", scope, filters] as const,
     queryFn: ({ signal }) => {
-      const query = new URLSearchParams({ scope });
-      for (const [field, value] of Object.entries(filters)) {
-        if (
-          field !== "page" &&
-          field !== "pageSize" &&
-          value !== undefined &&
-          value !== ""
-        )
-          query.set(field, String(value));
-      }
+      const query = filterParams(filters, new URLSearchParams({ scope }));
       query.set("page", String(filters.page));
       query.set("pageSize", String(filters.pageSize ?? PAGE_SIZE));
       return api<Page<ServiceRequestSummary>>(`/service-requests?${query}`, {
