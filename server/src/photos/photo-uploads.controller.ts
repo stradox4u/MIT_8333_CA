@@ -1,3 +1,4 @@
+import { ApiErrors, HTTP_ERROR_RESPONSE } from '../api-docs.js';
 import { Body, Controller, Header, Post } from '@nestjs/common';
 import { CurrentUser } from '@nestjs/authentication';
 import { Can } from '@nestjs/authorization';
@@ -9,14 +10,20 @@ import { Photos } from './photos.js';
 import { photoUploadBody, photoUploadResponse } from './photo.schemas.js';
 
 @Can(ServiceRequestPolicy, 'use')
+@ApiErrors(401, 403)
 @Controller('photo-uploads')
 export class PhotoUploadsController {
   constructor(private readonly photos: Photos) {}
 
   @Post()
   @Header('Cache-Control', 'no-store')
-  @ApiCreatedResponse({ standardSchema: photoUploadResponse })
+  @ApiCreatedResponse({
+    description:
+      'Signed upload instructions; send the photo bytes directly to storage.',
+    standardSchema: photoUploadResponse,
+  })
   @ApiBadRequestResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: 'JPEG, PNG or WebP only, from 1 byte to 5 MiB',
   })
   create(

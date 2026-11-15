@@ -1,3 +1,4 @@
+import { ApiErrors, HTTP_ERROR_RESPONSE } from '../api-docs.js';
 import {
   Body,
   Controller,
@@ -22,7 +23,6 @@ import {
   ApiNotFoundResponse,
   ApiNoContentResponse,
   ApiOkResponse,
-  ApiProduces,
 } from '@nestjs/swagger';
 import type { z } from 'zod';
 import type { User } from '../users/user.js';
@@ -69,6 +69,7 @@ const ANSWERS_THE_REQUEST = {
 };
 
 @Can(ServiceRequestPolicy, 'use')
+@ApiErrors(400, 401, 403)
 @Controller('service-requests')
 export class ServiceRequestsController {
   constructor(
@@ -80,11 +81,13 @@ export class ServiceRequestsController {
 
   /** Submits a Service Request, raised by the signed-in User. */
   @Post()
+  @ApiErrors(503)
   @ApiCreatedResponse({
     description: 'Submitted, with its Reference',
     standardSchema: submittedResponse,
   })
   @ApiBadRequestResponse({
+    ...HTTP_ERROR_RESPONSE,
     description:
       'A field is invalid, or `categoryId` names no Request Category',
   })
@@ -107,12 +110,17 @@ export class ServiceRequestsController {
    * Administrators, all of them (`all`).
    */
   @Get()
-  @ApiOkResponse({ standardSchema: serviceRequestPageResponse })
+  @ApiOkResponse({
+    description: 'One authorized page of Service Requests.',
+    standardSchema: serviceRequestPageResponse,
+  })
   @ApiBadRequestResponse({
+    ...HTTP_ERROR_RESPONSE,
     description:
       'Invalid query, unsupported scope filters, or reversed submitted days',
   })
   @ApiForbiddenResponse({
+    ...HTTP_ERROR_RESPONSE,
     description:
       'The User may not use this scope or another officer’s current Assignments',
   })
@@ -149,11 +157,18 @@ export class ServiceRequestsController {
 
   /** Dashboard counts for the same authorized scopes as lists. */
   @Get('summary')
-  @ApiOkResponse({ standardSchema: serviceRequestCountsResponse })
+  @ApiOkResponse({
+    description: 'Dashboard counts for the selected authorized scope.',
+    standardSchema: serviceRequestCountsResponse,
+  })
   @ApiBadRequestResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: 'A scope is required; list filters are not accepted',
   })
-  @ApiForbiddenResponse({ description: 'The User may not use this scope' })
+  @ApiForbiddenResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'The User may not use this scope',
+  })
   async summary(
     @CurrentUser() user: User,
     @Query({ schema: summaryQuery }) query: z.infer<typeof summaryQuery>,
@@ -170,7 +185,6 @@ export class ServiceRequestsController {
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="service-requests.csv"')
   @Header('Cache-Control', 'no-store')
-  @ApiProduces('text/csv')
   @ApiOkResponse({
     description:
       'Every matching row, UTF-8 CSV; pagination is validated but ignored. Priority/Status use display labels; dates are UTC ISO 8601, absent values empty. Formula-like cells are prefixed with an apostrophe.',
@@ -183,12 +197,16 @@ export class ServiceRequestsController {
       },
       'Cache-Control': { schema: { type: 'string', example: 'no-store' } },
     },
-    schema: { type: 'string' },
+    content: { 'text/csv': { schema: { type: 'string' } } },
   })
   @ApiBadRequestResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: 'Invalid list filters or scope other than all',
   })
-  @ApiForbiddenResponse({ description: 'Only Administrators may export' })
+  @ApiForbiddenResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'Only Administrators may export',
+  })
   async exportCsv(
     @Query({ schema: exportQuery }) query: z.infer<typeof exportQuery>,
   ) {
@@ -198,8 +216,14 @@ export class ServiceRequestsController {
   /** The tracking page: the details, and the timeline oldest first. */
   @Get(':reference')
   @Header('Cache-Control', 'no-store')
-  @ApiOkResponse({ standardSchema: serviceRequestDetailsResponse })
-  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiOkResponse({
+    description: 'Authorized request details with its oldest-first timeline.',
+    standardSchema: serviceRequestDetailsResponse,
+  })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: HIDDEN,
+  })
   find(
     @CurrentUser() user: User,
     @Param('reference', { schema: referenceParam }) reference: string,
@@ -215,10 +239,17 @@ export class ServiceRequestsController {
   @Can(ServiceRequestPolicy, 'manage')
   @ApiOkResponse(ANSWERS_THE_REQUEST)
   @ApiBadRequestResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: '`officerId` isn’t an active Maintenance Officer',
   })
-  @ApiNotFoundResponse({ description: 'No such Service Request' })
-  @ApiConflictResponse({ description: 'It’s Completed, Verified or Cancelled' })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'No such Service Request',
+  })
+  @ApiConflictResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'It’s Completed, Verified or Cancelled',
+  })
   async assign(
     @CurrentUser() admin: User,
     @Param('reference', { schema: referenceParam }) reference: string,
@@ -236,8 +267,14 @@ export class ServiceRequestsController {
   @Can(ServiceRequestPolicy, 'manage')
   @HttpCode(200)
   @ApiOkResponse(ANSWERS_THE_REQUEST)
-  @ApiNotFoundResponse({ description: 'No such Service Request' })
-  @ApiConflictResponse({ description: 'It isn’t Assigned or In Progress' })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'No such Service Request',
+  })
+  @ApiConflictResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'It isn’t Assigned or In Progress',
+  })
   async unassign(
     @CurrentUser() admin: User,
     @Param('reference', { schema: referenceParam }) reference: string,
@@ -250,9 +287,18 @@ export class ServiceRequestsController {
   @Post(':reference/start')
   @HttpCode(200)
   @ApiOkResponse(ANSWERS_THE_REQUEST)
-  @ApiForbiddenResponse({ description: 'Only its current officer may' })
-  @ApiNotFoundResponse({ description: HIDDEN })
-  @ApiConflictResponse({ description: 'It isn’t Assigned' })
+  @ApiForbiddenResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'Only its current officer may',
+  })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: HIDDEN,
+  })
+  @ApiConflictResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'It isn’t Assigned',
+  })
   async start(
     @CurrentUser() officer: User,
     @Param('reference', { schema: referenceParam }) reference: string,
@@ -267,11 +313,21 @@ export class ServiceRequestsController {
    * an optional note kept on that Status Update.
    */
   @Post(':reference/complete')
+  @ApiErrors(503)
   @HttpCode(200)
   @ApiOkResponse(ANSWERS_THE_REQUEST)
-  @ApiForbiddenResponse({ description: 'Only its current officer may' })
-  @ApiNotFoundResponse({ description: HIDDEN })
-  @ApiConflictResponse({ description: 'It isn’t In Progress' })
+  @ApiForbiddenResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'Only its current officer may',
+  })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: HIDDEN,
+  })
+  @ApiConflictResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'It isn’t In Progress',
+  })
   async complete(
     @CurrentUser() officer: User,
     @Param('reference', { schema: referenceParam }) reference: string,
@@ -295,10 +351,17 @@ export class ServiceRequestsController {
   @HttpCode(200)
   @ApiOkResponse(ANSWERS_THE_REQUEST)
   @ApiForbiddenResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: 'Only the Requester or an Administrator may verify',
   })
-  @ApiNotFoundResponse({ description: HIDDEN })
-  @ApiConflictResponse({ description: 'It is not Completed' })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: HIDDEN,
+  })
+  @ApiConflictResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'It is not Completed',
+  })
   async verify(
     @CurrentUser() user: User,
     @Param('reference', { schema: referenceParam }) reference: string,
@@ -319,10 +382,17 @@ export class ServiceRequestsController {
   @HttpCode(200)
   @ApiOkResponse(ANSWERS_THE_REQUEST)
   @ApiForbiddenResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: 'Only the Requester may answer Not fixed',
   })
-  @ApiNotFoundResponse({ description: HIDDEN })
-  @ApiConflictResponse({ description: 'It is not Completed' })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: HIDDEN,
+  })
+  @ApiConflictResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'It is not Completed',
+  })
   async notFixed(
     @CurrentUser() user: User,
     @Param('reference', { schema: referenceParam }) reference: string,
@@ -349,7 +419,10 @@ export class ServiceRequestsController {
   @ApiNoContentResponse({
     description: 'Deleted from ordinary use; history retained',
   })
-  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: HIDDEN,
+  })
   async delete(
     @CurrentUser() user: User,
     @Param('reference', { schema: referenceParam }) reference: string,
@@ -363,10 +436,15 @@ export class ServiceRequestsController {
   @HttpCode(200)
   @ApiOkResponse(ANSWERS_THE_REQUEST)
   @ApiForbiddenResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: 'Only the Requester or an Administrator may cancel',
   })
-  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: HIDDEN,
+  })
   @ApiConflictResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: 'Requesters need Submitted; Administrators need Open',
   })
   async cancel(
@@ -390,16 +468,23 @@ export class ServiceRequestsController {
 
   /** Changes only the details this User may edit in the current Status. */
   @Patch(':reference')
+  @ApiErrors(503)
   @ApiOkResponse(ANSWERS_THE_REQUEST)
   @ApiBadRequestResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: 'Invalid field or unknown Request Category',
   })
   @ApiForbiddenResponse({
+    ...HTTP_ERROR_RESPONSE,
     description:
       'Only the Requester or Administrator; administrators correct category and location only',
   })
-  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: HIDDEN,
+  })
   @ApiConflictResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: 'Requesters need Submitted; Administrators need Open',
   })
   async edit(
@@ -422,14 +507,20 @@ export class ServiceRequestsController {
   @Post(':reference/progress-notes')
   @ApiCreatedResponse(ANSWERS_THE_REQUEST)
   @ApiBadRequestResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: 'Text must be 1–2,000 characters after trimming',
   })
   @ApiForbiddenResponse({
+    ...HTTP_ERROR_RESPONSE,
     description:
       'Only the Requester, current officer or an Administrator may add notes',
   })
-  @ApiNotFoundResponse({ description: HIDDEN })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: HIDDEN,
+  })
   @ApiConflictResponse({
+    ...HTTP_ERROR_RESPONSE,
     description: 'The Service Request is Verified or Cancelled',
   })
   async addProgressNote(
@@ -455,8 +546,14 @@ export class ServiceRequestsController {
   @Put(':reference/priority')
   @Can(ServiceRequestPolicy, 'manage')
   @ApiOkResponse(ANSWERS_THE_REQUEST)
-  @ApiNotFoundResponse({ description: 'No such Service Request' })
-  @ApiConflictResponse({ description: 'The Service Request is not Open' })
+  @ApiNotFoundResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'No such Service Request',
+  })
+  @ApiConflictResponse({
+    ...HTTP_ERROR_RESPONSE,
+    description: 'The Service Request is not Open',
+  })
   async setPriority(
     @CurrentUser() user: User,
     @Param('reference', { schema: referenceParam }) reference: string,

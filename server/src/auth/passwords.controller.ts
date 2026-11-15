@@ -17,6 +17,11 @@ import {
 } from '@nestjs/authentication';
 import { Mailer } from '@nestjs/mail';
 import { Can } from '@nestjs/authorization';
+import {
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+} from '@nestjs/swagger';
 import { z } from 'zod';
 import { AccountPolicy } from './account.policy.js';
 import { FreshAuthentication } from './fresh-authentication.js';
@@ -31,6 +36,7 @@ import {
 } from './auth.schemas.js';
 import type { User } from '../users/user.js';
 import { UsersRepository } from '../users/users.repository.js';
+import { ApiErrors } from '../api-docs.js';
 
 const signInBody = z.object({
   email: signInEmail,
@@ -57,6 +63,12 @@ export class PasswordsController {
   @Public()
   @Post('sign-in')
   @HttpCode(200)
+  @ApiOperation({ security: [] })
+  @ApiErrors(400, 401, 403, 429)
+  @ApiOkResponse({
+    description:
+      'Session established through the session cookie; no response body.',
+  })
   async signInWithPassword(
     @Body({ schema: signInBody }) body: z.infer<typeof signInBody>,
   ) {
@@ -85,6 +97,10 @@ export class PasswordsController {
   @Can(AccountPolicy, 'manage')
   @Put('password')
   @HttpCode(204)
+  @ApiNoContentResponse({
+    description: 'Password set and other sessions revoked; no response body.',
+  })
+  @ApiErrors(400, 401, 403, 429)
   async setPassword(
     @CurrentUser() user: User,
     @CurrentSession() session: SessionRecord,

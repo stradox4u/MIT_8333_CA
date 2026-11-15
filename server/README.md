@@ -7,6 +7,22 @@ The Docker build context is this `server/` directory. Its allowlist excludes
 local `.env` files, dependencies, test fixtures and local documentation. Supply
 configuration at runtime; no credentials are build arguments or image inputs.
 
+## API documentation
+
+Swagger UI is at `/api/docs`; `/api/docs-json` exposes its OpenAPI document.
+Request bodies and parameters use the same Zod schemas as validation. Custom
+password refinements carry explicit documentation metadata for their length and
+composition rules.
+
+Response schemas describe identities, sessions, managed Users, Activity Log
+entries, Service Requests and photos. Empty successes are documented without a
+JSON body; Google redirects declare `302` and `Location`, and public sign-in
+routes override the default session requirement. Declared errors share the JSON
+envelope in `src/api-docs.ts`, including optional validation issue paths; CSV
+successes remain `text/csv` while their errors are JSON. HTTP documentation
+tests check these contracts and compare sensitive response field lists with
+actual API output.
+
 ## Image targets
 
 | Target    | Purpose                                                                               | Default command      |

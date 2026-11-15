@@ -10,6 +10,11 @@ import {
 } from '@nestjs/common';
 import { CurrentUser, SessionService } from '@nestjs/authentication';
 import { Can } from '@nestjs/authorization';
+import {
+  ApiAcceptedResponse,
+  ApiCreatedResponse,
+  ApiOkResponse,
+} from '@nestjs/swagger';
 import { z } from 'zod';
 import { ActivityLogRepository } from './activity-log.repository.js';
 import { refuseIf } from './refusals.js';
@@ -19,6 +24,8 @@ import { emailAddress, personName, roleId, userId } from './user.schemas.js';
 import { UserErasure } from './user-erasure.js';
 import { UserManagementPolicy } from './user-management.policy.js';
 import { UsersRepository } from './users.repository.js';
+import { managedUserResponse, managedUsersResponse } from './user.responses.js';
+import { ApiErrors } from '../api-docs.js';
 
 const inviteBody = z.object({
   firstName: personName,
@@ -33,6 +40,7 @@ const correctEmailBody = z.object({ email: emailAddress });
 
 /** Administrators managing other Users' accounts. */
 @Can(UserManagementPolicy, 'manage')
+@ApiErrors(401, 403)
 @Controller('users')
 export class UsersController {
   constructor(
@@ -44,11 +52,20 @@ export class UsersController {
   ) {}
 
   @Get()
+  @ApiOkResponse({
+    description: 'Managed Users, including Invitations and erased accounts.',
+    standardSchema: managedUsersResponse,
+  })
   list() {
     return this.users.list();
   }
 
   @Patch(':id/role')
+  @ApiErrors(400, 404, 409)
+  @ApiOkResponse({
+    description: 'The updated managed User.',
+    standardSchema: managedUserResponse,
+  })
   async changeRole(
     @CurrentUser() actor: User,
     @Param('id', { schema: userId }) id: string,
@@ -71,7 +88,12 @@ export class UsersController {
   }
 
   @Post(':id/deactivate')
+  @ApiErrors(400, 404, 409)
   @HttpCode(200)
+  @ApiOkResponse({
+    description: 'The updated managed User.',
+    standardSchema: managedUserResponse,
+  })
   async deactivate(
     @CurrentUser() actor: User,
     @Param('id', { schema: userId }) id: string,
@@ -90,7 +112,12 @@ export class UsersController {
   }
 
   @Post(':id/reactivate')
+  @ApiErrors(400, 404, 409)
   @HttpCode(200)
+  @ApiOkResponse({
+    description: 'The updated managed User.',
+    standardSchema: managedUserResponse,
+  })
   async reactivate(
     @CurrentUser() actor: User,
     @Param('id', { schema: userId }) id: string,
@@ -108,7 +135,12 @@ export class UsersController {
   }
 
   @Post(':id/erase')
+  @ApiErrors(400, 404, 409)
   @HttpCode(200)
+  @ApiOkResponse({
+    description: 'The updated managed User.',
+    standardSchema: managedUserResponse,
+  })
   async erase(
     @CurrentUser() actor: User,
     @Param('id', { schema: userId }) id: string,
@@ -127,7 +159,11 @@ export class UsersController {
 
   /** Sends a pending Invitation again. */
   @Post(':id/invitation')
+  @ApiErrors(400, 404, 409)
   @HttpCode(202)
+  @ApiAcceptedResponse({
+    description: 'Invitation email sent; no response body.',
+  })
   async resendInvitation(@Param('id', { schema: userId }) id: string) {
     const invitation = await this.users.findPendingInvitation(id);
     refuseIf(invitation);
@@ -139,6 +175,11 @@ export class UsersController {
 
   /** Corrects a pending Invitation's address, and sends it there. */
   @Patch(':id/email')
+  @ApiErrors(400, 404, 409)
+  @ApiOkResponse({
+    description: 'The updated managed User.',
+    standardSchema: managedUserResponse,
+  })
   async correctInvitationEmail(
     @Param('id', { schema: userId }) id: string,
     @Body({ schema: correctEmailBody }) body: z.infer<typeof correctEmailBody>,
@@ -161,6 +202,11 @@ export class UsersController {
   }
 
   @Post()
+  @ApiCreatedResponse({
+    description: 'The invited User.',
+    standardSchema: managedUserResponse,
+  })
+  @ApiErrors(400, 409)
   async invite(
     @CurrentUser() actor: User,
     @Body({ schema: inviteBody }) body: z.infer<typeof inviteBody>,
