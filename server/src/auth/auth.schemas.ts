@@ -34,10 +34,17 @@ export const newPassword = z
   .refine((value) => /\p{Lu}/u.test(value), 'needs an uppercase letter')
   .refine((value) => /\p{Ll}/u.test(value), 'needs a lowercase letter')
   .refine((value) => /\p{Nd}/u.test(value), 'needs a digit')
-  .refine((value) => /[^\p{L}\p{N}]/u.test(value), 'needs a special character');
+  .refine((value) => /[^\p{L}\p{N}]/u.test(value), 'needs a special character')
+  .meta({
+    minLength: 12,
+    maxLength: 128,
+    writeOnly: true,
+    description:
+      '12-128 Unicode code points, including an uppercase letter, lowercase letter, decimal digit and a special character (including spaces).',
+  });
 
 /** A password offered to sign in or to confirm it's you; never a new one. */
-export const offeredPassword = z.string().max(1024);
+export const offeredPassword = z.string().max(1024).meta({ writeOnly: true });
 
 /** Fresh authentication; needed unless the User signed in in the last 10 minutes. */
 export const currentPassword = offeredPassword.optional();

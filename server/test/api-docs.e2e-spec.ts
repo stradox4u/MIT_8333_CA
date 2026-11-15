@@ -6,6 +6,7 @@ describe('API documentation', () => {
     info: { description: string };
     paths: Record<string, Record<string, any>>;
     components: { securitySchemes: Record<string, unknown> };
+    security: unknown[];
   };
 
   beforeAll(async () => {
@@ -311,6 +312,263 @@ describe('API documentation', () => {
         lastName: expect.anything(),
         role: { enum: ['student', 'staff'] },
       },
+    });
+  });
+
+  it('describes the identity and session JSON returned to a Pending Sign-up', async () => {
+    const identity =
+      document.paths['/api/auth/me'].get.responses['200'].content?.[
+        'application/json'
+      ].schema;
+    const sessions =
+      document.paths['/api/auth/sessions'].get.responses['200'].content?.[
+        'application/json'
+      ].schema;
+
+    expect(identity).toMatchObject({
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        email: { type: 'string', nullable: true },
+        firstName: { type: 'string', nullable: true },
+        lastName: { type: 'string', nullable: true },
+        role: { nullable: true },
+        signUpComplete: { type: 'boolean' },
+        hasPassword: { type: 'boolean' },
+      },
+    });
+    expect(sessions).toMatchObject({
+      type: 'array',
+      items: {
+        properties: {
+          id: { type: 'string' },
+          userAgent: { type: 'string', nullable: true },
+          signedInAt: { type: 'string', format: 'date-time' },
+          lastActiveAt: { type: 'string', format: 'date-time' },
+          current: { type: 'boolean' },
+        },
+      },
+    });
+
+    const browser = await app.signInByLink('docs-pending@example.com');
+    const me = await browser.get('/api/auth/me').expect(200);
+    const listed = await browser.get('/api/auth/sessions').expect(200);
+    expect(Object.keys(identity.properties).sort()).toEqual(
+      Object.keys(me.body).sort(),
+    );
+    expect(Object.keys(sessions.items.properties).sort()).toEqual(
+      Object.keys(listed.body[0]).sort(),
+    );
+    expect(me.body.role).toBeNull();
+  });
+
+  it('describes managed Users and nullable Activity Log subjects without credentials', async () => {
+    const users = document.paths['/api/users'];
+    const managed =
+      users.post.responses['201'].content?.['application/json'].schema;
+    expect(managed).toMatchObject({
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        name: { type: 'string' },
+        email: { type: 'string', nullable: true },
+        firstName: { type: 'string', nullable: true },
+        lastName: { type: 'string', nullable: true },
+        role: {
+          enum: ['student', 'staff', 'maintenance_officer', 'administrator'],
+        },
+        status: { enum: ['invited', 'active', 'deactivated', 'erased'] },
+        createdAt: { type: 'string', format: 'date-time' },
+      },
+    });
+    expect(
+      users.get.responses['200'].content['application/json'].schema,
+    ).toMatchObject({
+      type: 'array',
+      items: managed,
+    });
+    for (const [suffix, method] of [
+      ['role', 'patch'],
+      ['email', 'patch'],
+      ['deactivate', 'post'],
+      ['reactivate', 'post'],
+      ['erase', 'post'],
+    ]) {
+      expect(
+        document.paths[`/api/users/{id}/${suffix}`][method].responses['200']
+          .content['application/json'].schema,
+      ).toEqual(managed);
+    }
+
+    const log =
+      document.paths['/api/activity-log'].get.responses['200'].content?.[
+        'application/json'
+      ].schema;
+    expect(log).toMatchObject({
+      type: 'array',
+      items: {
+        properties: {
+          id: { type: 'integer' },
+          occurredAt: { type: 'string', format: 'date-time' },
+          action: {
+            enum: expect.arrayContaining([
+              'invited',
+              'status_changed',
+              'request_deleted',
+            ]),
+          },
+          details: { type: 'object', nullable: true },
+          actor: { nullable: true },
+          target: { nullable: true },
+          serviceRequest: {
+            nullable: true,
+            properties: { reference: { type: 'string' } },
+          },
+        },
+      },
+    });
+    const admin = await app.signInAsAdministrator('docs-admin@example.com');
+    const invited = await admin
+      .post('/api/users')
+      .send({
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        email: 'docs-invited@example.com',
+        role: 'student',
+      })
+      .expect(201);
+    const erased = await admin
+      .post(`/api/users/${invited.body.id}/erase`)
+      .expect(200);
+    expect(Object.keys(managed.properties).sort()).toEqual(
+      Object.keys(erased.body).sort(),
+    );
+    expect(erased.body.email).toBeNull();
+    const activity = await admin.get('/api/activity-log').expect(200);
+    expect(Object.keys(log.items.properties).sort()).toEqual(
+      Object.keys(activity.body[0]).sort(),
+    );
+    expect(managed.properties).not.toHaveProperty('passwordHash');
+    expect(log.items.properties.actor.properties).not.toHaveProperty('email');
+  });
+
+  it('documents public sign-in, cookie-only success responses and Google redirects', () => {
+    for (const [path, method] of [
+      ['/api/auth/sign-in-link', 'post'],
+      ['/api/auth/sign-in-link/consume', 'post'],
+      ['/api/auth/sign-in', 'post'],
+      ['/api/auth/oidc/{provider}/login', 'get'],
+      ['/api/auth/oidc/{provider}/callback', 'get'],
+    ]) {
+      expect(document.paths[path][method].security).toEqual([]);
+    }
+    expect(
+      document.paths['/api/auth/me'].get.security ?? document.security,
+    ).toEqual([{ session: [] }]);
+    for (const [path, method, status] of [
+      ['/api/auth/sign-in-link', 'post', '202'],
+      ['/api/auth/sign-in-link/consume', 'post', '200'],
+      ['/api/auth/sign-up/complete', 'post', '200'],
+      ['/api/auth/sign-in', 'post', '200'],
+      ['/api/auth/password', 'put', '204'],
+      ['/api/auth/sign-out', 'post', '204'],
+      ['/api/auth/sign-out-everywhere', 'post', '204'],
+      ['/api/auth/sessions/{id}', 'delete', '204'],
+      ['/api/me', 'delete', '204'],
+      ['/api/users/{id}/invitation', 'post', '202'],
+    ]) {
+      const response = document.paths[path][method].responses[status];
+      expect(response.description).toMatch(/no response body/i);
+      expect(response).not.toHaveProperty('content');
+    }
+    for (const action of ['login', 'callback']) {
+      const operation =
+        document.paths[`/api/auth/oidc/{provider}/${action}`].get;
+      expect(operation.responses).not.toHaveProperty('200');
+      expect(operation.responses['302'].headers.Location.schema).toEqual({
+        type: 'string',
+      });
+    }
+    expect(
+      document.paths['/api/auth/oidc/{provider}/callback'].get.parameters,
+    ).toEqual(
+      expect.arrayContaining(
+        ['code', 'state', 'error'].map((name) =>
+          expect.objectContaining({
+            name,
+            in: 'query',
+            required: false,
+            schema: { type: 'string', maxLength: 4096 },
+          }),
+        ),
+      ),
+    );
+  });
+
+  it('documents password rules that custom refinements cannot infer', () => {
+    const body =
+      document.paths['/api/auth/password'].put.requestBody.content[
+        'application/json'
+      ].schema;
+    expect(body).toMatchObject({
+      required: ['newPassword'],
+      properties: {
+        newPassword: {
+          type: 'string',
+          minLength: 12,
+          maxLength: 128,
+          writeOnly: true,
+        },
+        currentPassword: { type: 'string', writeOnly: true },
+      },
+    });
+    expect(body.properties.newPassword.description).toContain('Unicode');
+    expect(body.properties.newPassword.description).toContain('uppercase');
+  });
+
+  it('describes declared HTTP errors and preserves validation issue paths', async () => {
+    for (const path of Object.values(document.paths)) {
+      for (const operation of Object.values(path)) {
+        for (const [status, response] of Object.entries(
+          operation.responses,
+        ) as [string, any][]) {
+          if (Number(status) < 400) continue;
+          expect(
+            response.content?.['application/json']?.schema,
+            `${operation.operationId} ${status}`,
+          ).toMatchObject({
+            properties: {
+              statusCode: { type: 'integer' },
+              message: expect.anything(),
+              issues: {
+                type: 'array',
+                items: {
+                  properties: {
+                    path: { type: 'array' },
+                    message: { type: 'string' },
+                  },
+                },
+              },
+            },
+            required: expect.arrayContaining(['statusCode', 'message']),
+          });
+        }
+      }
+    }
+    expect(document.paths['/api/auth/me'].get.responses).toHaveProperty('401');
+    expect(document.paths['/api/users'].get.responses).toHaveProperty('403');
+    expect(
+      document.paths['/api/auth/sign-in-link'].post.responses,
+    ).toHaveProperty('429');
+    const browser = await app.signInByLink('docs-invalid@example.com');
+    const invalid = await browser
+      .post('/api/auth/sign-up/complete')
+      .send({ firstName: '', lastName: 'Test', role: 'student' })
+      .expect(400);
+    expect(invalid.body).toMatchObject({
+      statusCode: 400,
+      issues: expect.arrayContaining([
+        { path: ['firstName'], message: expect.any(String) },
+      ]),
     });
   });
 

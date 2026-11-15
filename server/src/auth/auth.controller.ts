@@ -11,6 +11,11 @@ import {
 } from '@nestjs/common';
 import { CurrentUser, MagicLinkService, Public } from '@nestjs/authentication';
 import { Can } from '@nestjs/authorization';
+import {
+  ApiAcceptedResponse,
+  ApiOkResponse,
+  ApiOperation,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { personName, selfChosenRole } from '../users/user.schemas.js';
@@ -19,6 +24,8 @@ import { RateLimitGuard } from '../rate-limiting/rate-limit.guard.js';
 import { KeepSignedInCookie } from './keep-signed-in.cookie.js';
 import type { User } from '../users/user.js';
 import { UsersRepository } from '../users/users.repository.js';
+import { currentIdentityResponse } from './auth.responses.js';
+import { ApiErrors } from '../api-docs.js';
 
 const signInLinkBody = z.object({
   // Malformed addresses get the same 202 and no mail (the package checks).
@@ -48,6 +55,12 @@ export class AuthController {
   @UseGuards(RateLimitGuard)
   @Post('sign-in-link')
   @HttpCode(202)
+  @ApiOperation({ security: [] })
+  @ApiErrors(400, 429)
+  @ApiAcceptedResponse({
+    description:
+      'Sign-in Link requested; no response body, whether the address is known or unknown.',
+  })
   async requestSignInLink(
     @Body({ schema: signInLinkBody }) body: z.infer<typeof signInLinkBody>,
     @Res({ passthrough: true }) response: Response,
@@ -60,6 +73,12 @@ export class AuthController {
   @Public()
   @Post('sign-in-link/consume')
   @HttpCode(200)
+  @ApiOperation({ security: [] })
+  @ApiOkResponse({
+    description:
+      'Session established through the session cookie; no response body.',
+  })
+  @ApiErrors(400, 401)
   async consumeSignInLink(
     @Body({ schema: consumeSignInLinkBody })
     body: z.infer<typeof consumeSignInLinkBody>,
@@ -73,6 +92,11 @@ export class AuthController {
   // Pending Sign-ups too: the client reads `signUpComplete` here.
   @Can.Anyone()
   @Get('me')
+  @ApiOkResponse({
+    description: 'Current identity, including Pending Sign-up state.',
+    standardSchema: currentIdentityResponse,
+  })
+  @ApiErrors(401)
   me(@CurrentUser() user: User) {
     return {
       id: user.id,
@@ -88,6 +112,11 @@ export class AuthController {
   @Can.Anyone()
   @Post('sign-up/complete')
   @HttpCode(200)
+  @ApiOkResponse({
+    description:
+      'Sign-up completed; no response body. Read /api/auth/me for the updated identity.',
+  })
+  @ApiErrors(400, 401, 409)
   async completeSignUp(
     @CurrentUser() user: User,
     @Body({ schema: completeSignUpBody })

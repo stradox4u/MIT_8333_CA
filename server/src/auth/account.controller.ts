@@ -11,6 +11,7 @@ import {
   type SessionRecord,
 } from '@nestjs/authentication';
 import { Can } from '@nestjs/authorization';
+import { ApiNoContentResponse } from '@nestjs/swagger';
 import { z } from 'zod';
 import { ActivityLogRepository } from '../users/activity-log.repository.js';
 import { UserErasure } from '../users/user-erasure.js';
@@ -18,6 +19,7 @@ import type { User } from '../users/user.js';
 import { AccountPolicy } from './account.policy.js';
 import { currentPassword } from './auth.schemas.js';
 import { FreshAuthentication } from './fresh-authentication.js';
+import { ApiErrors } from '../api-docs.js';
 
 const eraseSelfBody = z.object({ currentPassword }).optional();
 
@@ -34,6 +36,10 @@ export class AccountController {
   @Can(AccountPolicy, 'manage')
   @Delete()
   @HttpCode(204)
+  @ApiNoContentResponse({
+    description: 'Your account erased and sessions revoked; no response body.',
+  })
+  @ApiErrors(400, 401, 403, 409, 429)
   async eraseSelf(
     @CurrentUser() user: User,
     @CurrentSession() session: SessionRecord,

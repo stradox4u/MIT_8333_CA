@@ -1,3 +1,4 @@
+import { ApiErrors } from '../api-docs.js';
 import { Controller, Get } from '@nestjs/common';
 import { Can } from '@nestjs/authorization';
 import { ApiOkResponse } from '@nestjs/swagger';
@@ -7,13 +8,18 @@ import { maintenanceOfficerResponse } from './service-request.responses.js';
 import { ServiceRequestPolicy } from './service-request.policy.js';
 
 @Can(ServiceRequestPolicy, 'manage')
+@ApiErrors(401, 403)
 @Controller('maintenance-officers')
 export class MaintenanceOfficersController {
   constructor(private readonly officers: MaintenanceOfficersRepository) {}
 
   /** Active officers with their counts of Open Assignments, for assigning. */
   @Get()
-  @ApiOkResponse({ standardSchema: z.array(maintenanceOfficerResponse) })
+  @ApiOkResponse({
+    description:
+      'Active Maintenance Officers and their Open Assignment counts.',
+    standardSchema: z.array(maintenanceOfficerResponse),
+  })
   list() {
     return this.officers.list();
   }
